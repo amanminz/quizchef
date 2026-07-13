@@ -1,0 +1,678 @@
+# QuizChef Architecture
+
+**Version:** 1.0.0
+
+**Status:** Living Document
+
+**Last Updated:** YYYY-MM-DD
+
+---
+
+# 1. Purpose
+
+This document is the architectural source of truth for QuizChef.
+
+Every contributor (human or AI) MUST read this document before making architectural decisions.
+
+This document explains:
+
+- Why QuizChef exists
+- What problems it solves
+- Architectural philosophy
+- Engineering principles
+- Module boundaries
+- System design
+- Constraints
+- Coding philosophy
+
+Implementation details belong in their respective documents.
+
+---
+
+# 2. Vision
+
+QuizChef is an open-source platform for building and hosting engaging real-time quizzes.
+
+The first deployment powers Bible Quiz events for Bangalore Evangelical Lutheran Church.
+
+The long-term vision is to become an extensible quiz platform for churches, schools, companies, conferences and communities.
+
+QuizChef should feel as simple as Kahoot while remaining completely self-hostable.
+
+---
+
+# 3. Mission
+
+Enable anyone to create engaging quizzes in minutes.
+
+Provide an exceptional live experience for participants.
+
+Remain easy to deploy, maintain and extend.
+
+---
+
+# 4. Design Goals
+
+Priority order.
+
+1. Simplicity
+2. Reliability
+3. Maintainability
+4. Extensibility
+5. Performance
+6. Scalability
+
+Scalability should never come at the cost of developer productivity unless necessary.
+
+---
+
+# 5. Engineering Principles
+
+QuizChef follows these principles.
+
+## 5.1 Modular Monolith
+
+QuizChef is NOT a microservice application.
+
+It is a modular monolith.
+
+Reasons:
+
+- Faster development
+- Easier deployment
+- Easier debugging
+- Lower infrastructure cost
+- Better developer experience
+
+Modules should behave like independent services while sharing one deployment.
+
+---
+
+## 5.2 Domain First
+
+The domain model drives the architecture.
+
+Controllers do not define the system.
+
+Database tables do not define the system.
+
+The business domain defines the system.
+
+---
+
+## 5.3 API First
+
+Public APIs are contracts.
+
+Controllers should never expose entities.
+
+Every endpoint should be intentionally designed.
+
+---
+
+## 5.4 Open Source First
+
+Every architectural decision should assume:
+
+Someone else will read this code.
+
+Someone else will contribute.
+
+Someone else will deploy it.
+
+Code should be optimized for readability.
+
+---
+
+## 5.5 Convention Over Configuration
+
+Reasonable defaults should exist.
+
+Users should configure only what they must.
+
+---
+
+## 5.6 Testability First
+
+Every service should be testable.
+
+Every module should be independently testable.
+
+Dependencies should be injectable.
+
+---
+
+## 5.7 Security by Default
+
+Authentication is mandatory where required.
+
+Authorization is explicit.
+
+Sensitive information is never logged.
+
+Validation occurs at the API boundary.
+
+---
+
+## 5.8 Feature Completeness
+
+Shipping fewer polished features is preferred over shipping many incomplete ones.
+
+---
+
+# 6. Architecture Overview
+
+                   React Application
+
+                          │
+
+          REST API + WebSocket (STOMP)
+
+                          │
+
+          Spring Boot Modular Monolith
+
+┌─────────────────────────────────────────────┐
+
+App
+
+Auth
+
+User
+
+Quiz
+
+Session
+
+Media
+
+Security
+
+WebSocket
+
+Common
+
+└─────────────────────────────────────────────┘
+
+                PostgreSQL
+
+                     │
+
+                  MinIO
+
+---
+
+# 7. High Level Components
+
+Frontend
+
+Responsible for:
+
+- UI
+- Routing
+- Authentication
+- WebSocket Client
+- State Management
+
+Backend
+
+Responsible for:
+
+- Business Logic
+- Validation
+- Authentication
+- Authorization
+- Session Management
+- Scoring
+
+Database
+
+Responsible for:
+
+- Persistence
+
+Object Storage
+
+Responsible for:
+
+- Images
+- Audio
+- Video
+
+---
+
+# 8. Module Responsibilities
+
+## App
+
+Spring Boot launcher.
+
+Contains no business logic.
+
+---
+
+## Common
+
+Shared utilities.
+
+Exceptions.
+
+Constants.
+
+Utility classes.
+
+Shared DTOs.
+
+---
+
+## Auth
+
+Authentication.
+
+JWT.
+
+Login.
+
+Registration.
+
+Password hashing.
+
+---
+
+## User
+
+User profile.
+
+Roles.
+
+Preferences.
+
+Quiz history.
+
+---
+
+## Quiz
+
+Quiz management.
+
+Questions.
+
+Options.
+
+Media references.
+
+Validation.
+
+---
+
+## Session
+
+Live quiz execution.
+
+PIN generation.
+
+Participants.
+
+Leaderboard.
+
+Scoring.
+
+---
+
+## Media
+
+Uploads.
+
+Downloads.
+
+Object storage integration.
+
+---
+
+## Security
+
+Spring Security configuration.
+
+JWT filters.
+
+Authorization.
+
+---
+
+## WebSocket
+
+Realtime communication.
+
+STOMP configuration.
+
+Session events.
+
+---
+
+# 9. Architectural Constraints
+
+Modules communicate through public interfaces.
+
+Modules never access another module's repositories directly.
+
+Controllers never contain business logic.
+
+Repositories never contain business logic.
+
+Entities are persistence models.
+
+DTOs are API contracts.
+
+---
+
+# 10. Package Structure
+
+Each module follows the same structure.
+
+api
+
+application
+
+domain
+
+infrastructure
+
+Example
+
+quiz
+
+├── api
+
+├── application
+
+├── domain
+
+└── infrastructure
+
+---
+
+# 11. Request Flow
+
+HTTP Request
+
+↓
+
+Controller
+
+↓
+
+Application Service
+
+↓
+
+Domain
+
+↓
+
+Repository
+
+↓
+
+Database
+
+Controllers orchestrate.
+
+Domain models implement business rules.
+
+Repositories persist.
+
+---
+
+# 12. Dependency Rules
+
+Allowed
+
+Controller
+
+↓
+
+Application
+
+↓
+
+Domain
+
+↓
+
+Infrastructure
+
+Forbidden
+
+Controller → Repository
+
+Repository → Controller
+
+Infrastructure → API
+
+Cross-module repository access
+
+---
+
+# 13. Technology Stack
+
+Backend
+
+Java 21
+
+Spring Boot
+
+Spring Security
+
+Spring Data JPA
+
+Flyway
+
+PostgreSQL
+
+Spring WebSocket
+
+MapStruct
+
+Lombok
+
+Frontend
+
+React
+
+TypeScript
+
+Vite
+
+Tailwind
+
+shadcn/ui
+
+TanStack Query
+
+Infrastructure
+
+Docker Compose
+
+GitHub Actions
+
+MinIO
+
+Railway
+
+Cloudflare Pages
+
+---
+
+# 14. Data Storage
+
+Relational data belongs in PostgreSQL.
+
+Large files belong in Object Storage.
+
+Application never stores images inside PostgreSQL.
+
+---
+
+# 15. Logging
+
+Every request has
+
+Correlation ID
+
+User ID
+
+Execution Time
+
+Never log
+
+Passwords
+
+JWT
+
+Secrets
+
+Tokens
+
+---
+
+# 16. Error Handling
+
+Single global exception handler.
+
+Consistent API response format.
+
+Never expose stack traces.
+
+---
+
+# 17. Security
+
+JWT authentication.
+
+Role-based authorization.
+
+Input validation.
+
+Output sanitization.
+
+Rate limiting (future).
+
+---
+
+# 18. Scalability Strategy
+
+Scale vertically first.
+
+Scale horizontally later.
+
+Split modules into services only when operational requirements justify it.
+
+---
+
+# 19. Quality Standards
+
+Code should be:
+
+Readable
+
+Maintainable
+
+Testable
+
+Documented
+
+Consistent
+
+Performance is important.
+
+Readability is mandatory.
+
+---
+
+# 20. Project Philosophy
+
+Every engineer should be able to understand a feature within minutes.
+
+Architecture exists to make development easier.
+
+Avoid unnecessary abstractions.
+
+Avoid premature optimization.
+
+Prefer explicit code over clever code.
+
+---
+
+# 21. AI Contribution Rules
+
+AI-generated code must follow this document.
+
+AI must never:
+
+Introduce new frameworks.
+
+Replace architectural decisions.
+
+Change module boundaries.
+
+Generate placeholder implementations.
+
+Leave TODO comments.
+
+Every AI-generated change should be production quality.
+
+---
+
+# 22. Definition of Done
+
+A feature is complete only if:
+
+Code builds.
+
+Tests pass.
+
+Documentation updated.
+
+API documented.
+
+No warnings.
+
+Reviewed.
+
+Merged.
+
+---
+
+# 23. Future Evolution
+
+Expected future modules:
+
+Organization
+
+Teams
+
+Tournament
+
+Analytics
+
+Notifications
+
+Question Bank
+
+AI
+
+Localization
+
+Mobile
+
+These additions must not require architectural redesign.
+
+---
+
+# 24. Guiding Principle
+
+QuizChef is designed for the next contributor, not the current one.
+
+Readable code is a feature.
+
+Architecture should remove complexity, not introduce it.
