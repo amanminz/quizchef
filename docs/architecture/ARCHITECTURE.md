@@ -295,9 +295,11 @@ Joining a quiz
 
 Display name
 
-Current score
+Total score (cached sum of answer points)
 
 Connection status
+
+Active connection (optional)
 
 Session
 
@@ -312,6 +314,42 @@ A Participant is always backed by an Identity — either a Guest Identity or a R
 A Participant is scoped to a single session. The same person joining two sessions is two Participants.
 
 Guest play and registered play share one code path.
+
+## Durable Participants
+
+A Participant is a durable session entity. Connections are ephemeral.
+
+A player joins a quiz session, not a WebSocket connection. The active connection is an optional property of the Participant, never its identity.
+
+A Participant survives network interruptions, browser refreshes, app crashes, device sleep, and network switches.
+
+Disconnects mark the Participant disconnected. They never delete it.
+
+Participant lifecycle:
+
+Created
+
+↓
+
+Connected
+
+↓
+
+Disconnected
+
+↓
+
+Reconnected
+
+↓
+
+Finished
+
+Reconnection restores score, answers, current question, and leaderboard position.
+
+Registered users reconnect through their identity. Guests reconnect through a participant token stored on the client.
+
+Joining with the same identity from a new device invalidates the previous connection (single active session policy).
 
 ---
 
@@ -391,6 +429,10 @@ PIN generation.
 
 Participants (backed by a Guest Identity or a Registered User).
 
+Participant tokens.
+
+Session recovery (reconnection, state restoration, connection rebinding).
+
 Leaderboard.
 
 Scoring.
@@ -424,6 +466,8 @@ Realtime communication.
 STOMP configuration.
 
 Session events.
+
+Connections are ephemeral transport. Participant state never lives here.
 
 ---
 

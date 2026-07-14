@@ -1,0 +1,6 @@
+# ADR-003
+
+Decision: Participants are durable session entities; connections are ephemeral.
+Status: Accepted
+Reason: A player joins a quiz session, not a WebSocket connection. Modeling the participant as the connection deletes scores and progress on network interruptions, browser refreshes, app crashes, device sleep, and network switches — the most frustrating failure mode of a live quiz. The connection is an optional property of the participant, never its identity.
+Consequences: Disconnects mark the participant disconnected (connected = false, lastSeenAt) instead of deleting it; the lifecycle is Created → Connected → Disconnected → Reconnected → Finished. Reconnection restores score, answers, current question, remaining time, and leaderboard position, greeted with a "Welcome back" message. Registered users reconnect via their identity; guests via a secure participant token returned on join and stored client-side (display names are not unique and never identify a participant). Joining with the same identity from a new device invalidates the previous connection (single active connection policy). Answers record pointsAwarded so totalScore is an auditable SUM, cached on the participant for efficiency. Reconnection logic is isolated in SessionRecoveryService in the session module's application layer. Builds on [ADR-002](ADR-002-identity-model.md).
