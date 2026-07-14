@@ -21,4 +21,8 @@ public class InvalidTokenException extends UnauthorizedException {
     public static InvalidTokenException expired() {
         return new InvalidTokenException("identity.token.expired", "Token has expired");
     }
+
+    public static InvalidTokenException sessionRevoked() {
+        return new InvalidTokenException("identity.session.revoked", "Login session is no longer active");
+    }
 }

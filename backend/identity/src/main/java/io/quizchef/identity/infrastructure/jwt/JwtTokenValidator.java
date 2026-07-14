@@ -41,6 +41,7 @@ public class JwtTokenValidator {
         try {
             return new IdentityToken(
                     UUID.fromString(claims.getSubject()),
+                    UUID.fromString(claims.get(JwtTokenGenerator.CLAIM_SESSION_ID, String.class)),
                     IdentityType.valueOf(claims.get(JwtTokenGenerator.CLAIM_IDENTITY_TYPE, String.class)),
                     parseRoles(claims.get(JwtTokenGenerator.CLAIM_ROLES)),
                     claims.getExpiration().toInstant());

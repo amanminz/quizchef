@@ -1,0 +1,91 @@
+package io.quizchef.security.infrastructure;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.quizchef.common.api.ApiError;
+import io.quizchef.common.exception.UnauthorizedException;
+import io.quizchef.identity.application.IdentitySessionQueryService;
+import io.quizchef.identity.infrastructure.jwt.IdentityToken;
+import io.quizchef.identity.infrastructure.jwt.InvalidTokenException;
+import io.quizchef.identity.infrastructure.jwt.JwtTokenValidator;
+import jakarta.servlet.FilterChain;
+import jakarta.servlet.ServletException;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
+import java.io.IOException;
+import java.util.List;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
+import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
+import org.springframework.security.core.authority.SimpleGrantedAuthority;
+import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.stereotype.Component;
+import org.springframework.web.filter.OncePerRequestFilter;
+
+/**
+ * Authenticates requests carrying a bearer token.
+ *
+ * <p>Two checks, by design (RFC-002): the JWT is validated cryptographically
+ * (stateless), then its {@code sessionId} claim is checked against the durable
+ * IdentitySession. A revoked session invalidates every token issued for it —
+ * no blacklist, no token store. Requests without a bearer token pass through
+ * anonymously; authorization decides what anonymous may reach.
+ */
+@Component
+public class JwtAuthenticationFilter extends OncePerRequestFilter {
+
+    private static final String BEARER_PREFIX = "Bearer ";
+
+    private final JwtTokenValidator tokenValidator;
+    private final IdentitySessionQueryService sessionQueryService;
+    private final ObjectMapper objectMapper;
+
+    public JwtAuthenticationFilter(JwtTokenValidator tokenValidator,
+                                   IdentitySessionQueryService sessionQueryService,
+                                   ObjectMapper objectMapper) {
+        this.tokenValidator = tokenValidator;
+        this.sessionQueryService = sessionQueryService;
+        this.objectMapper = objectMapper;
+    }
+
+    @Override
+    protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response,
+                                    FilterChain filterChain) throws ServletException, IOException {
+        String header = request.getHeader(HttpHeaders.AUTHORIZATION);
+        if (header == null || !header.startsWith(BEARER_PREFIX)) {
+            filterChain.doFilter(request, response);
+            return;
+        }
+
+        try {
+            IdentityToken token = tokenValidator.validate(header.substring(BEARER_PREFIX.length()));
+            if (!sessionQueryService.isSessionActive(token.sessionId(), token.identityId())) {
+                throw InvalidTokenException.sessionRevoked();
+            }
+            authenticate(token);
+        } catch (UnauthorizedException exception) {
+            SecurityContextHolder.clearContext();
+            reject(response, exception);
+            return;
+        }
+
+        filterChain.doFilter(request, response);
+    }
+
+    private void authenticate(IdentityToken token) {
+        IdentityPrincipal principal =
+                new IdentityPrincipal(token.identityId(), token.identityType(), token.roles());
+        List<SimpleGrantedAuthority> authorities = token.roles().stream()
+                .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
+                .toList();
+        SecurityContextHolder.getContext().setAuthentication(
+                UsernamePasswordAuthenticationToken.authenticated(principal, null, authorities));
+    }
+
+    private void reject(HttpServletResponse response, UnauthorizedException exception) throws IOException {
+        response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
+        response.setContentType(MediaType.APPLICATION_JSON_VALUE);
+        objectMapper.writeValue(
+                response.getOutputStream(),
+                ApiError.of(exception.errorCode(), exception.getMessage()));
+    }
+}
