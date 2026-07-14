@@ -485,6 +485,8 @@ Entities are persistence models.
 
 DTOs are API contracts.
 
+Domain state is durable. Transport state is ephemeral. The domain never depends on a transport (WebSocket, SSE, polling).
+
 ---
 
 # 11. Package Structure
