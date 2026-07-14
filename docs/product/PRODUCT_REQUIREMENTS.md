@@ -103,7 +103,29 @@ Not included in Version 1
 
 ---
 
-# 6. User Roles
+# 6. Identity Model and User Roles
+
+## Identity Model
+
+Identity
+
+↓
+
+User
+
+↓
+
+Participant
+
+Every visitor has an Identity: a Guest Identity or a Registered User.
+
+A User is a registered account: authentication, registration, profile, roles, email, password.
+
+A Participant is an Identity playing in a live session: display name, current score, connection status, session, ranking, answers.
+
+A Participant may be backed by a Guest Identity or a Registered User.
+
+## User Roles
 
 Guest
 
