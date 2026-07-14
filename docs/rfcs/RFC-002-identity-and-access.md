@@ -189,7 +189,8 @@ Decisions recorded during implementation:
 
 ## Later
 
-- Login + JWT authentication filter (PR #3): the filter verifies tokens and populates `IdentityPrincipal`; `PublicEndpoints` gains `/api/v1/auth/**`.
+- Login + JWT authentication filter (PR #3): the filter verifies tokens and populates `IdentityPrincipal`; `PublicEndpoints` gains the login path. **Login must return an `AuthenticationResult` value object** — `identity` (IdentityReference), `token`, `expiresAt`, optional `refreshToken`, `authorities` — so the controller stays a thin mapper. The type is introduced in that PR, where its first consumer lives.
+- Pre-v1 refinements agreed in review: `Email` as a first-class value object; `DomainEvent` gains `eventId` and `eventVersion` alongside `occurredAt` (replay, audit, event evolution); `DomainEventPublisher` accepts a list of events so aggregates can emit several per operation; registration response gains the identity `status` field.
 - Guest identity issuance for the session join flow (RFC-004).
 - Refresh tokens bound to `IdentitySession.refreshTokenHash`; refreshes move `lastAuthenticatedAt`.
 - `IdentityStatus` expansion (LOCKED, PENDING_VERIFICATION) and the reserved SYSTEM identity type.

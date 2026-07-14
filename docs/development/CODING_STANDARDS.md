@@ -462,6 +462,12 @@ Example
 
 /api/v1/sessions
 
+Every public endpoint must include the version segment.
+
+/api/v1/...
+
+No exceptions.
+
 Never expose entities directly.
 
 ---
