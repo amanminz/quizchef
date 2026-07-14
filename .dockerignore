@@ -1,0 +1,30 @@
+# Version control and CI
+.git
+.github
+.devcontainer
+
+# Build outputs and caches
+.gradle
+**/build
+**/node_modules
+**/dist
+**/.vite
+**/*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+
+# Documentation and tooling
+docs
+scripts
+**/*.md
+.idea
+.vscode
+*.iml
+*.log
+
+# Docker itself
+compose.yml
+compose.*.yml
+compose.override.yml

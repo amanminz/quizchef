@@ -4,7 +4,7 @@
 
 **Status:** Living Document
 
-**Last Updated:** YYYY-MM-DD
+**Last Updated:** 2026-07-14
 
 ---
 
@@ -241,7 +241,121 @@ Responsible for:
 
 ---
 
-# 8. Module Responsibilities
+# 8. Core Domain Model
+
+The identity hierarchy:
+
+Identity
+
+↓
+
+User
+
+↓
+
+Participant
+
+## Identity
+
+Who someone is.
+
+Every actor in the system has an Identity.
+
+An Identity is either a Guest Identity or a Registered User.
+
+Guest Identities are short-lived and exist only to play.
+
+## User
+
+A registered Identity.
+
+Represents:
+
+Authentication
+
+Registration
+
+Profile
+
+Roles
+
+Email
+
+Password
+
+Owned by the Auth and User modules.
+
+## Participant
+
+Someone playing in a live session.
+
+Represents:
+
+Joining a quiz
+
+Display name
+
+Total score (cached sum of answer points)
+
+Connection status
+
+Active connection (optional)
+
+Session
+
+Ranking
+
+Answers
+
+Owned by the Session module.
+
+A Participant is always backed by an Identity — either a Guest Identity or a Registered User.
+
+A Participant is scoped to a single session. The same person joining two sessions is two Participants.
+
+Guest play and registered play share one code path.
+
+## Durable Participants
+
+A Participant is a durable session entity. Connections are ephemeral.
+
+A player joins a quiz session, not a WebSocket connection. The active connection is an optional property of the Participant, never its identity.
+
+The active connection is modeled as a ParticipantConnection: active transport, reconnect, heartbeat, disconnect. It is deliberately not called "presence" — presence has a distinct meaning in distributed systems.
+
+A Participant survives network interruptions, browser refreshes, app crashes, device sleep, and network switches.
+
+Disconnects mark the Participant disconnected. They never delete it.
+
+Participant lifecycle:
+
+Created
+
+↓
+
+Connected
+
+↓
+
+Disconnected
+
+↓
+
+Reconnected
+
+↓
+
+Finished
+
+Reconnection restores score, answers, current question, and leaderboard position.
+
+Registered users reconnect through their identity. Guests reconnect through a participant token stored on the client.
+
+Joining with the same identity from a new device invalidates the previous connection (single active session policy).
+
+---
+
+# 9. Module Responsibilities
 
 ## App
 
@@ -263,6 +377,8 @@ Utility classes.
 
 Shared DTOs.
 
+Domain event contract (DomainEvent) and event dispatcher.
+
 ---
 
 ## Auth
@@ -277,9 +393,13 @@ Registration.
 
 Password hashing.
 
+Guest Identity issuance.
+
 ---
 
 ## User
+
+The registered Identity.
 
 User profile.
 
@@ -311,7 +431,11 @@ Live quiz execution.
 
 PIN generation.
 
-Participants.
+Participants (backed by a Guest Identity or a Registered User).
+
+Participant tokens.
+
+Session recovery (reconnection, state restoration, connection rebinding).
 
 Leaderboard.
 
@@ -345,11 +469,15 @@ Realtime communication.
 
 STOMP configuration.
 
-Session events.
+Subscribes to domain events and delivers them to clients.
+
+Connections are ephemeral transport. Participant state never lives here.
+
+Expected to generalize into a transport module (websocket, sse, mqtt) as delivery mechanisms grow.
 
 ---
 
-# 9. Architectural Constraints
+# 10. Architectural Constraints
 
 Modules communicate through public interfaces.
 
@@ -363,9 +491,15 @@ Entities are persistence models.
 
 DTOs are API contracts.
 
+Domain state is durable. Transport state is ephemeral. The domain never depends on a transport (WebSocket, SSE, polling).
+
+Only Application Services mutate aggregates, publish domain events, or open transactions. Everything else is read-only.
+
+Domain events are framework independent.
+
 ---
 
-# 10. Package Structure
+# 11. Package Structure
 
 Each module follows the same structure.
 
@@ -391,7 +525,7 @@ quiz
 
 ---
 
-# 11. Request Flow
+# 12. Request Flow
 
 HTTP Request
 
@@ -423,7 +557,83 @@ Repositories persist.
 
 ---
 
-# 12. Dependency Rules
+# 13. Domain Events
+
+State changes are announced through internal domain events.
+
+HTTP / WebSocket
+
+↓
+
+Application Service
+
+↓
+
+Business Logic
+
+↓
+
+Publishes Domain Event
+
+↓
+
+Event Dispatcher
+
+├── WebSocket Publisher
+
+├── Audit Logger
+
+└── Future subscribers (notifications, analytics)
+
+Everything is reactive inside the application — without Kafka, RabbitMQ, or Spring Cloud. The dispatcher is in-process.
+
+## The Event Model
+
+Domain events are framework independent.
+
+QuizChef defines its own contract instead of Spring's ApplicationEvent, so the domain never depends on the framework:
+
+public interface DomainEvent {
+
+    Instant occurredAt();
+
+}
+
+Examples:
+
+QuestionStartedEvent
+
+ParticipantJoinedEvent
+
+ParticipantReconnectedEvent
+
+AnswerSubmittedEvent
+
+LeaderboardUpdatedEvent
+
+SessionCompletedEvent
+
+Events are pure domain concepts. The contract and the dispatcher live in the Common module.
+
+## Rules
+
+Only Application Services publish domain events.
+
+Inbound commands always enter through an Application Service. The transport never orchestrates business logic.
+
+Outbound realtime updates always leave through domain events. Domain modules never call the WebSocket module.
+
+Subscribers perform delivery and side effects (publishing, logging). They never trigger business operations.
+
+## What This Enables
+
+Because every state change is an event, the session timeline can later be reconstructed — analytics, replay, moderation — without changing the domain.
+
+This is not event sourcing. The database remains the source of truth. Events are notifications, not storage.
+
+---
+
+# 14. Dependency Rules
 
 Allowed
 
@@ -453,7 +663,7 @@ Cross-module repository access
 
 ---
 
-# 13. Technology Stack
+# 15. Technology Stack
 
 Backend
 
@@ -503,7 +713,7 @@ Cloudflare Pages
 
 ---
 
-# 14. Data Storage
+# 16. Data Storage
 
 Relational data belongs in PostgreSQL.
 
@@ -513,7 +723,7 @@ Application never stores images inside PostgreSQL.
 
 ---
 
-# 15. Logging
+# 17. Logging
 
 Every request has
 
@@ -535,7 +745,7 @@ Tokens
 
 ---
 
-# 16. Error Handling
+# 18. Error Handling
 
 Single global exception handler.
 
@@ -545,7 +755,7 @@ Never expose stack traces.
 
 ---
 
-# 17. Security
+# 19. Security
 
 JWT authentication.
 
@@ -559,7 +769,7 @@ Rate limiting (future).
 
 ---
 
-# 18. Scalability Strategy
+# 20. Scalability Strategy
 
 Scale vertically first.
 
@@ -569,7 +779,7 @@ Split modules into services only when operational requirements justify it.
 
 ---
 
-# 19. Quality Standards
+# 21. Quality Standards
 
 Code should be:
 
@@ -589,7 +799,7 @@ Readability is mandatory.
 
 ---
 
-# 20. Project Philosophy
+# 22. Project Philosophy
 
 Every engineer should be able to understand a feature within minutes.
 
@@ -603,7 +813,7 @@ Prefer explicit code over clever code.
 
 ---
 
-# 21. AI Contribution Rules
+# 23. AI Contribution Rules
 
 AI-generated code must follow this document.
 
@@ -623,7 +833,7 @@ Every AI-generated change should be production quality.
 
 ---
 
-# 22. Definition of Done
+# 24. Definition of Done
 
 A feature is complete only if:
 
@@ -643,7 +853,7 @@ Merged.
 
 ---
 
-# 23. Future Evolution
+# 25. Future Evolution
 
 Expected future modules:
 
@@ -669,7 +879,7 @@ These additions must not require architectural redesign.
 
 ---
 
-# 24. Guiding Principle
+# 26. Guiding Principle
 
 QuizChef is designed for the next contributor, not the current one.
 

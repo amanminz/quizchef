@@ -103,7 +103,29 @@ Not included in Version 1
 
 ---
 
-# 6. User Roles
+# 6. Identity Model and User Roles
+
+## Identity Model
+
+Identity
+
+↓
+
+User
+
+↓
+
+Participant
+
+Every visitor has an Identity: a Guest Identity or a Registered User.
+
+A User is a registered account: authentication, registration, profile, roles, email, password.
+
+A Participant is an Identity playing in a live session: display name, current score, connection status, session, ranking, answers.
+
+A Participant may be backed by a Guest Identity or a Registered User.
+
+## User Roles
 
 Guest
 
@@ -160,6 +182,14 @@ As a participant
 I want a live leaderboard
 
 So I know my ranking.
+
+---
+
+As a participant
+
+I want to be reconnected automatically after losing my connection
+
+So I keep my score and never have to rejoin manually.
 
 ---
 
@@ -261,6 +291,8 @@ Join
 
 Leave
 
+Reconnect (score and progress preserved)
+
 Host Controls
 
 Realtime Updates
@@ -287,6 +319,8 @@ Next Question
 
 Winner
 
+Reconnection: "Welcome back! You've been reconnected to the quiz." — then restore the current question, remaining timer, previously submitted answer (if any), current score, and leaderboard position.
+
 ---
 
 # 9. Non Functional Requirements
@@ -304,6 +338,10 @@ Secure
 Extensible
 
 Open Source
+
+## Session Recovery
+
+Participants should automatically recover from temporary network interruptions, browser refreshes, and WebSocket disconnects without losing their score or quiz progress. Recovery should occur transparently whenever possible and should not require rejoining the quiz manually.
 
 ---
 
@@ -426,6 +464,28 @@ Running
 ↓
 
 Completed
+
+## Participant Lifecycle
+
+Created
+
+↓
+
+Connected
+
+↓
+
+Disconnected
+
+↓
+
+Reconnected
+
+↓
+
+Finished
+
+Disconnecting never removes a participant or resets their score. A participant is a durable session entity; connections are ephemeral.
 
 ---
 
@@ -577,6 +637,8 @@ Session
 ✓ PIN generation
 
 ✓ Join via PIN
+
+✓ Reconnection restores score, answers, and progress
 
 Gameplay
 
