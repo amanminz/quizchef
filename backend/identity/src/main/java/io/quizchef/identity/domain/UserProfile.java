@@ -73,7 +73,11 @@ public class UserProfile extends AuditableEntity {
         return displayName.strip();
     }
 
-    private static String normalizeEmail(String email) {
+    /**
+     * The single domain rule for email normalization: trimmed, lower case.
+     * Uniqueness checks and persistence must always use this form.
+     */
+    public static String normalizeEmail(String email) {
         if (email == null || email.isBlank()) {
             throw new IllegalArgumentException("email must not be blank");
         }
