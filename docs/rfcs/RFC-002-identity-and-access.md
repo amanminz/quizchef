@@ -41,8 +41,8 @@ Every future capability — registration, login, guest join, participants, sessi
 
 # Non Goals
 
-- Login, logout, and refresh APIs — later PRs.
-- The JWT authentication filter — arrives with login.
+- Logout and refresh APIs — later PRs.
+- Authorization rules and role management — PR #4.
 - Role assignment and administration.
 - Password reset and email verification (out of scope for v1).
 
@@ -159,6 +159,7 @@ Flyway is now pinned to `default-schema: quizchef` / `schemas: quizchef`. Withou
 - [x] `CurrentUser` abstraction with a Spring Security adapter as the only SecurityContextHolder reader.
 - [x] ArchUnit enforces: framework-free domain, no Spring Security outside infrastructure, inward-pointing dependencies.
 - [x] Registration: 201 + Location, case-insensitive duplicate → 409, invalid payload → 400 with field errors, Argon2 hash persisted, no IdentitySession created, IdentityRegisteredEvent published.
+- [x] Authentication: 200 with session-bound JWT, previous sessions revoked (old tokens → 401 `identity.session.revoked`), all credential failures identical 401, CurrentUser populated from the filter, IdentityAuthenticatedEvent published.
 
 ---
 
@@ -187,9 +188,40 @@ Decisions recorded during implementation:
 - `PublicEndpoints` gains exactly `/api/v1/auth/register` — deny-by-default means the whitelist grows one endpoint at a time, not by `/auth/**`.
 - `AuditableEntity` implements Spring Data's `Persistable` (isNew = createdAt absent): with domain-assigned UUIDs, saves would otherwise run through merge — firing lifecycle callbacks on an internal copy and costing an extra SELECT per insert.
 
+# Authentication (implemented — Milestone 2 PR #3)
+
+`POST /api/v1/auth/login` authenticates registered users and returns an `AuthenticationResult` (identityId, displayName, token, expiresAt, refreshToken — null for now — and authorities), keeping the controller a thin mapper.
+
+## Session-bound JWTs
+
+JWTs are never revoked; IdentitySessions are. The trust chain is:
+
+```text
+JWT (sessionId claim) → IdentitySession (revocable, durable) → Identity
+```
+
+Every token carries a `sessionId` claim binding it to the login session it was issued for. The authentication filter validates the token cryptographically (stateless), then checks the session is active and belongs to the token's identity via `IdentitySessionQueryService` — the identity module's public boundary, since other modules never touch its repositories. A revoked session invalidates every token issued for it: no blacklist, no token store, no cache. The cost is one session lookup per authenticated request — the deliberate price of enforceable revocation, logout, and forced sign-out.
+
+## Login flow
+
+One transaction: normalize email → load profile → verify Argon2 → load identity → require ACTIVE → revoke all active IdentitySessions (**single active session per identity** is a business rule) → create the new session (userAgent and remote address captured when available; `lastAuthenticatedAt` = `lastSeenAt` = now) → issue the session-bound JWT → publish `IdentityAuthenticatedEvent` (IdentityReference only, no PII).
+
+## Indistinguishable failures
+
+Unknown email, wrong password, and disabled identity all produce the identical 401 (`identity.credentials.invalid`, "Invalid email or password"). The unknown-email path still pays a full Argon2 verification against a constant timing-mask hash so response timing does not reveal whether an address is registered. Logs use identityId where known and never contain emails, passwords, hashes, or tokens.
+
+## Filter and error codes
+
+Requests without a bearer token pass through anonymously (public endpoints keep working); protected endpoints then answer 401 (`auth.unauthorized`) via the shared-format entry point. A presented but invalid token → 401 `identity.token.invalid`; expired → `identity.token.expired`; token of a revoked session → `identity.session.revoked` (distinct so clients can show "signed in elsewhere"). The filter is the only component that reads tokens; it publishes `IdentityPrincipal` into the security context, and business code keeps seeing only `CurrentUser`.
+
+## Interim authority rule
+
+Until role assignment exists, every registered identity authenticates with the implicit `USER` authority — in the token, the result, and the security context. Guests and real role persistence come later.
+
 ## Later
 
-- Login + JWT authentication filter (PR #3): the filter verifies tokens and populates `IdentityPrincipal`; `PublicEndpoints` gains the login path. **Login must return an `AuthenticationResult` value object** — `identity` (IdentityReference), `token`, `expiresAt`, optional `refreshToken`, `authorities` — so the controller stays a thin mapper. The type is introduced in that PR, where its first consumer lives.
+- `PublicEndpoints` currently lists exactly `/api/v1/auth/register` and `/api/v1/auth/login`.
+- Proxy-aware client addresses (X-Forwarded-For) once a reverse proxy fronts the API.
 - Pre-v1 refinements agreed in review: `Email` as a first-class value object; `DomainEvent` gains `eventId` and `eventVersion` alongside `occurredAt` (replay, audit, event evolution); `DomainEventPublisher` accepts a list of events so aggregates can emit several per operation; registration response gains the identity `status` field.
 - Guest identity issuance for the session join flow (RFC-004).
 - Refresh tokens bound to `IdentitySession.refreshTokenHash`; refreshes move `lastAuthenticatedAt`.

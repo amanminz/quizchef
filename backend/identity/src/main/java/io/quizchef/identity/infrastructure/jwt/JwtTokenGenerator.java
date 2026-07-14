@@ -15,12 +15,18 @@ import org.springframework.stereotype.Component;
 
 /**
  * Issues signed access tokens (HMAC-SHA256).
+ *
+ * <p>Every token is bound to an IdentitySession through the
+ * {@code sessionId} claim: cryptographic validation stays stateless, while
+ * revocation is enforced against the durable session record — no token
+ * blacklist, no token store.
  */
 @Component
 public class JwtTokenGenerator {
 
     static final String CLAIM_IDENTITY_TYPE = "identityType";
     static final String CLAIM_ROLES = "roles";
+    static final String CLAIM_SESSION_ID = "sessionId";
 
     private final JwtProperties properties;
     private final Clock clock;
@@ -32,18 +38,20 @@ public class JwtTokenGenerator {
         this.signingKey = Keys.hmacShaKeyFor(properties.secret().getBytes(StandardCharsets.UTF_8));
     }
 
-    public String generate(UUID identityId, IdentityType identityType, Set<Role> roles) {
+    public IssuedToken generate(UUID identityId, UUID sessionId, IdentityType identityType, Set<Role> roles) {
         Instant now = clock.instant();
+        Instant expiresAt = now.plus(properties.accessTokenTtl());
         var builder = Jwts.builder()
                 .issuer(properties.issuer())
                 .subject(identityId.toString())
                 .issuedAt(Date.from(now))
-                .expiration(Date.from(now.plus(properties.accessTokenTtl())))
+                .expiration(Date.from(expiresAt))
+                .claim(CLAIM_SESSION_ID, sessionId.toString())
                 .claim(CLAIM_IDENTITY_TYPE, identityType.name())
                 .claim(CLAIM_ROLES, roles.stream().map(Enum::name).sorted().toList());
         if (properties.hasAudience()) {
             builder.audience().add(properties.audience());
         }
-        return builder.signWith(signingKey).compact();
+        return new IssuedToken(builder.signWith(signingKey).compact(), expiresAt);
     }
 }
