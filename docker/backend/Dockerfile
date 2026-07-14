@@ -14,7 +14,7 @@ COPY gradle/ gradle/
 COPY backend/settings.gradle.kts backend/build.gradle.kts backend/
 COPY backend/app/build.gradle.kts backend/app/
 COPY backend/common/build.gradle.kts backend/common/
-COPY backend/auth/build.gradle.kts backend/auth/
+COPY backend/identity/build.gradle.kts backend/identity/
 COPY backend/user/build.gradle.kts backend/user/
 COPY backend/quiz/build.gradle.kts backend/quiz/
 COPY backend/session/build.gradle.kts backend/session/

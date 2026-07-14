@@ -5,6 +5,9 @@ spring:
     password: ${DB_PASSWORD:quizchef}
 
 quizchef:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:quizchef-test-only-signing-secret-0001}
   storage:
     endpoint: ${MINIO_ENDPOINT:http://localhost:9000}
     access-key: ${MINIO_ACCESS_KEY:quizchef}

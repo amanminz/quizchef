@@ -17,6 +17,8 @@ spring:
   flyway:
     locations: classpath:db/migration
     fail-on-missing-locations: true
+    default-schema: quizchef
+    schemas: quizchef
 
 server:
   port: ${SERVER_PORT:8080}
@@ -47,6 +49,12 @@ springdoc:
     path: /swagger-ui.html
 
 quizchef:
+  security:
+    jwt:
+      issuer: quizchef
+      secret: ${JWT_SECRET}
+      access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:PT15M}
+      audience: ${JWT_AUDIENCE:}
   storage:
     endpoint: ${MINIO_ENDPOINT}
     access-key: ${MINIO_ACCESS_KEY}
