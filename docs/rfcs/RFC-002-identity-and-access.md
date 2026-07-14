@@ -41,7 +41,7 @@ Every future capability — registration, login, guest join, participants, sessi
 
 # Non Goals
 
-- Public authentication APIs (registration, login, logout, refresh) — later PRs.
+- Login, logout, and refresh APIs — later PRs.
 - The JWT authentication filter — arrives with login.
 - Role assignment and administration.
 - Password reset and email verification (out of scope for v1).
@@ -158,34 +158,39 @@ Flyway is now pinned to `default-schema: quizchef` / `schemas: quizchef`. Withou
 - [x] JWT generation and validation round-trip, and reject expired, tampered, foreign-issuer, and foreign-key tokens.
 - [x] `CurrentUser` abstraction with a Spring Security adapter as the only SecurityContextHolder reader.
 - [x] ArchUnit enforces: framework-free domain, no Spring Security outside infrastructure, inward-pointing dependencies.
-- [x] No public authentication API exists.
+- [x] Registration: 201 + Location, case-insensitive duplicate → 409, invalid payload → 400 with field errors, Argon2 hash persisted, no IdentitySession created, IdentityRegisteredEvent published.
 
 ---
 
-# Future Work
+# Registration (implemented — Milestone 2 PR #2)
 
-## Milestone 2 PR #2 — Identity Registration
-
-Scope: `POST /api/v1/auth/register` only. The flow establishes the project's application-service and domain-event patterns:
+`POST /api/v1/auth/register` is the first public API. The flow establishes the project's application-service and domain-event patterns:
 
 ```text
-POST /register
+POST /api/v1/auth/register
   → request DTO validation (Jakarta, shared ApiError contract)
   → RegisterIdentityCommand
   → RegisterIdentityApplicationService (single transaction)
       → duplicate email? → DuplicateEmailException (409)
-      → create Identity, Credentials, UserProfile
+      → create Identity, Credentials (Argon2 hash), UserProfile
       → publish IdentityRegisteredEvent
-  → 201 Created
+  → 201 Created, Location: /api/v1/identities/{identityId}
 ```
 
-- **IdentityRegisteredEvent** is the first domain event (framework-independent DomainEvent contract per ADR-005). Nothing consumes it yet — the pattern is the point.
-- Validation lives in three layers with distinct responsibilities: request DTO (shape: not blank, email format, lengths), application service (business preconditions: email uniqueness), domain (invariants: normalization, non-blank aggregates).
-- Email normalization (trim + lower case) is a domain rule in `UserProfile`, already implemented.
+Decisions recorded during implementation:
+
+- **201 + Location header** pointing at `/api/v1/identities/{identityId}`, REST-conventional even though the GET endpoint does not exist yet — the registration contract will not change when it does. No JWT is returned; registration does not log the user in, and no IdentitySession is created.
+- **Three-layer validation**: request DTO (shape: not blank, email format, display name 2–50, password 8–128), application service (email uniqueness), domain (normalization, invariants). Password complexity rules beyond length are deferred.
+- **Race-safe duplicates**: the unique index is the authority. Concurrent registrations that pass the precondition check are caught at flush and translated to the same 409.
+- **Dispatcher implementation**: `DomainEventPublisher` (framework-free port in common, with the `DomainEvent` contract) is backed by an adapter delegating to Spring's in-process event machinery; subscribers use `@EventListener`. The domain never sees Spring (ADR-005). `IdentityRegisteredEvent` carries only the `IdentityReference` and timestamp — no PII — and is published inside the registration transaction; transactional-consumer semantics get decided when the first real consumer appears (RFC-004).
+- **Raw passwords never reach logs**: command and request DTOs redact the password in `toString`, hashes stay inside the identity module, error messages never echo addresses.
+- `PublicEndpoints` gains exactly `/api/v1/auth/register` — deny-by-default means the whitelist grows one endpoint at a time, not by `/auth/**`.
+- `AuditableEntity` implements Spring Data's `Persistable` (isNew = createdAt absent): with domain-assigned UUIDs, saves would otherwise run through merge — firing lifecycle callbacks on an internal copy and costing an extra SELECT per insert.
 
 ## Later
 
-- Login + JWT authentication filter (PR #3): the filter verifies tokens and populates `IdentityPrincipal`; `PublicEndpoints` gains `/api/v1/auth/**`.
+- Login + JWT authentication filter (PR #3): the filter verifies tokens and populates `IdentityPrincipal`; `PublicEndpoints` gains the login path. **Login must return an `AuthenticationResult` value object** — `identity` (IdentityReference), `token`, `expiresAt`, optional `refreshToken`, `authorities` — so the controller stays a thin mapper. The type is introduced in that PR, where its first consumer lives.
+- Pre-v1 refinements agreed in review: `Email` as a first-class value object; `DomainEvent` gains `eventId` and `eventVersion` alongside `occurredAt` (replay, audit, event evolution); `DomainEventPublisher` accepts a list of events so aggregates can emit several per operation; registration response gains the identity `status` field.
 - Guest identity issuance for the session join flow (RFC-004).
 - Refresh tokens bound to `IdentitySession.refreshTokenHash`; refreshes move `lastAuthenticatedAt`.
 - `IdentityStatus` expansion (LOCKED, PENDING_VERIFICATION) and the reserved SYSTEM identity type.
