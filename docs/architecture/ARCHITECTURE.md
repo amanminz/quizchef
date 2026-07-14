@@ -176,7 +176,7 @@ Shipping fewer polished features is preferred over shipping many incomplete ones
 
 App
 
-Auth
+Identity
 
 User
 
@@ -283,7 +283,7 @@ Email
 
 Password
 
-Owned by the Auth and User modules.
+Owned by the Identity module (with user-facing features in the User module).
 
 ## Participant
 
@@ -310,6 +310,8 @@ Answers
 Owned by the Session module.
 
 A Participant is always backed by an Identity — either a Guest Identity or a Registered User.
+
+Modules refer to an Identity through IdentityReference (identityId + identityType) — who is acting, never credentials, profile, or sessions.
 
 A Participant is scoped to a single session. The same person joining two sessions is two Participants.
 
@@ -381,33 +383,37 @@ Domain event contract (DomainEvent) and event dispatcher.
 
 ---
 
-## Auth
+## Identity
 
-Authentication.
+The identity bounded context (previously named Auth; renamed because authentication is just one thing an identity does).
 
-JWT.
+Identity lifecycle (registered and guest).
 
-Login.
+Credentials (password hashes behind the PasswordHasher port).
 
-Registration.
+User profiles (email is the login identifier).
 
-Password hashing.
+Identity sessions (durable login sessions).
+
+Roles.
+
+JWT infrastructure.
 
 Guest Identity issuance.
+
+CurrentUser port — the framework-independent request context all business services depend on.
 
 ---
 
 ## User
 
-The registered Identity.
-
-User profile.
-
-Roles.
+User-facing account features on top of the Identity module.
 
 Preferences.
 
 Quiz history.
+
+(Profiles and roles live in the Identity module.)
 
 ---
 
@@ -681,9 +687,15 @@ PostgreSQL
 
 Spring WebSocket
 
+JJWT
+
+Argon2 (spring-security-crypto)
+
 MapStruct
 
 Lombok
+
+ArchUnit
 
 Frontend
 

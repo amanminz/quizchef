@@ -61,6 +61,7 @@ services:
       dockerfile: docker/backend/Dockerfile
     environment:
       SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
+      JWT_SECRET: ${JWT_SECRET:-quizchef-local-development-secret-0001}
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-quizchef}
       DB_USERNAME: ${POSTGRES_USER:-quizchef}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-quizchef}

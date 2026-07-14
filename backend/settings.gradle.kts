@@ -7,7 +7,7 @@ rootProject.name = "quizchef-backend"
 include(
     "app",
     "common",
-    "auth",
+    "identity",
     "user",
     "quiz",
     "session",

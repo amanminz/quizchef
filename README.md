@@ -64,8 +64,12 @@ cp .env.example .env
 | `MINIO_CONSOLE_PORT` | `9001`           | Host port for the MinIO console  |
 | `BACKEND_PORT`       | `8080`           | Host port for the backend        |
 | `FRONTEND_PORT`      | `3000`           | Host port for the frontend       |
+| `JWT_SECRET`         | dev-only default | JWT signing secret (min. 32 chars) |
+| `JWT_AUDIENCE`       | unset            | Optional JWT audience claim, asserted when set |
 
-The backend itself is configured through Spring profiles (`local`, `dev`, `test`, `prod`) in `backend/app/src/main/resources/`. Outside Docker it reads `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, and `MINIO_BUCKET`; the `local` profile provides defaults matching the Compose stack. The `dev` and `prod` profiles require these variables to be set — no secrets are committed.
+The backend itself is configured through Spring profiles (`local`, `dev`, `test`, `prod`) in `backend/app/src/main/resources/`. Outside Docker it reads `DB_URL`, `DB_USERNAME`, `DB_PASSWORD`, `MINIO_ENDPOINT`, `MINIO_ACCESS_KEY`, `MINIO_SECRET_KEY`, `MINIO_BUCKET`, `JWT_SECRET`, and `JWT_ACCESS_TOKEN_TTL`; the `local` profile provides defaults matching the Compose stack. The `dev` and `prod` profiles require these variables to be set — no secrets are committed.
+
+Running the backend tests requires Docker: the integration tests start a disposable PostgreSQL via Testcontainers.
 
 ## Local development without Docker
 

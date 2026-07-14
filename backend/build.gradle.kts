@@ -49,7 +49,8 @@ subprojects {
         add("testImplementation", platform("org.junit:junit-bom:5.11.4"))
         add("testImplementation", "org.junit.jupiter:junit-jupiter")
         add("testImplementation", "org.mockito:mockito-junit-jupiter:5.14.2")
-        add("testImplementation", "org.testcontainers:junit-jupiter:1.20.6")
+        add("testImplementation", platform("org.testcontainers:testcontainers-bom:1.21.3"))
+        add("testImplementation", "org.testcontainers:junit-jupiter")
         add("testImplementation", "com.tngtech.archunit:archunit-junit5:1.4.0")
     }
 }

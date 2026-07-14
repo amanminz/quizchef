@@ -4,7 +4,7 @@ plugins {
 
 dependencies {
     implementation(project(":common"))
-    implementation(project(":auth"))
+    implementation(project(":identity"))
     implementation(project(":user"))
     implementation(project(":quiz"))
     implementation(project(":session"))
@@ -20,4 +20,7 @@ dependencies {
     implementation("org.flywaydb:flyway-core")
     implementation("org.flywaydb:flyway-database-postgresql")
     runtimeOnly("org.postgresql:postgresql:42.7.5")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-testcontainers")
+    testImplementation("org.testcontainers:postgresql")
 }
