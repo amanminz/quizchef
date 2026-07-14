@@ -39,6 +39,8 @@ This builds and starts the complete development environment:
 
 Database migrations run automatically at backend startup via Flyway. The `quizchef-media` bucket is created automatically in MinIO.
 
+The stack is defined in `compose.yml` (environment-agnostic services and health checks) plus `compose.override.yml` (local development concerns such as host port publishing), which Docker Compose merges automatically.
+
 Stop the environment with `docker compose down`. Add `-v` to also delete the PostgreSQL and MinIO volumes.
 
 ## Environment variables

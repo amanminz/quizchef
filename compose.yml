@@ -1,3 +1,6 @@
+# QuizChef base Compose definition: services, wiring, and health checks.
+# Environment-specific concerns (host port publishing) live in override files;
+# compose.override.yml is merged automatically for local development.
 name: quizchef
 
 services:
@@ -8,8 +11,6 @@ services:
       POSTGRES_USER: ${POSTGRES_USER:-quizchef}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quizchef}
       POSTGRES_INITDB_ARGS: --encoding=UTF8
-    ports:
-      - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     networks:
@@ -26,9 +27,6 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-quizchef}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-quizchef-local}
-    ports:
-      - "${MINIO_PORT:-9000}:9000"
-      - "${MINIO_CONSOLE_PORT:-9001}:9001"
     volumes:
       - minio-data:/data
     networks:
@@ -62,7 +60,7 @@ services:
       context: .
       dockerfile: docker/backend/Dockerfile
     environment:
-      SPRING_PROFILES_ACTIVE: local
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-local}
       DB_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-quizchef}
       DB_USERNAME: ${POSTGRES_USER:-quizchef}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-quizchef}
@@ -70,8 +68,6 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-quizchef}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-quizchef-local}
       MINIO_BUCKET: ${MINIO_BUCKET:-quizchef-media}
-    ports:
-      - "${BACKEND_PORT:-8080}:8080"
     depends_on:
       postgres:
         condition: service_healthy
@@ -90,8 +86,6 @@ services:
     build:
       context: .
       dockerfile: docker/frontend/Dockerfile
-    ports:
-      - "${FRONTEND_PORT:-3000}:8080"
     depends_on:
       backend:
         condition: service_healthy

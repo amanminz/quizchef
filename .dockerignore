@@ -25,4 +25,6 @@ scripts
 *.log
 
 # Docker itself
-docker-compose.yml
+compose.yml
+compose.*.yml
+compose.override.yml

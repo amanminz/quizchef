@@ -1,4 +1,4 @@
-package io.quizchef.app;
+package io.quizchef.common.configuration;
 
 import io.swagger.v3.oas.models.OpenAPI;
 import io.swagger.v3.oas.models.info.Info;
