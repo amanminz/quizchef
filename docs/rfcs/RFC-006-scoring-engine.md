@@ -1,8 +1,30 @@
-## RFC-006
+# RFC-006 Scoring Engine
 
-Scoring Engine
+Status
 
-Defines:
+Draft
+
+Authors
+
+Aman Minz
+
+Created
+
+2026-07-14
+
+Updated
+
+2026-07-16
+
+---
+
+# Summary
+
+Placeholder. This RFC is a Draft: it names the scope below, and nothing in it is agreed.
+
+---
+
+# Scope
 
 * Speed bonus
 * Ranking

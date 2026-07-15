@@ -12,6 +12,10 @@ Vision
 ├── ADRs                         (Why were key decisions made?)
 │
 ├── RFCs                         (How should major features be designed?)
+│                                 Every RFC has a Status: Draft, Proposed,
+│                                 Accepted, Implemented, or Superseded.
+│                                 Implemented = describes the code today.
+│                                 See rfcs/README.md for the lifecycle.
 │
 └── Feature Specs                (What exactly should this feature do?)
 ```
