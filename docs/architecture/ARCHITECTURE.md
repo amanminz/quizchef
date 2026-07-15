@@ -395,7 +395,7 @@ User profiles (email is the login identifier).
 
 Identity sessions (durable login sessions).
 
-Roles.
+Roles, permissions, and the policy-based AuthorizationService (permissions are derived from roles in code, never persisted).
 
 JWT infrastructure.
 

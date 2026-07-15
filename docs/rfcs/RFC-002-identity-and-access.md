@@ -218,10 +218,39 @@ Requests without a bearer token pass through anonymously (public endpoints keep 
 
 Until role assignment exists, every registered identity authenticates with the implicit `USER` authority — in the token, the result, and the security context. Guests and real role persistence come later.
 
+# Authorization (implemented — Milestone 2 PR #4)
+
+Policy-based, code-defined, deliberately not a database-backed RBAC engine: easy to understand and test, deterministic, and free of administrative complexity the platform does not need yet. When organizations, custom roles, or multi-tenancy arrive, the mapping evolves into a persisted policy engine.
+
+## Permission model
+
+`Permission` covers only functionality that exists: `QUIZ_VIEW`, `QUIZ_CREATE`, `QUIZ_EDIT`, `QUIZ_DELETE`, `QUIZ_HOST`, `USER_PROFILE_READ`, `USER_PROFILE_UPDATE`. Permissions are never persisted — they are derived from roles through the explicit matrix in `RolePermissions` (a domain rule, pinned by tests so any change is a conscious decision):
+
+```text
+ADMIN       → all seven
+QUIZ_MASTER → QUIZ_VIEW, QUIZ_CREATE, QUIZ_EDIT, QUIZ_HOST
+USER        → QUIZ_VIEW, USER_PROFILE_READ, USER_PROFILE_UPDATE
+```
+
+Roles are additive: an identity's permissions are the union over all roles it holds (a real quiz master will also hold USER once role assignment exists).
+
+## AuthorizationService
+
+The single place authorization decisions are made — application services in every module (Quiz, Session, Media later) call `authorize(currentUser, permission)`; nobody writes `hasRole` checks and controllers contain no authorization logic. Anonymous callers → 401; authenticated callers lacking the permission → 403 (`auth.permission.denied`). Successful authorization publishes `IdentityAuthorizedEvent` (IdentityReference + Permission + occurredAt, no PII); denials publish nothing.
+
+The service is framework-independent — only `CurrentUser` in, decision out — and lives in the identity application layer (not the domain) because ADR-005 reserves event publication for application services; the policy itself stays in the domain.
+
+## Demonstration endpoint
+
+`GET /api/v1/users/me` (bearer-authenticated) exercises the full architecture: filter → CurrentUser → application service → `authorize(USER_PROFILE_READ)` → response with identityId, identityType, roles, and derived permissions. OpenAPI documents the `bearerAuth` security scheme.
+
+With this PR the identity bounded context is feature complete for v1 (registration, authentication, authorization).
+
 ## Later
 
 - `PublicEndpoints` currently lists exactly `/api/v1/auth/register` and `/api/v1/auth/login`.
 - Proxy-aware client addresses (X-Forwarded-For) once a reverse proxy fronts the API.
+- Role assignment/administration; guest authorization rules (RFC-004).
 - Pre-v1 refinements agreed in review: `Email` as a first-class value object; `DomainEvent` gains `eventId` and `eventVersion` alongside `occurredAt` (replay, audit, event evolution); `DomainEventPublisher` accepts a list of events so aggregates can emit several per operation; registration response gains the identity `status` field.
 - Guest identity issuance for the session join flow (RFC-004).
 - Refresh tokens bound to `IdentitySession.refreshTokenHash`; refreshes move `lastAuthenticatedAt`.
