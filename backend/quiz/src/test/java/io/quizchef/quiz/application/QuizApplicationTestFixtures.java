@@ -1,6 +1,7 @@
 package io.quizchef.quiz.application;
 
 import io.quizchef.identity.domain.CurrentUser;
+import io.quizchef.identity.domain.IdentityReference;
 import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.identity.domain.Role;
 import io.quizchef.quiz.domain.Difficulty;
@@ -41,6 +42,7 @@ final class QuizApplicationTestFixtures {
         Option falseOption = Option.of(false, 2);
         Question question = Question.create(
                 new QuestionLocalization(languages[0], "Jonah", "Jonah was swallowed by a great fish.", null),
+                new IdentityReference(UUID.randomUUID(), IdentityType.REGISTERED),
                 QuestionType.TRUE_FALSE, Difficulty.EASY,
                 List.of(trueOption, falseOption),
                 List.of(trueOption.localized(languages[0], "True"),

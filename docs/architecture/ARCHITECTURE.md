@@ -427,6 +427,12 @@ Authoring API (create, read, update, publish, archive — draft-first: content a
 
 Questions — separate reusable aggregates, never owned by a quiz. Quizzes compose them by id through QuizQuestion ordering.
 
+Question library API (create, read, update, publish, archive — owned by their author, draft-editable, immutable once published, retained when archived so existing published quizzes keep working; questions never know which quizzes use them).
+
+Tags — their own aggregate (id + normalized name); questions hold tag ids, so synonyms, hierarchies, and organization vocabularies can grow without touching questions.
+
+Question source metadata (MANUAL / AI / IMPORT) — provenance for the future generation and import features; no behavior varies by it.
+
 Typed questions (single choice, multiple choice, true/false) with per-type structural rules.
 
 Options (language-neutral: id, correctness, order — participants answer with option ids, so gameplay never depends on language).

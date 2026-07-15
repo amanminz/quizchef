@@ -482,6 +482,7 @@ class QuizAuthoringIntegrationTest {
         Option falseOption = Option.of(false, 2);
         return Question.create(
                 new QuestionLocalization(languageCode, "Jonah", "Jonah was swallowed by a great fish.", null),
+                identityRepository.save(Identity.registered()).reference(),
                 QuestionType.TRUE_FALSE, Difficulty.EASY,
                 List.of(trueOption, falseOption),
                 List.of(trueOption.localized(languageCode, "True"),
