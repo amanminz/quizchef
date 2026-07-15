@@ -1,5 +1,8 @@
 package io.quizchef.identity.domain;
 
+import jakarta.persistence.Embeddable;
+import jakarta.persistence.EnumType;
+import jakarta.persistence.Enumerated;
 import java.util.Objects;
 import java.util.UUID;
 
@@ -7,10 +10,14 @@ import java.util.UUID;
  * The way other modules refer to an identity.
  *
  * <p>A value object carrying only who is acting — never credentials,
- * profile, or sessions. Future aggregates such as Participant hold an
- * IdentityReference instead of reaching into the identity aggregates.
+ * profile, or sessions. Aggregates in other modules (Quiz owner,
+ * Participant) embed an IdentityReference instead of reaching into the
+ * identity aggregates.
  */
-public record IdentityReference(UUID identityId, IdentityType identityType) {
+@Embeddable
+public record IdentityReference(
+        UUID identityId,
+        @Enumerated(EnumType.STRING) IdentityType identityType) {
 
     public IdentityReference {
         Objects.requireNonNull(identityId, "identityId must not be null");

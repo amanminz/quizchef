@@ -421,13 +421,17 @@ Quiz history.
 
 Quiz management.
 
-Questions.
+Questions — separate reusable aggregates, never owned by a quiz. Quizzes compose them by id through QuizQuestion ordering.
+
+Typed questions (single choice, multiple choice, true/false) with per-type structural rules.
 
 Options.
 
+Bible references.
+
 Media references.
 
-Validation.
+Validation (aggregates enforce their own invariants).
 
 ---
 
