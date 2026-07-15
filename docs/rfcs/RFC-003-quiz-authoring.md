@@ -20,7 +20,9 @@ Updated
 
 # Summary
 
-Defines the Quiz bounded context: the Quiz aggregate (settings, lifecycle, localized content, and composition), the reusable Question aggregate with its typed structural rules, the value objects they embed, the domain events, and the persistence model. Content is multilingual from the start (Milestone 3 PR #1.5): structure is language neutral, displayable text lives in per-language localizations, and every aggregate carries a configurable default language. The domain was established first (Milestone 3 PR #1/#1.5); PR #2 adds the author-facing quiz APIs — create, read, update, publish, archive — with owner-only mutations and optimistic locking. Question authoring APIs follow in PR #3.
+Defines the Quiz bounded context: the Quiz aggregate (settings, lifecycle, localized content, and composition), the reusable Question aggregate with its typed structural rules and its own lifecycle, the Tag aggregate, the value objects they embed, the domain events, and the persistence model. Content is multilingual from the start (Milestone 3 PR #1.5): structure is language neutral, displayable text lives in per-language localizations, and every aggregate carries a configurable default language.
+
+Built in four steps: the domain first (PR #1/#1.5, no API), then the author-facing quiz APIs (PR #2 — create, read, update, publish, archive, owner-only, optimistic locking), then the question library (PR #3 — questions as owned, lifecycle-managed, taggable, reusable assets with their own API). Attaching questions to quizzes over HTTP is the next step.
 
 ---
 
@@ -35,19 +37,21 @@ Internationalization is foundational for the same reason: BELC's congregation sp
 # Goals
 
 - A rich, framework-independent quiz domain that enforces its own invariants.
-- Questions reusable across quizzes from day one.
+- Questions reusable across quizzes from day one — authored once, owned, and versionable into a question bank later.
 - A typed question model that can grow beyond Bible quizzes without redesign.
 - Multilingual content as a first-class capability: every participant can experience a quiz in their preferred language, while business logic never touches translated text.
+- A tag vocabulary that can grow (synonyms, hierarchies, organizations) without touching questions.
 
 ---
 
 # Non Goals
 
-- Quiz/Question CRUD APIs — PR #2.
+- Attaching questions to quizzes over HTTP, and question search/browsing — next steps.
 - Media upload (RFC-007), gameplay, sessions, scoring (RFC-004/006).
 - Bible API integration; references are plain value objects.
-- Question versioning — deferred until editing published content demands it.
-- Translation APIs, automatic translation, and import/export of translations.
+- Question versioning/revisions — deferred until editing published content demands it.
+- Translation APIs, automatic translation, AI generation, and import/export (the `source` enum reserves the provenance, nothing more).
+- Sharing questions between authors or organizations — question bank, PRD v1.1.
 - Participant language preference and runtime language switching — the participant belongs to the session module (RFC-004).
 - UI localization (labels, buttons, error messages) — a future frontend concern, unrelated to content.
 
@@ -116,7 +120,7 @@ Lifecycle invariants, enforced by the aggregate — never by controllers:
 
 ## Question aggregate
 
-`defaultLanguage`, localized content (title and prompt required, optional explanation — shown after answering, PRD), `questionType`, `difficulty` (EASY/MEDIUM/HARD, reserved as a future scoring multiplier), and four embedded collections: options, option localizations, Bible references, media references.
+`ownerIdentity` (embedded `IdentityReference`), `state`, `source`, `defaultLanguage`, localized content (title and prompt required, optional explanation — shown after answering, PRD), `questionType`, `difficulty` (EASY/MEDIUM/HARD, reserved as a future scoring multiplier), and five embedded collections: options, option localizations, Bible references, media references, tag ids.
 
 **QuestionType is modeled from day one** so the platform can grow beyond BELC without redesigning the aggregate. The type carries the structural rules, revalidated on every option change:
 
@@ -124,7 +128,24 @@ Lifecycle invariants, enforced by the aggregate — never by controllers:
 - `MULTIPLE_CHOICE` — one or more correct options.
 - `TRUE_FALSE` — exactly two options, exactly one correct.
 
-Plus: at least one option, unique option display order, and complete option localization per stored language. Structural violations are `IllegalArgumentException` (invalid construction); PR #2 maps them to 400 at the API boundary.
+Plus: at least one option, unique option ids and display orders, and complete option localization per stored language. Structural violations are `IllegalArgumentException` (invalid construction); the API boundary maps them to 400.
+
+### Question lifecycle (PR #3)
+
+`DRAFT → PUBLISHED → ARCHIVED`, deliberately mirroring the quiz lifecycle so authors learn one model:
+
+- **DRAFT** — fully editable: difficulty, options, every translation, references, tags.
+- **PUBLISHED** — **immutable** (`question.content.locked`, 409), and reusable by quizzes. A question is a shared asset the moment other people's quizzes can depend on it; silently changing what a quiz asks — or which answer is correct — after the fact is the failure mode this rule exists to prevent.
+- **ARCHIVED** — terminal and read-only (`question.archived`, 409); unavailable for new quizzes while existing published quizzes keep functioning. Retained, never deleted (same reasoning as quizzes: played sessions must stay reconstructable).
+- Drafts cannot be archived (`question.not-archivable`, 409) — a draft is edited or abandoned; archiving retires live content.
+
+**Immutability includes translations, and that has a real cost**: today, adding a Kannada translation to an already-published question is impossible. That is the honest consequence of "published means frozen", but the workflow it blocks is legitimate — a church publishes in English, then translates a month later. Resolving it properly needs the revision concept (`QuizRevision` / question revisions) so a re-publish produces a new, identifiable version rather than mutating history under running quizzes. Deliberately deferred, not overlooked; see Open Questions.
+
+**Ownership.** Questions carry `ownerIdentity` — always the authoring caller, never client-supplied. For now they are private assets: only the owner may read or modify them (others get 404, never a hint of existence). Cross-author reuse is real and wanted, but it needs a sharing model (visibility, organizations, or a shared bank) rather than an implicit "any author sees everything"; that arrives with the question bank (PRD v1.1). **Reusability across quizzes is unaffected** — that is a property of the aggregate boundary (quizzes hold question ids), not of who may read the question.
+
+**Source.** `MANUAL | AI | IMPORT` — metadata only, no behavior varies by it. The authoring API always creates MANUAL; AI and IMPORT exist so the generation and import features can record provenance without a migration.
+
+**Tags.** Questions hold `Set<UUID>` of tag ids — never strings. Tag is its own aggregate (id + normalized name, unique), so synonyms, descriptions, parent/child hierarchies, usage counts, and organization-specific vocabularies can grow on the tag without touching the Question model or migrating question rows. The API accepts and returns names; `TagResolver` resolves-or-creates by normalized name (`"Moses"`, `"  moses "` → one tag), with the unique index as the authority under concurrency (`tag.concurrent-creation`, 409 — retryable). Tags are language independent by design: a tag is a concept, not a word, so localized tag *labels* would live on the Tag aggregate later, never on the question. No search endpoint yet — tags are recorded now so the bank has something to index later.
 
 ## Value objects
 
@@ -143,7 +164,9 @@ All records, all JPA embeddables:
 
 ## Domain events
 
-`QuizCreatedEvent` (quizId, owner, occurredAt), `QuestionAddedToQuizEvent` (quizId, questionId, occurredAt), `QuizPublishedEvent` (quizId, occurredAt), `QuizArchivedEvent` (quizId, occurredAt). Created/Published/Archived are published by the application services per ADR-005; `QuestionAddedToQuizEvent` waits for the attach API (PR #3). No consumers yet.
+`QuizCreatedEvent` (quizId, owner, occurredAt), `QuestionAddedToQuizEvent` (quizId, questionId, occurredAt), `QuizPublishedEvent` (quizId, occurredAt), `QuizArchivedEvent` (quizId, occurredAt), `QuestionPublishedEvent` (questionId, occurredAt), `QuestionArchivedEvent` (questionId, occurredAt). All are published by the application services per ADR-005 except `QuestionAddedToQuizEvent`, which waits for the attach API. No consumers yet.
+
+There is deliberately no `QuestionCreatedEvent`: nothing can react to a private draft, and an event without a plausible subscriber is dead code (the same rule that kept placeholder services out of PR #1). Publication and archival are the moments other parts of the system will care about.
 
 Events reference aggregate ids only and are language independent — no localization events exist, and none are needed yet.
 
@@ -155,21 +178,34 @@ Events reference aggregate ids only and are language independent — no localiza
 
 `V5__optimistic_locking.sql` adds a `version BIGINT` column to every aggregate table (identities, credentials, user_profiles, identity_sessions, quizzes, questions), backing JPA `@Version` on `AuditableEntity`.
 
-Repositories: `QuizRepository`, `QuestionRepository` — plain, query methods arrive with the use cases that need them.
+`V6__question_library.sql` turns questions into owned, lifecycle-managed assets: adds `owner_identity_id` / `owner_identity_type`, `state`, `source` to `questions`; creates `tags` (unique name) and `question_tags` (PK question+tag). Two backfills make existing data legal, both integration-tested against a seeded V5 database:
 
-## Application layer (implemented in PR #2)
+- **Ownership** is inherited from the oldest quiz referencing each question — the closest thing to authorship that exists in pre-library data. A question no quiz references cannot be attributed, and the migration **stops with an actionable message** rather than inventing an owner; the operator attaches or removes it and re-runs.
+- **State**: questions already used by a published or archived quiz become `PUBLISHED` — they are live content and must not be silently editable. Everything else becomes `DRAFT`.
+
+Repositories: `QuizRepository`, `QuestionRepository`, `TagRepository` — plain, query methods arrive with the use cases that need them.
+
+## Application layer
 
 One application service per operation, per ADR-005 the only place aggregates are mutated, transactions opened, and events published:
 
 ```text
-CreateQuizApplicationService.create(CurrentUser, CreateQuizCommand)    → authorize(QUIZ_CREATE)             → QuizCreatedEvent
-UpdateQuizApplicationService.update(CurrentUser, UpdateQuizCommand)    → authorize(QUIZ_EDIT)  + ownership  → (no event)
-PublishQuizApplicationService.publish(CurrentUser, PublishQuizCommand) → authorize(QUIZ_EDIT)  + ownership  → QuizPublishedEvent
-ArchiveQuizApplicationService.archive(CurrentUser, ArchiveQuizCommand) → authorize(QUIZ_EDIT)  + ownership  → QuizArchivedEvent
-QuizQueryService.quiz(CurrentUser, quizId)                             → authorize(QUIZ_VIEW)  + visibility → (read only)
+CreateQuizApplicationService.create(CurrentUser, CreateQuizCommand)            → authorize(QUIZ_CREATE)             → QuizCreatedEvent
+UpdateQuizApplicationService.update(CurrentUser, UpdateQuizCommand)            → authorize(QUIZ_EDIT)  + ownership  → (no event)
+PublishQuizApplicationService.publish(CurrentUser, PublishQuizCommand)         → authorize(QUIZ_EDIT)  + ownership  → QuizPublishedEvent
+ArchiveQuizApplicationService.archive(CurrentUser, ArchiveQuizCommand)         → authorize(QUIZ_EDIT)  + ownership  → QuizArchivedEvent
+QuizQueryService.quiz(CurrentUser, quizId)                                     → authorize(QUIZ_VIEW)  + visibility → (read only)
+
+CreateQuestionApplicationService.create(CurrentUser, CreateQuestionCommand)    → authorize(QUIZ_CREATE)             → (no event)
+UpdateQuestionApplicationService.update(CurrentUser, UpdateQuestionCommand)    → authorize(QUIZ_EDIT)  + ownership  → (no event)
+PublishQuestionApplicationService.publish(CurrentUser, PublishQuestionCommand) → authorize(QUIZ_EDIT)  + ownership  → QuestionPublishedEvent
+ArchiveQuestionApplicationService.archive(CurrentUser, ArchiveQuestionCommand) → authorize(QUIZ_EDIT)  + ownership  → QuestionArchivedEvent
+QuestionQueryService.question(CurrentUser, questionId)                         → authorize(QUIZ_VIEW)  + ownership  → (read only)
 ```
 
-Controllers resolve `CurrentUser` from `CurrentUserProvider` and delegate — zero authorization logic at the transport edge. `AddQuestionToQuizApplicationService` arrives with the attach API in PR #3.
+Questions reuse the quiz permissions (`QUIZ_CREATE`/`QUIZ_EDIT`/`QUIZ_VIEW`) rather than introducing `QUESTION_*`: authoring questions *is* quiz authoring — the permission model tracks what a person does, not which table it lands in, and a role that may create quizzes but not their questions has no product meaning. Dedicated permissions can split out if the question bank ever gives questions an independent audience.
+
+Controllers resolve `CurrentUser` from `CurrentUserProvider` and delegate — zero authorization logic at the transport edge. `AddQuestionToQuizApplicationService` arrives with the attach API.
 
 **Publication preconditions.** The aggregate enforces its own rules (DRAFT only, at least one question, default localization by construction). The service adds the single check that crosses aggregate boundaries: every attached question must be localized in the quiz's default language (`quiz.not-publishable`, 409, naming the offending question ids) — otherwise participants falling back to the default would face untranslated questions.
 
@@ -177,21 +213,29 @@ Controllers resolve `CurrentUser` from `CurrentUserProvider` and delegate — ze
 
 **Optimistic locking.** Every aggregate carries a `@Version` (base entity). Read responses include the version; `PUT` requires it back and a stale value is rejected with 409 `quiz.concurrent-modification` before anything is applied — two authors editing the same draft can never silently overwrite each other. Same-instant races that slip past the check are caught by the JPA version at flush and surface as 409 `conflict.concurrent-modification`.
 
-**Update semantics.** `PUT /quizzes/{id}` treats omitted fields as unchanged; a provided localization list replaces the full set of translations (the aggregate refuses to drop the default language). Domain `IllegalArgumentException`s surface as 400 (`request.invalid`) via the global handler, as planned in PR #1.
+**Update semantics.** `PUT /quizzes/{id}` treats omitted fields as unchanged; a provided localization list replaces the full set of translations (the aggregate refuses to drop the default language). `PUT /questions/{id}` is a true PUT — every field is the complete new value, the localization list must include the default language, and options keep their ids so translations survive (new options carry fresh ids). Domain `IllegalArgumentException`s surface as 400 (`request.invalid`) via the global handler.
 
 ## Public API
 
 ```text
-POST /api/v1/quizzes                  201  create a draft (owner = caller)
-GET  /api/v1/quizzes/{quizId}         200  metadata, settings, state, visibility, default language, localizations, ordered question ids, version
-PUT  /api/v1/quizzes/{quizId}         200  update visibility / settings / localizations (state-dependent)
-POST /api/v1/quizzes/{quizId}/publish 200  DRAFT → PUBLISHED
-POST /api/v1/quizzes/{quizId}/archive 200  PUBLISHED → ARCHIVED
+POST /api/v1/quizzes                        201  create a draft (owner = caller)
+GET  /api/v1/quizzes/{quizId}               200  metadata, settings, state, visibility, default language, localizations, ordered question ids, version
+PUT  /api/v1/quizzes/{quizId}               200  update visibility / settings / localizations (state-dependent)
+POST /api/v1/quizzes/{quizId}/publish       200  DRAFT → PUBLISHED
+POST /api/v1/quizzes/{quizId}/archive       200  PUBLISHED → ARCHIVED
+
+POST /api/v1/questions                      201  create a draft in its default language (owner = caller; option ids assigned by the server)
+GET  /api/v1/questions/{questionId}         200  metadata, options, every localization with option texts, references, tags, version
+PUT  /api/v1/questions/{questionId}         200  replace the full editable representation (DRAFT only)
+POST /api/v1/questions/{questionId}/publish 200  DRAFT → PUBLISHED
+POST /api/v1/questions/{questionId}/archive 200  PUBLISHED → ARCHIVED
 ```
 
-There is no `DELETE`, deliberately. Published quizzes may have been played — sessions, scores, and history must stay reconstructable, so quizzes are retired by archiving, never destroyed. A hard delete would also cascade into the composition of other data (quiz_questions foreign keys) for no product benefit; drafts someone abandons simply stay drafts. If a true deletion need ever appears (privacy requests), it will be designed deliberately, not shipped as a default endpoint.
+Neither resource has a `DELETE`, deliberately. Published quizzes may have been played and published questions may sit inside other people's quizzes — sessions, scores, and history must stay reconstructable, so content is retired by archiving, never destroyed. A hard delete would also cascade into referencing data (the `quiz_questions` foreign keys) for no product benefit; drafts someone abandons simply stay drafts. If a true deletion need ever appears (privacy requests), it will be designed deliberately, not shipped as a default endpoint.
 
-The read API returns question ids only — questions are separate aggregates with their own (upcoming) resource; embedding them would couple the read models and bloat every quiz response.
+The question read model returns **no quiz references**: questions do not know where they are used. That direction of the relationship belongs to the quiz (which holds question ids), and inverting it would couple every question read to the quiz composition and leak other authors' quizzes into a question response. "Which quizzes use this question?" is a real future query — it belongs to the quiz side (a filter on quizzes), not to the question aggregate.
+
+The quiz read API mirrors this: question ids only — embedding questions would couple the read models and bloat every quiz response.
 
 ---
 
@@ -213,28 +257,38 @@ The read API returns question ids only — questions are separate aggregates wit
 
 **Partial translations with per-field fallback** — rejected: every consumer would need field-level fallback logic, and a half-translated question shown to a participant is worse than a cleanly fallen-back one.
 
+**Tags as plain strings on the question** — rejected (review decision): a string tag can never grow. Synonyms, descriptions, parent/child hierarchies, usage counts, popular tags, and organization-specific vocabularies all become schema changes to every question row, and renaming a tag becomes a mass update with no identity to anchor it. `Tag` as an aggregate plus `Set<TagId>` on the question costs one table and a resolver now, and buys all of that for free later — the right trade for a platform meant to outgrow one church.
+
+**Mutable published questions (edit in place)** — rejected: a published question is a shared asset other people's quizzes depend on; changing its wording or its correct answer under them is exactly the surprise the lifecycle exists to prevent. The cost — no translations after publish — is real and resolved by revisions, not by weakening immutability.
+
+**`QUESTION_*` permissions** — rejected: authoring questions is quiz authoring. A role that may create quizzes but not their questions has no product meaning, and the permission model tracks what a person does, not which table it lands in.
+
 ---
 
 # Risks
 
 - Element collections rewrite on change (delete + insert); fine at authoring scale, revisit only if question editing becomes hot.
-- `quiz_questions.question_id` has a foreign key, so deleting a question used by any quiz is blocked at the database — question deletion policy is a PR #2/question-bank decision.
-- `replaceOptions` silently drops translations left incomplete by the change. Authoring UX should surface this (PR #2+ returns which languages were invalidated); the domain rule itself is correct.
+- `replaceOptions` silently drops translations left incomplete by the change. Authoring UX should surface this (a future response could name the invalidated languages); the domain rule itself is correct.
+- **Publishing is one-way and freezes translations.** Until revisions exist, an author who publishes before translating must create a new question. Acceptable while BELC authors in one language; the first multilingual publishing cycle will make this urgent.
+- **`ARCHIVED` is not yet enforced at attachment.** The state exists and archival is recorded, but "unavailable for new quizzes" cannot be enforced without the attach API (out of scope here) — the domain is ready, the check lands with `AddQuestionToQuizApplicationService`. Nothing regresses meanwhile: quizzes today compose questions only through the domain.
+- Tag creation races surface as a retryable 409 rather than resolving silently; if authoring UX ever creates many tags at once, resolve-or-retry belongs in the resolver.
 
 ---
 
 # Migration
 
-`V3__quiz_domain.sql` is additive; existing data is unaffected. `V4__content_i18n.sql` moves content into localization tables with no data loss (integration-tested against a seeded V3 database); existing quizzes and questions keep their identities and become default-language (`en`) localized. `V5__optimistic_locking.sql` is additive; existing rows start at version 0.
+`V3__quiz_domain.sql` is additive; existing data is unaffected. `V4__content_i18n.sql` moves content into localization tables with no data loss (integration-tested against a seeded V3 database); existing quizzes and questions keep their identities and become default-language (`en`) localized. `V5__optimistic_locking.sql` is additive; existing rows start at version 0. `V6__question_library.sql` backfills question ownership from the referencing quiz and promotes questions inside published quizzes to `PUBLISHED` (integration-tested against a seeded V5 database); it refuses to run rather than invent an owner for a question no quiz references.
 
 ---
 
 # Open Questions
 
-- Question deletion semantics when referenced by quizzes (block vs. soft-delete) — PR #3 (quiz deletion is decided: there is none).
-- Whether editing a published quiz's questions requires versioning — deferred.
-- Question ownership/authorship for authorization — PR #3.
+- **Revisions.** Publishing is immutable, so translating or correcting published content requires a new question today. A revision counter (incremented per publish, recorded by sessions) would let content evolve while keeping played history identifiable — the first real need for it will come from either multilingual publishing or a typo in a live quiz.
+- **Sharing questions across authors.** Questions are private assets; reuse across quizzes works, reuse across *people* does not. Needs a deliberate model (visibility, organizations, or a shared bank), not an implicit widening — question bank, PRD v1.1.
+- Whether archived questions should also disappear from *drafts* that already reference them, or only be blocked at new attachment — decide with the attach API.
 - Localized display names for Bible books (rendering concern) — deferred until a UI needs them.
+
+*Resolved since PR #1:* quiz deletion (there is none — archive instead), question deletion (likewise), question ownership (the authoring identity, owner-only access).
 
 ---
 
@@ -245,18 +299,21 @@ The read API returns question ids only — questions are separate aggregates wit
 - [x] Content is multilingual: `LanguageCode` value object, per-language localizations for quiz, question, and option text; structure and gameplay stay language independent.
 - [x] Localization invariants enforced by the roots: one per language, default language always present, option coverage complete per language.
 - [x] Domain events defined; language independent.
-- [x] `V3__quiz_domain.sql` and `V4__content_i18n.sql` apply incrementally on an existing database with no data loss; Hibernate validates the mapping (Testcontainers).
+- [x] `V3__quiz_domain.sql`, `V4__content_i18n.sql`, `V5__optimistic_locking.sql`, and `V6__question_library.sql` apply incrementally on an existing database with no data loss; Hibernate validates the mapping (Testcontainers).
 - [x] Quiz domain is framework-independent (ArchUnit).
-- [x] Authoring API: create/read/update/publish/archive with the draft-first lifecycle, owner-only mutations from `CurrentUser`, `AuthorizationService` for every operation, and OpenAPI documentation (integration-tested end to end).
+- [x] Quiz authoring API: create/read/update/publish/archive with the draft-first lifecycle, owner-only mutations from `CurrentUser`, `AuthorizationService` for every operation, and OpenAPI documentation (integration-tested end to end).
 - [x] Optimistic locking on every aggregate; stale saves receive 409 instead of overwriting.
+- [x] Question library: questions are owned, lifecycle-managed (draft → published → archived), multilingual, taggable, reusable assets with their own API; publication freezes them and archival retires them without breaking existing quizzes.
+- [x] Tags are their own aggregate; questions reference tag ids, so tag vocabulary can grow without touching questions.
 
 ---
 
 # Future Work
 
-- PR #3: Question authoring (question CRUD, localization management, attach/detach on quizzes with `QuestionAddedToQuizEvent`, question deletion policy).
-- Quiz listing/browsing (owner's quizzes, PUBLIC discovery) — with the first UI that needs it.
+- Attach/detach questions on quizzes (`AddQuestionToQuizApplicationService`, `QuestionAddedToQuizEvent`), enforcing "archived questions are unavailable for new quizzes".
+- Question and quiz revisions — the prerequisite for translating or correcting published content (see Open Questions).
+- Quiz and question listing/browsing, plus tag search — with the first UI that needs it.
 - Participant language preference at session join (RFC-004) — the consumer of this model.
-- Question bank browsing and import/export (v1.1), including translations.
-- Question versioning if published-content editing demands it.
+- Question bank: sharing questions across authors and organizations, browsing, import/export (v1.1), including translations.
+- Tag vocabulary growth (synonyms, descriptions, hierarchies, usage counts) — the reason Tag is an aggregate.
 - Localized Bible book display names, translation tooling, and Bible API integration — when demanded.

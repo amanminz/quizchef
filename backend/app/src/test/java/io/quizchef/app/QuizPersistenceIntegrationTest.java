@@ -69,6 +69,7 @@ class QuizPersistenceIntegrationTest {
         Option aaron = Option.of(false, 2);
         Question question = Question.create(
                 new QuestionLocalization(EN, "Exodus leader", "Who led Israel out of Egypt?", "See Exodus 3."),
+                identityRepository.save(Identity.registered()).reference(),
                 QuestionType.SINGLE_CHOICE, Difficulty.EASY,
                 List.of(moses, aaron),
                 List.of(moses.localized(EN, "Moses"), aaron.localized(EN, "Aaron")));
@@ -135,6 +136,7 @@ class QuizPersistenceIntegrationTest {
         Option falseOption = Option.of(false, 2);
         Question question = Question.create(
                 new QuestionLocalization(EN, "Jonah", "Jonah was swallowed by a great fish.", null),
+                owner.reference(),
                 QuestionType.TRUE_FALSE, Difficulty.EASY,
                 List.of(trueOption, falseOption),
                 List.of(trueOption.localized(EN, "True"), falseOption.localized(EN, "False")));
@@ -198,6 +200,7 @@ class QuizPersistenceIntegrationTest {
         Option falseOption = Option.of(false, 2);
         return Question.create(
                 new QuestionLocalization(EN, title, "Prompt for " + title, null),
+                identityRepository.save(Identity.registered()).reference(),
                 QuestionType.TRUE_FALSE, Difficulty.MEDIUM,
                 List.of(trueOption, falseOption),
                 List.of(trueOption.localized(EN, "True"), falseOption.localized(EN, "False")));

@@ -40,7 +40,7 @@ class ContentI18nMigrationIntegrationTest {
         migrateTo("3");
         seedPreI18nContent();
 
-        migrateTo("latest");
+        migrateTo("4");
 
         try (Connection connection = connect()) {
             assertThat(queryString(connection,

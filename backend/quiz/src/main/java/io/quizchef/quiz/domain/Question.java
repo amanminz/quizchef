@@ -1,7 +1,12 @@
 package io.quizchef.quiz.domain;
 
 import io.quizchef.common.persistence.AuditableEntity;
+import io.quizchef.identity.domain.IdentityReference;
 import io.quizchef.quiz.domain.exception.DefaultLocalizationRequiredException;
+import io.quizchef.quiz.domain.exception.QuestionArchivedException;
+import io.quizchef.quiz.domain.exception.QuestionContentLockedException;
+import io.quizchef.quiz.domain.exception.QuestionNotArchivableException;
+import io.quizchef.quiz.domain.exception.QuestionNotPublishableException;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -16,6 +21,7 @@ import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
@@ -28,15 +34,20 @@ import lombok.NoArgsConstructor;
 /**
  * A reusable question: its own aggregate, never owned by a quiz.
  *
- * <p>Questions outlive and cross quizzes — the same question can appear in
- * many quizzes (question bank, PRD roadmap v1.1), so quizzes reference it
- * by id through QuizQuestion. Structural rules follow the
+ * <p>Questions are authored once and cross quizzes — the same question can
+ * appear in many quizzes (question bank, PRD roadmap v1.1), so quizzes
+ * reference it by id through QuizQuestion. Structural rules follow the
  * {@link QuestionType}: single choice has exactly one correct option,
  * multiple choice at least one, true/false exactly two options with one
  * correct.
  *
+ * <p>Lifecycle: DRAFT (fully editable) → PUBLISHED (immutable — quizzes
+ * may rely on it — but attachable) → ARCHIVED (unavailable for new
+ * quizzes; existing published quizzes continue functioning). Owned by the
+ * identity that authored it.
+ *
  * <p>Content is language neutral: structure (type, difficulty, options
- * with correctness, references) never varies by language, while
+ * with correctness, references, tags) never varies by language, while
  * displayable text lives in {@link QuestionLocalization} and
  * {@link OptionLocalization}. A language is either fully present —
  * question text plus a text for every option — or absent; partial
@@ -49,6 +60,21 @@ import lombok.NoArgsConstructor;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Question extends AuditableEntity {
+
+    @Embedded
+    @AttributeOverride(name = "identityId",
+            column = @Column(name = "owner_identity_id", nullable = false, updatable = false))
+    @AttributeOverride(name = "identityType",
+            column = @Column(name = "owner_identity_type", nullable = false, updatable = false, length = 20))
+    private IdentityReference ownerIdentity;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    private QuestionState state;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, updatable = false, length = 20)
+    private QuestionSource source;
 
     @Embedded
     @AttributeOverride(name = "value",
@@ -87,11 +113,19 @@ public class Question extends AuditableEntity {
     @CollectionTable(name = "question_media_references", joinColumns = @JoinColumn(name = "question_id"))
     private List<MediaReference> mediaReferences = new ArrayList<>();
 
-    private Question(UUID id, QuestionLocalization defaultContent, QuestionType questionType,
-                     Difficulty difficulty, List<Option> options,
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "question_tags", joinColumns = @JoinColumn(name = "question_id"))
+    @Column(name = "tag_id", nullable = false)
+    private Set<UUID> tagIds = new LinkedHashSet<>();
+
+    private Question(UUID id, QuestionLocalization defaultContent, IdentityReference ownerIdentity,
+                     QuestionType questionType, Difficulty difficulty, List<Option> options,
                      List<OptionLocalization> defaultOptionTexts) {
         super(id);
         Objects.requireNonNull(defaultContent, "defaultContent must not be null");
+        this.ownerIdentity = Objects.requireNonNull(ownerIdentity, "ownerIdentity must not be null");
+        this.state = QuestionState.DRAFT;
+        this.source = QuestionSource.MANUAL;
         this.defaultLanguage = defaultContent.languageCode();
         this.questionType = Objects.requireNonNull(questionType, "questionType must not be null");
         this.difficulty = Objects.requireNonNull(difficulty, "difficulty must not be null");
@@ -103,15 +137,47 @@ public class Question extends AuditableEntity {
     }
 
     /**
-     * Creates a question whose default language is the language of the
-     * given content; the option texts must cover every option in that
-     * same language.
+     * Creates a draft question whose default language is the language of
+     * the given content; the option texts must cover every option in that
+     * same language. The authoring API only creates MANUAL questions — AI
+     * and IMPORT sources arrive with their features.
      */
-    public static Question create(QuestionLocalization defaultContent, QuestionType questionType,
-                                  Difficulty difficulty, List<Option> options,
+    public static Question create(QuestionLocalization defaultContent, IdentityReference ownerIdentity,
+                                  QuestionType questionType, Difficulty difficulty, List<Option> options,
                                   List<OptionLocalization> defaultOptionTexts) {
-        return new Question(UUID.randomUUID(), defaultContent, questionType,
+        return new Question(UUID.randomUUID(), defaultContent, ownerIdentity, questionType,
                 difficulty, options, defaultOptionTexts);
+    }
+
+    /**
+     * Publishing freezes the question: quizzes may rely on it from now on.
+     * The localization invariants (default language present, every option
+     * localized per stored language) hold by construction.
+     */
+    public void publish() {
+        requireModifiable();
+        if (state == QuestionState.PUBLISHED) {
+            throw new QuestionNotPublishableException("Question is already published");
+        }
+        this.state = QuestionState.PUBLISHED;
+    }
+
+    /**
+     * Retires a published question: unavailable for new quizzes, while
+     * existing published quizzes continue functioning. Drafts are edited
+     * or abandoned, never archived.
+     */
+    public void archive() {
+        requireModifiable();
+        if (state != QuestionState.PUBLISHED) {
+            throw new QuestionNotArchivableException();
+        }
+        this.state = QuestionState.ARCHIVED;
+    }
+
+    public void changeDifficulty(Difficulty difficulty) {
+        requireDraft();
+        this.difficulty = Objects.requireNonNull(difficulty, "difficulty must not be null");
     }
 
     /**
@@ -120,6 +186,7 @@ public class Question extends AuditableEntity {
      * cover every option, in the same language.
      */
     public void localize(QuestionLocalization localization, List<OptionLocalization> optionTexts) {
+        requireDraft();
         Objects.requireNonNull(localization, "localization must not be null");
         validateOptionTexts(localization.languageCode(), options, optionTexts);
         removeLanguage(localization.languageCode());
@@ -132,6 +199,7 @@ public class Question extends AuditableEntity {
      * fallback everything resolves to and can never be removed.
      */
     public void removeLocalization(LanguageCode languageCode) {
+        requireDraft();
         Objects.requireNonNull(languageCode, "languageCode must not be null");
         if (languageCode.equals(defaultLanguage)) {
             throw new DefaultLocalizationRequiredException(defaultLanguage);
@@ -154,6 +222,7 @@ public class Question extends AuditableEntity {
      * the change is removed entirely and must be re-translated.
      */
     public void replaceOptions(List<Option> options, List<OptionLocalization> defaultOptionTexts) {
+        requireDraft();
         List<Option> validated = validateOptions(questionType, options);
         validateOptionTexts(defaultLanguage, validated, defaultOptionTexts);
 
@@ -184,17 +253,38 @@ public class Question extends AuditableEntity {
     }
 
     public void updateBibleReferences(List<BibleReference> references) {
+        requireDraft();
         Objects.requireNonNull(references, "references must not be null");
         this.bibleReferences.clear();
         this.bibleReferences.addAll(references);
     }
 
     public void updateMediaReferences(List<MediaReference> references) {
+        requireDraft();
         Objects.requireNonNull(references, "references must not be null");
         requireUniqueOrders(references.stream().map(MediaReference::displayOrder).toList(),
                 "media reference displayOrder must be unique");
         this.mediaReferences.clear();
         this.mediaReferences.addAll(references);
+    }
+
+    /**
+     * Replaces the tag set. Questions hold tag ids only — the Tag
+     * aggregate owns names and everything that will grow on them.
+     */
+    public void updateTags(Set<UUID> tagIds) {
+        requireDraft();
+        Objects.requireNonNull(tagIds, "tagIds must not be null");
+        this.tagIds.clear();
+        this.tagIds.addAll(tagIds);
+    }
+
+    public boolean isPublished() {
+        return state == QuestionState.PUBLISHED;
+    }
+
+    public boolean isArchived() {
+        return state == QuestionState.ARCHIVED;
     }
 
     public List<Option> options() {
@@ -243,6 +333,10 @@ public class Question extends AuditableEntity {
                 .toList();
     }
 
+    public Set<UUID> tagIds() {
+        return Set.copyOf(tagIds);
+    }
+
     private static int displayOrderOf(UUID optionId, List<Option> ordered) {
         for (Option option : ordered) {
             if (option.id().equals(optionId)) {
@@ -259,6 +353,12 @@ public class Question extends AuditableEntity {
         }
         requireUniqueOrders(options.stream().map(Option::displayOrder).toList(),
                 "option displayOrder must be unique");
+        Set<UUID> ids = new HashSet<>();
+        for (Option option : options) {
+            if (!ids.add(option.id())) {
+                throw new IllegalArgumentException("option ids must be unique");
+            }
+        }
         long correctCount = options.stream().filter(Option::correct).count();
         switch (type) {
             case SINGLE_CHOICE -> {
@@ -331,5 +431,21 @@ public class Question extends AuditableEntity {
     private void removeLanguage(LanguageCode languageCode) {
         localizations.removeIf(existing -> existing.languageCode().equals(languageCode));
         optionLocalizations.removeIf(text -> text.languageCode().equals(languageCode));
+    }
+
+    private void requireModifiable() {
+        if (state == QuestionState.ARCHIVED) {
+            throw new QuestionArchivedException();
+        }
+    }
+
+    /**
+     * Content changes only while DRAFT; a published question is immutable.
+     */
+    private void requireDraft() {
+        requireModifiable();
+        if (state != QuestionState.DRAFT) {
+            throw new QuestionContentLockedException();
+        }
     }
 }
