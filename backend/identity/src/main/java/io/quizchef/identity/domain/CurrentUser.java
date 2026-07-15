@@ -43,4 +43,14 @@ public record CurrentUser(
     public boolean isGuest() {
         return authenticated && identityType == IdentityType.GUEST;
     }
+
+    /**
+     * The reference other code uses to point at this identity.
+     */
+    public IdentityReference reference() {
+        if (!authenticated) {
+            throw new IllegalStateException("An anonymous user has no identity reference");
+        }
+        return new IdentityReference(identityId, identityType);
+    }
 }

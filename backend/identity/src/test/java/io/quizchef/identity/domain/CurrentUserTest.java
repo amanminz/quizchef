@@ -49,6 +49,21 @@ class CurrentUserTest {
     }
 
     @Test
+    void authenticatedUserExposesIdentityReference() {
+        UUID identityId = UUID.randomUUID();
+        CurrentUser user = CurrentUser.authenticated(identityId, IdentityType.REGISTERED, Set.of(Role.USER));
+
+        assertThat(user.reference().identityId()).isEqualTo(identityId);
+        assertThat(user.reference().identityType()).isEqualTo(IdentityType.REGISTERED);
+    }
+
+    @Test
+    void anonymousUserHasNoIdentityReference() {
+        assertThatThrownBy(() -> CurrentUser.anonymous().reference())
+                .isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
     void rolesAreImmutable() {
         CurrentUser user = CurrentUser.authenticated(UUID.randomUUID(), IdentityType.REGISTERED, Set.of(Role.USER));
 
