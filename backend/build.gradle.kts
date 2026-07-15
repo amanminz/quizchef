@@ -1,5 +1,6 @@
 import io.spring.gradle.dependencymanagement.dsl.DependencyManagementExtension
 import org.gradle.api.plugins.JavaPluginExtension
+import org.gradle.api.tasks.compile.JavaCompile
 import org.gradle.api.tasks.testing.Test
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.kotlin.dsl.withType
@@ -36,6 +37,13 @@ subprojects {
 
     tasks.withType<Test>().configureEach {
         useJUnitPlatform()
+    }
+
+    // Spring resolves @PathVariable/@RequestParam names via reflection;
+    // only the boot plugin adds -parameters by itself, library modules
+    // with controllers need it too.
+    tasks.withType<JavaCompile>().configureEach {
+        options.compilerArgs.add("-parameters")
     }
 
     dependencies {

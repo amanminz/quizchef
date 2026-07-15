@@ -9,6 +9,8 @@ import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.quiz.domain.exception.DefaultLocalizationRequiredException;
 import io.quizchef.quiz.domain.exception.DuplicateQuizQuestionException;
 import io.quizchef.quiz.domain.exception.QuizArchivedException;
+import io.quizchef.quiz.domain.exception.QuizContentLockedException;
+import io.quizchef.quiz.domain.exception.QuizNotArchivableException;
 import io.quizchef.quiz.domain.exception.QuizNotPublishableException;
 import io.quizchef.quiz.domain.exception.QuizQuestionsLockedException;
 import java.util.UUID;
@@ -165,9 +167,37 @@ class QuizTest {
     }
 
     @Test
+    void publishedQuizAcceptsOnlyVisibilityChanges() {
+        Quiz quiz = quiz();
+        quiz.addQuestion(UUID.randomUUID());
+        quiz.publish();
+
+        assertThatExceptionOfType(QuizContentLockedException.class)
+                .isThrownBy(() -> quiz.updateSettings(new QuizSettings(true, true, 60, false, false)));
+        assertThatExceptionOfType(QuizContentLockedException.class)
+                .isThrownBy(() -> quiz.localize(new QuizLocalization(KN, "ಬೈಬಲ್ ರಸಪ್ರಶ್ನೆ", null)));
+        assertThatExceptionOfType(QuizContentLockedException.class)
+                .isThrownBy(() -> quiz.removeLocalization(KN));
+
+        quiz.changeVisibility(QuizVisibility.PUBLIC);
+        assertThat(quiz.getVisibility()).isEqualTo(QuizVisibility.PUBLIC);
+    }
+
+    @Test
+    void draftCannotBeArchived() {
+        Quiz quiz = quiz();
+        quiz.addQuestion(UUID.randomUUID());
+
+        assertThatExceptionOfType(QuizNotArchivableException.class)
+                .isThrownBy(quiz::archive);
+        assertThat(quiz.getState()).isEqualTo(QuizState.DRAFT);
+    }
+
+    @Test
     void archivedQuizIsReadOnly() {
         Quiz quiz = quiz();
         quiz.addQuestion(UUID.randomUUID());
+        quiz.publish();
         quiz.archive();
 
         assertThat(quiz.isArchived()).isTrue();

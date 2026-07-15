@@ -5,6 +5,8 @@ import io.quizchef.identity.domain.IdentityReference;
 import io.quizchef.quiz.domain.exception.DefaultLocalizationRequiredException;
 import io.quizchef.quiz.domain.exception.DuplicateQuizQuestionException;
 import io.quizchef.quiz.domain.exception.QuizArchivedException;
+import io.quizchef.quiz.domain.exception.QuizContentLockedException;
+import io.quizchef.quiz.domain.exception.QuizNotArchivableException;
 import io.quizchef.quiz.domain.exception.QuizNotPublishableException;
 import io.quizchef.quiz.domain.exception.QuizQuestionsLockedException;
 import jakarta.persistence.AttributeOverride;
@@ -102,10 +104,11 @@ public class Quiz extends AuditableEntity {
 
     /**
      * Adds or replaces the quiz's content for the localization's language —
-     * one localization per language, always.
+     * one localization per language, always. Drafts only: published content
+     * is what participants signed up for.
      */
     public void localize(QuizLocalization localization) {
-        requireModifiable();
+        requireDraft();
         Objects.requireNonNull(localization, "localization must not be null");
         localizations.removeIf(existing -> existing.languageCode().equals(localization.languageCode()));
         localizations.add(localization);
@@ -116,7 +119,7 @@ public class Quiz extends AuditableEntity {
      * fallback everything resolves to and can never be removed.
      */
     public void removeLocalization(LanguageCode languageCode) {
-        requireModifiable();
+        requireDraft();
         Objects.requireNonNull(languageCode, "languageCode must not be null");
         if (languageCode.equals(defaultLanguage)) {
             throw new DefaultLocalizationRequiredException(defaultLanguage);
@@ -134,7 +137,7 @@ public class Quiz extends AuditableEntity {
     }
 
     public void updateSettings(QuizSettings settings) {
-        requireModifiable();
+        requireDraft();
         this.settings = Objects.requireNonNull(settings, "settings must not be null");
     }
 
@@ -173,8 +176,16 @@ public class Quiz extends AuditableEntity {
         this.state = QuizState.PUBLISHED;
     }
 
+    /**
+     * Retires a published quiz. Drafts cannot be archived — they are edited
+     * or abandoned; archiving exists to take a live quiz out of circulation
+     * while retaining it (no deletion).
+     */
     public void archive() {
         requireModifiable();
+        if (state != QuizState.PUBLISHED) {
+            throw new QuizNotArchivableException();
+        }
         this.state = QuizState.ARCHIVED;
     }
 
@@ -225,6 +236,17 @@ public class Quiz extends AuditableEntity {
     private void requireModifiable() {
         if (state == QuizState.ARCHIVED) {
             throw new QuizArchivedException();
+        }
+    }
+
+    /**
+     * Content and settings change only while DRAFT; a published quiz may
+     * change nothing but visibility.
+     */
+    private void requireDraft() {
+        requireModifiable();
+        if (state != QuizState.DRAFT) {
+            throw new QuizContentLockedException();
         }
     }
 }

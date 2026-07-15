@@ -381,6 +381,8 @@ Shared DTOs.
 
 Domain event contract (DomainEvent) and event dispatcher.
 
+Base entity (AuditableEntity: UUID id, timestamps, and optimistic locking — every aggregate carries a version; concurrent saves receive 409 instead of silently overwriting each other).
+
 ---
 
 ## Identity
@@ -420,6 +422,8 @@ Quiz history.
 ## Quiz
 
 Quiz management.
+
+Authoring API (create, read, update, publish, archive — draft-first: content and settings change only while DRAFT, published quizzes accept nothing but visibility, archiving is terminal and deletion does not exist). Ownership comes from CurrentUser; mutations are owner-only, and private quizzes are invisible to everyone else.
 
 Questions — separate reusable aggregates, never owned by a quiz. Quizzes compose them by id through QuizQuestion ordering.
 
