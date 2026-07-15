@@ -2,6 +2,7 @@ package io.quizchef.quiz.domain;
 
 import io.quizchef.common.persistence.AuditableEntity;
 import io.quizchef.identity.domain.IdentityReference;
+import io.quizchef.quiz.domain.exception.DefaultLocalizationRequiredException;
 import io.quizchef.quiz.domain.exception.DuplicateQuizQuestionException;
 import io.quizchef.quiz.domain.exception.QuizArchivedException;
 import io.quizchef.quiz.domain.exception.QuizNotPublishableException;
@@ -21,18 +22,25 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
 /**
- * An authored quiz: metadata, settings, lifecycle, and the ordered
- * composition of reusable questions.
+ * An authored quiz: settings, lifecycle, localized content, and the
+ * ordered composition of reusable questions.
  *
- * <p>The quiz owns only metadata and ordering — never Question aggregates.
- * Questions are referenced by id through {@link QuizQuestion} so they stay
- * reusable across quizzes.
+ * <p>The quiz owns only settings, ordering, and its localizations — never
+ * Question aggregates. Questions are referenced by id through
+ * {@link QuizQuestion} so they stay reusable across quizzes.
+ *
+ * <p>Content is language neutral: displayable text lives in
+ * {@link QuizLocalization}, one per language. The default language is
+ * chosen per quiz (a BELC quiz may default to {@code en}, another church's
+ * to {@code kn}) and its localization always exists — it is created with
+ * the quiz and can never be removed.
  */
 @Entity
 @Table(name = "quizzes")
@@ -40,18 +48,17 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class Quiz extends AuditableEntity {
 
-    @Column(nullable = false, length = 200)
-    private String title;
-
-    @Column(length = 2000)
-    private String description;
-
     @Embedded
     @AttributeOverride(name = "identityId",
             column = @Column(name = "owner_identity_id", nullable = false, updatable = false))
     @AttributeOverride(name = "identityType",
             column = @Column(name = "owner_identity_type", nullable = false, updatable = false, length = 20))
     private IdentityReference ownerIdentity;
+
+    @Embedded
+    @AttributeOverride(name = "value",
+            column = @Column(name = "default_language", nullable = false, length = 20))
+    private LanguageCode defaultLanguage;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
@@ -65,31 +72,60 @@ public class Quiz extends AuditableEntity {
     private QuizSettings settings;
 
     @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "quiz_localizations", joinColumns = @JoinColumn(name = "quiz_id"))
+    @AttributeOverride(name = "languageCode.value",
+            column = @Column(name = "language_code", nullable = false, length = 20))
+    private List<QuizLocalization> localizations = new ArrayList<>();
+
+    @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "quiz_questions", joinColumns = @JoinColumn(name = "quiz_id"))
     private List<QuizQuestion> questions = new ArrayList<>();
 
-    private Quiz(UUID id, String title, String description, IdentityReference ownerIdentity) {
+    private Quiz(UUID id, QuizLocalization defaultContent, IdentityReference ownerIdentity) {
         super(id);
-        this.title = requireTitle(title);
-        this.description = description;
+        Objects.requireNonNull(defaultContent, "defaultContent must not be null");
         this.ownerIdentity = Objects.requireNonNull(ownerIdentity, "ownerIdentity must not be null");
+        this.defaultLanguage = defaultContent.languageCode();
+        this.localizations.add(defaultContent);
         this.visibility = QuizVisibility.PRIVATE;
         this.state = QuizState.DRAFT;
         this.settings = QuizSettings.defaults();
     }
 
-    public static Quiz create(String title, String description, IdentityReference ownerIdentity) {
-        return new Quiz(UUID.randomUUID(), title, description, ownerIdentity);
+    /**
+     * Creates a draft quiz whose default language is the language of the
+     * given content.
+     */
+    public static Quiz create(QuizLocalization defaultContent, IdentityReference ownerIdentity) {
+        return new Quiz(UUID.randomUUID(), defaultContent, ownerIdentity);
     }
 
-    public void rename(String title) {
+    /**
+     * Adds or replaces the quiz's content for the localization's language —
+     * one localization per language, always.
+     */
+    public void localize(QuizLocalization localization) {
         requireModifiable();
-        this.title = requireTitle(title);
+        Objects.requireNonNull(localization, "localization must not be null");
+        localizations.removeIf(existing -> existing.languageCode().equals(localization.languageCode()));
+        localizations.add(localization);
     }
 
-    public void describe(String description) {
+    /**
+     * Drops a translation. The default language localization is the
+     * fallback everything resolves to and can never be removed.
+     */
+    public void removeLocalization(LanguageCode languageCode) {
         requireModifiable();
-        this.description = description;
+        Objects.requireNonNull(languageCode, "languageCode must not be null");
+        if (languageCode.equals(defaultLanguage)) {
+            throw new DefaultLocalizationRequiredException(defaultLanguage);
+        }
+        boolean removed = localizations.removeIf(existing -> existing.languageCode().equals(languageCode));
+        if (!removed) {
+            throw new IllegalArgumentException(
+                    "Quiz is not localized in %s".formatted(languageCode.value()));
+        }
     }
 
     public void changeVisibility(QuizVisibility visibility) {
@@ -155,6 +191,25 @@ public class Quiz extends AuditableEntity {
                 .toList();
     }
 
+    public List<QuizLocalization> localizations() {
+        return localizations.stream()
+                .sorted(Comparator.comparing(localization -> localization.languageCode().value()))
+                .toList();
+    }
+
+    public Optional<QuizLocalization> localization(LanguageCode languageCode) {
+        return localizations.stream()
+                .filter(existing -> existing.languageCode().equals(languageCode))
+                .findFirst();
+    }
+
+    /**
+     * The localization for the default language — guaranteed to exist.
+     */
+    public QuizLocalization defaultLocalization() {
+        return localization(defaultLanguage).orElseThrow();
+    }
+
     public boolean isPublished() {
         return state == QuizState.PUBLISHED;
     }
@@ -171,12 +226,5 @@ public class Quiz extends AuditableEntity {
         if (state == QuizState.ARCHIVED) {
             throw new QuizArchivedException();
         }
-    }
-
-    private static String requireTitle(String title) {
-        if (title == null || title.isBlank()) {
-            throw new IllegalArgumentException("title must not be blank");
-        }
-        return title.strip();
     }
 }

@@ -425,11 +425,13 @@ Questions — separate reusable aggregates, never owned by a quiz. Quizzes compo
 
 Typed questions (single choice, multiple choice, true/false) with per-type structural rules.
 
-Options.
+Options (language-neutral: id, correctness, order — participants answer with option ids, so gameplay never depends on language).
 
-Bible references.
+Multilingual content (LanguageCode value object; quiz, question, and option text live in per-language localizations owned by their aggregate; each quiz and question has a configurable default language whose localization always exists; a translation is whole or absent). Participants choose their language per session (session module) — identities carry no content language.
 
-Media references.
+Bible references (deliberately not localized — the canonical reference is language independent).
+
+Media references (shared across all translations).
 
 Validation (aggregates enforce their own invariants).
 
