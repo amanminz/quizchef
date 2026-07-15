@@ -713,6 +713,20 @@ Documentation
 
 # 20. Product Roadmap
 
+## Release Plan
+
+Each milestone ends with an annotated git tag on its final merge commit and a GitHub Release.
+
+| Tag                               | Milestone   | Meaning                                                                                                    |
+| --------------------------------- | ----------- | ---------------------------------------------------------------------------------------------------------- |
+| **v0.1.0-foundation** ✅          | Milestone 1 | Repository and infrastructure ready. Scaffolding, CI, Gradle multi-module, Docker, PostgreSQL, Flyway.     |
+| **v0.2.0-platform-foundation** ✅ | Milestone 2 | Identity and security platform complete. Authentication, Authorization, JWT, RequestContext, ADRs/RFCs.    |
+| **v0.3.0-quiz-authoring**         | Milestone 3 | Quiz creation, question authoring, media references, quiz CRUD complete.                                   |
+| **v0.4.0-live-session**           | Milestone 4 | Live quiz sessions, lobby, participant join, host controls, reconnection, WebSocket transport.             |
+| **v0.5.0-gameplay**               | Milestone 5 | Question flow, timers, scoring, leaderboard, explanations, Bible references.                               |
+| **v0.6.0-belc-release-candidate** | Milestone 6 | Feature complete for BELC. Bug fixes, performance, UX polish, deployment validation.                       |
+| **v1.0.0**                        | Production  | First public production release for BELC at `quiz.thebelc.in`.                                            |
+
 ## Version 1
 
 BELC Live Bible Quiz
