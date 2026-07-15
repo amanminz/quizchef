@@ -5,29 +5,31 @@ import java.util.Objects;
 import java.util.UUID;
 
 /**
- * One answer option of a question. Identity matters (participants pick an
- * option id during gameplay), but options live and die with their question.
+ * One answer option of a question: identity, correctness, and position —
+ * deliberately language neutral. Identity matters (participants pick an
+ * option id during gameplay), correctness belongs here and never to a
+ * translation, and the displayable text lives in
+ * {@link OptionLocalization}.
  */
 @Embeddable
 public record Option(
         UUID id,
-        String text,
         boolean correct,
         int displayOrder
 ) {
 
     public Option {
         Objects.requireNonNull(id, "id must not be null");
-        if (text == null || text.isBlank()) {
-            throw new IllegalArgumentException("option text must not be blank");
-        }
-        text = text.strip();
         if (displayOrder < 1) {
             throw new IllegalArgumentException("displayOrder must be positive");
         }
     }
 
-    public static Option of(String text, boolean correct, int displayOrder) {
-        return new Option(UUID.randomUUID(), text, correct, displayOrder);
+    public static Option of(boolean correct, int displayOrder) {
+        return new Option(UUID.randomUUID(), correct, displayOrder);
+    }
+
+    public OptionLocalization localized(LanguageCode languageCode, String text) {
+        return new OptionLocalization(id, languageCode, text);
     }
 }

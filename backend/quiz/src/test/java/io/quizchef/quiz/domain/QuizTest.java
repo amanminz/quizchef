@@ -6,6 +6,7 @@ import static org.assertj.core.api.Assertions.assertThatIllegalArgumentException
 
 import io.quizchef.identity.domain.IdentityReference;
 import io.quizchef.identity.domain.IdentityType;
+import io.quizchef.quiz.domain.exception.DefaultLocalizationRequiredException;
 import io.quizchef.quiz.domain.exception.DuplicateQuizQuestionException;
 import io.quizchef.quiz.domain.exception.QuizArchivedException;
 import io.quizchef.quiz.domain.exception.QuizNotPublishableException;
@@ -17,9 +18,11 @@ class QuizTest {
 
     private static final IdentityReference OWNER =
             new IdentityReference(UUID.randomUUID(), IdentityType.REGISTERED);
+    private static final LanguageCode EN = LanguageCode.of("en");
+    private static final LanguageCode KN = LanguageCode.of("kn");
 
     private Quiz quiz() {
-        return Quiz.create("BELC Bible Quiz", "Weekly quiz", OWNER);
+        return Quiz.create(new QuizLocalization(EN, "BELC Bible Quiz", "Weekly quiz"), OWNER);
     }
 
     @Test
@@ -35,9 +38,52 @@ class QuizTest {
     }
 
     @Test
+    void shouldCreateWithDefaultLanguageLocalizationFromDayOne() {
+        Quiz quiz = quiz();
+
+        assertThat(quiz.getDefaultLanguage()).isEqualTo(EN);
+        assertThat(quiz.defaultLocalization().title()).isEqualTo("BELC Bible Quiz");
+        assertThat(quiz.localizations()).hasSize(1);
+    }
+
+    @Test
+    void defaultLanguageIsConfigurablePerQuiz() {
+        Quiz quiz = Quiz.create(
+                new QuizLocalization(KN, "ಬೈಬಲ್ ರಸಪ್ರಶ್ನೆ", null), OWNER);
+
+        assertThat(quiz.getDefaultLanguage()).isEqualTo(KN);
+        assertThat(quiz.defaultLocalization().title()).isEqualTo("ಬೈಬಲ್ ರಸಪ್ರಶ್ನೆ");
+    }
+
+    @Test
     void shouldRejectBlankTitle() {
         assertThatIllegalArgumentException()
-                .isThrownBy(() -> Quiz.create("   ", null, OWNER));
+                .isThrownBy(() -> Quiz.create(new QuizLocalization(EN, "   ", null), OWNER));
+    }
+
+    @Test
+    void localizeAddsTranslationsAndKeepsOnePerLanguage() {
+        Quiz quiz = quiz();
+
+        quiz.localize(new QuizLocalization(KN, "ಬೈಬಲ್ ರಸಪ್ರಶ್ನೆ", "ವಾರದ ರಸಪ್ರಶ್ನೆ"));
+        quiz.localize(new QuizLocalization(KN, "ಬಿಇಎಲ್ಸಿ ರಸಪ್ರಶ್ನೆ", null));
+
+        assertThat(quiz.localizations()).hasSize(2);
+        assertThat(quiz.localization(KN).orElseThrow().title()).isEqualTo("ಬಿಇಎಲ್ಸಿ ರಸಪ್ರಶ್ನೆ");
+        assertThat(quiz.localization(EN).orElseThrow().title()).isEqualTo("BELC Bible Quiz");
+    }
+
+    @Test
+    void defaultLanguageLocalizationCannotBeRemoved() {
+        Quiz quiz = quiz();
+        quiz.localize(new QuizLocalization(KN, "ಬೈಬಲ್ ರಸಪ್ರಶ್ನೆ", null));
+
+        assertThatExceptionOfType(DefaultLocalizationRequiredException.class)
+                .isThrownBy(() -> quiz.removeLocalization(EN));
+
+        quiz.removeLocalization(KN);
+        assertThat(quiz.localizations()).hasSize(1);
+        assertThatIllegalArgumentException().isThrownBy(() -> quiz.removeLocalization(KN));
     }
 
     @Test
@@ -125,7 +171,10 @@ class QuizTest {
         quiz.archive();
 
         assertThat(quiz.isArchived()).isTrue();
-        assertThatExceptionOfType(QuizArchivedException.class).isThrownBy(() -> quiz.rename("New"));
+        assertThatExceptionOfType(QuizArchivedException.class)
+                .isThrownBy(() -> quiz.localize(new QuizLocalization(KN, "ಹೊಸ", null)));
+        assertThatExceptionOfType(QuizArchivedException.class)
+                .isThrownBy(() -> quiz.removeLocalization(KN));
         assertThatExceptionOfType(QuizArchivedException.class)
                 .isThrownBy(() -> quiz.addQuestion(UUID.randomUUID()));
         assertThatExceptionOfType(QuizArchivedException.class).isThrownBy(quiz::publish);
@@ -138,13 +187,12 @@ class QuizTest {
     void shouldUpdateMetadataWhileModifiable() {
         Quiz quiz = quiz();
 
-        quiz.rename("Renamed");
-        quiz.describe("New description");
+        quiz.localize(new QuizLocalization(EN, "Renamed", "New description"));
         quiz.changeVisibility(QuizVisibility.PUBLIC);
         quiz.updateSettings(new QuizSettings(true, true, 60, false, false));
 
-        assertThat(quiz.getTitle()).isEqualTo("Renamed");
-        assertThat(quiz.getDescription()).isEqualTo("New description");
+        assertThat(quiz.defaultLocalization().title()).isEqualTo("Renamed");
+        assertThat(quiz.defaultLocalization().description()).isEqualTo("New description");
         assertThat(quiz.getVisibility()).isEqualTo(QuizVisibility.PUBLIC);
         assertThat(quiz.getSettings().questionTimeLimitSeconds()).isEqualTo(60);
     }

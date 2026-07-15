@@ -20,13 +20,15 @@ Updated
 
 # Summary
 
-Defines the Quiz bounded context: the Quiz aggregate (metadata, settings, lifecycle, and composition), the reusable Question aggregate with its typed structural rules, the value objects they embed, the domain events, and the persistence model. The domain is established first (Milestone 3 PR #1) without any API; CRUD endpoints follow in PR #2.
+Defines the Quiz bounded context: the Quiz aggregate (settings, lifecycle, localized content, and composition), the reusable Question aggregate with its typed structural rules, the value objects they embed, the domain events, and the persistence model. Content is multilingual from the start (Milestone 3 PR #1.5): structure is language neutral, displayable text lives in per-language localizations, and every aggregate carries a configurable default language. The domain is established first (Milestone 3 PR #1/#1.5) without any API; CRUD endpoints follow in PR #2.
 
 ---
 
 # Motivation
 
 Quiz authoring is the heart of the product. Getting the aggregate boundaries right before exposing functionality prevents the most expensive mistake available here: welding questions to quizzes and losing the question bank (PRD roadmap v1.1), import/export, and reuse.
+
+Internationalization is foundational for the same reason: BELC's congregation spans English, Kannada, Hindi, Tamil, Telugu, and Malayalam speakers. Retrofitting translations after text is welded into aggregate columns would be a schema-and-domain rewrite; introducing it before any API exists costs one migration.
 
 ---
 
@@ -35,6 +37,7 @@ Quiz authoring is the heart of the product. Getting the aggregate boundaries rig
 - A rich, framework-independent quiz domain that enforces its own invariants.
 - Questions reusable across quizzes from day one.
 - A typed question model that can grow beyond Bible quizzes without redesign.
+- Multilingual content as a first-class capability: every participant can experience a quiz in their preferred language, while business logic never touches translated text.
 
 ---
 
@@ -44,6 +47,9 @@ Quiz authoring is the heart of the product. Getting the aggregate boundaries rig
 - Media upload (RFC-007), gameplay, sessions, scoring (RFC-004/006).
 - Bible API integration; references are plain value objects.
 - Question versioning — deferred until editing published content demands it.
+- Translation APIs, automatic translation, and import/export of translations.
+- Participant language preference and runtime language switching — the participant belongs to the session module (RFC-004).
+- UI localization (labels, buttons, error messages) — a future frontend concern, unrelated to content.
 
 ---
 
@@ -51,7 +57,7 @@ Quiz authoring is the heart of the product. Getting the aggregate boundaries rig
 
 ## Aggregate boundaries: why Question is separate
 
-**A Question must never belong to exactly one Quiz.** Questions are their own aggregate; a quiz owns only metadata, settings, lifecycle, and an ordered list of question references (`QuizQuestion`: questionId + displayOrder, an element collection inside the Quiz aggregate).
+**A Question must never belong to exactly one Quiz.** Questions are their own aggregate; a quiz owns only settings, lifecycle, localized content, and an ordered list of question references (`QuizQuestion`: questionId + displayOrder, an element collection inside the Quiz aggregate).
 
 Reasons:
 
@@ -61,21 +67,55 @@ Reasons:
 
 `QuizQuestion` lives inside the Quiz aggregate rather than being an independently-repositoried entity, deliberately: ordering invariants (unique question per quiz, unique position) can only be enforced by the aggregate root. There is no QuizQuestion repository — composition changes go through `Quiz.addQuestion` / `Quiz.removeQuestion`. The `quiz_questions` table backs the collection with database-level uniqueness as the second line of defense.
 
+## Content internationalization
+
+Content and structure are split. **Structure is language neutral**: question types, correctness, ordering, difficulty, settings, scripture and media references never vary by language. **Content is localized**: every piece of displayable text lives in a localization value object keyed by `LanguageCode`, owned by its aggregate root.
+
+```text
+Quiz                                         Question
+├── defaultLanguage : LanguageCode           ├── defaultLanguage : LanguageCode
+├── localizations : [QuizLocalization]       ├── localizations : [QuestionLocalization]
+│     languageCode · title · description     │     languageCode · title · prompt · explanation
+├── owner, settings, visibility, state       ├── questionType, difficulty
+└── questions : [QuizQuestion]               ├── options : [Option]
+      questionId · displayOrder              │     id · correct · displayOrder
+                                             ├── optionLocalizations : [OptionLocalization]
+                                             │     optionId · languageCode · text
+                                             └── bibleReferences, mediaReferences  (language neutral)
+```
+
+Principles, and why:
+
+- **Business logic operates on ids, never translated text.** Participants answer with option ids; scoring compares ids to `Option.correct`. Correctness lives on `Option` and never on a translation — a wrong translation can never change an answer. Gameplay is completely language independent.
+- **Language selection belongs to the Participant, not the Identity.** The same person may host an English quiz on Sunday and play a Kannada one on Wednesday; language is a per-session choice, not an account attribute. The Participant (session module, RFC-004) will carry the preference; this PR only guarantees the content model can serve it.
+- **The default language is configurable per aggregate — English is not special.** BELC will choose `en`; another church can author in `kn` or `hi` without any model change. The default is fixed at creation as the language of the initial content, and its localization is the fallback all display resolution ends at.
+- **A translation is whole or absent.** A language is present only if it localizes the question text *and* every option. Partial translations cannot exist, so display resolution is binary: use the requested language if present, else the default. No per-field fallback logic anywhere.
+
+Domain rules, enforced by the roots:
+
+- Exactly one localization per language (`localize` replaces; the persistence PK is the second line of defense).
+- The default language localization always exists — created with the aggregate, never removable (`quiz.localization.default-required`, 409).
+- Option localizations must cover exactly the option set: one text per option, no strays, no duplicates, all in the language being added (violations are `IllegalArgumentException` → 400 in PR #2).
+- Localizations cannot exist without their parent aggregate — they are element collections inside it, deleted with it (`ON DELETE CASCADE` as the database mirror).
+- `replaceOptions` re-verifies every translation: languages whose texts still cover the new option set survive (texts of dropped options are pruned); a language left incomplete is removed entirely and must be re-translated. Changing what a question asks invalidates its translations — that is a feature, not a loss.
+
+`BibleReference` is deliberately **not** localized: Exodus 3:1 is Exodus 3:1 in every language — the canonical reference is language independent. Only display names of Bible books may ever vary, and that is a rendering concern for later. `MediaReference` is shared across all translations.
+
 ## Quiz aggregate
 
-Metadata (title required, description), `ownerIdentity` (an embedded `IdentityReference` — who, never more), `visibility` (PRIVATE default | UNLISTED | PUBLIC), `state` (DRAFT → PUBLISHED → ARCHIVED), embedded `QuizSettings`, and the composition.
+`ownerIdentity` (an embedded `IdentityReference` — who, never more), `defaultLanguage`, localized content (title required, optional description per language), `visibility` (PRIVATE default | UNLISTED | PUBLIC), `state` (DRAFT → PUBLISHED → ARCHIVED), embedded `QuizSettings`, and the composition.
 
 Lifecycle invariants, enforced by the aggregate — never by controllers:
 
 - Publishing requires at least one question, and only a DRAFT can publish.
 - Published quizzes may gain questions but never lose them (`quiz.questions.locked`, 409) — participants may already rely on the composition.
-- Archived quizzes are read-only (`quiz.archived`, 409); archiving is terminal.
+- Archived quizzes are read-only (`quiz.archived`, 409), including their localizations; archiving is terminal.
 - Adding a question twice is a conflict (`quiz.question.duplicate`).
 - Display order is assigned by the aggregate (append = max + 1), unique per quiz.
 
 ## Question aggregate
 
-Title, prompt, optional explanation (shown after answering, PRD), `questionType`, `difficulty` (EASY/MEDIUM/HARD, reserved as a future scoring multiplier), and three embedded collections: options, Bible references, media references.
+`defaultLanguage`, localized content (title and prompt required, optional explanation — shown after answering, PRD), `questionType`, `difficulty` (EASY/MEDIUM/HARD, reserved as a future scoring multiplier), and four embedded collections: options, option localizations, Bible references, media references.
 
 **QuestionType is modeled from day one** so the platform can grow beyond BELC without redesigning the aggregate. The type carries the structural rules, revalidated on every option change:
 
@@ -83,13 +123,17 @@ Title, prompt, optional explanation (shown after answering, PRD), `questionType`
 - `MULTIPLE_CHOICE` — one or more correct options.
 - `TRUE_FALSE` — exactly two options, exactly one correct.
 
-Plus: at least one option, unique option display order, non-blank option text. Structural violations are `IllegalArgumentException` (invalid construction); PR #2 maps them to 400 at the API boundary.
+Plus: at least one option, unique option display order, and complete option localization per stored language. Structural violations are `IllegalArgumentException` (invalid construction); PR #2 maps them to 400 at the API boundary.
 
 ## Value objects
 
 All records, all JPA embeddables:
 
-- **Option** — id (participants pick option ids during gameplay), text, correct, displayOrder.
+- **LanguageCode** — a normalized BCP-47 tag (`en`, `kn`, `en-IN`, `zh-Hant`; pragmatic subset: language, optional script, optional region). The domain never handles raw language strings.
+- **Option** — id (participants pick option ids during gameplay), correct, displayOrder. Deliberately language neutral.
+- **QuizLocalization** — languageCode, title, description.
+- **QuestionLocalization** — languageCode, title, prompt, explanation.
+- **OptionLocalization** — optionId, languageCode, text.
 - **BibleReference** — book, chapter, verseStart, optional verseEnd (null = single verse), optional translation. No API integration.
 - **MediaReference** — id, mediaType (IMAGE/AUDIO/VIDEO), storageKey, optional altText, displayOrder. Only the pointer; uploads are the media module's concern (RFC-007).
 - **QuizSettings** — randomizeQuestionOrder, randomizeOptionOrder, questionTimeLimitSeconds (5–300, default 30), showLeaderboardAfterQuestion, showExplanationAfterQuestion. New settings are new components — no redesign.
@@ -100,9 +144,15 @@ All records, all JPA embeddables:
 
 Definitions only, no consumers: `QuizCreatedEvent` (quizId, owner, occurredAt), `QuestionAddedToQuizEvent` (quizId, questionId, occurredAt), `QuizPublishedEvent` (quizId, occurredAt). Published by the application services of PR #2 per ADR-005.
 
+Events reference aggregate ids only and are language independent — no localization events exist, and none are needed yet.
+
 ## Persistence
 
-`V3__quiz_domain.sql` (additive, idempotent): `quizzes` (with flattened owner reference and settings columns), `questions`, `quiz_questions` (PK quiz+question, unique quiz+order, FKs both ways), `question_options` / `question_media_references` (unique display order per question), `question_bible_references`. CHECK constraints mirror every enum and range invariant. Repositories: `QuizRepository`, `QuestionRepository` — plain, query methods arrive with the use cases that need them.
+`V3__quiz_domain.sql` (additive, idempotent): `quizzes` (with flattened owner reference and settings columns), `questions`, `quiz_questions` (PK quiz+question, unique quiz+order, FKs both ways), `question_options` / `question_media_references` (unique display order per question), `question_bible_references`. CHECK constraints mirror every enum and range invariant.
+
+`V4__content_i18n.sql` (content move, no data loss): adds `default_language` to `quizzes` and `questions`; creates `quiz_localizations` (PK quiz+language), `question_localizations` (PK question+language), and `option_localizations` (PK question+option+language), all `ON DELETE CASCADE` from their parent; copies every existing title, description, prompt, explanation, and option text into the default-language localization; then drops the old text columns. Aggregate identities are preserved — the migration is proven by an integration test that seeds a V3 database and migrates it. `option_localizations` has no composite FK to `question_options` deliberately: Hibernate rewrites both element collections independently, so option membership is enforced by the Question aggregate.
+
+Repositories: `QuizRepository`, `QuestionRepository` — plain, query methods arrive with the use cases that need them.
 
 ## Application layer (PR #2 contract)
 
@@ -114,7 +164,7 @@ AddQuestionToQuizApplicationService.add(CurrentUser, AddQuestionCommand)   → a
 PublishQuizApplicationService.publish(CurrentUser, PublishQuizCommand)     → authorize(QUIZ_EDIT) + ownership → QuizPublishedEvent
 ```
 
-All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (owner-or-admin) are decided in PR #2.
+All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (owner-or-admin) are decided in PR #2. Localization management (add/remove translation) rides the same edit authorization.
 
 ---
 
@@ -128,18 +178,27 @@ All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (
 
 **String-typed question kinds** — rejected in favor of the `QuestionType` enum with per-type rules (review decision).
 
+**Text columns on the aggregates with a translations side-table** — rejected: two sources of truth for the same text, and "which language is the column?" has no good answer. One shape for all languages, default included, keeps display resolution uniform.
+
+**A fixed platform default language (English)** — rejected: makes English structurally special. The default is a per-aggregate choice; a Kannada-first church is not a variation, it is the same model.
+
+**Localizations as independent aggregates with their own repositories** — rejected: uniqueness per language, default-language presence, and option coverage are exactly the invariants only the parent root can guarantee.
+
+**Partial translations with per-field fallback** — rejected: every consumer would need field-level fallback logic, and a half-translated question shown to a participant is worse than a cleanly fallen-back one.
+
 ---
 
 # Risks
 
 - Element collections rewrite on change (delete + insert); fine at authoring scale, revisit only if question editing becomes hot.
 - `quiz_questions.question_id` has a foreign key, so deleting a question used by any quiz is blocked at the database — question deletion policy is a PR #2/question-bank decision.
+- `replaceOptions` silently drops translations left incomplete by the change. Authoring UX should surface this (PR #2+ returns which languages were invalidated); the domain rule itself is correct.
 
 ---
 
 # Migration
 
-`V3__quiz_domain.sql` is additive; existing data is unaffected.
+`V3__quiz_domain.sql` is additive; existing data is unaffected. `V4__content_i18n.sql` moves content into localization tables with no data loss (integration-tested against a seeded V3 database); existing quizzes and questions keep their identities and become default-language (`en`) localized.
 
 ---
 
@@ -148,6 +207,7 @@ All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (
 - Question deletion semantics when referenced by quizzes (block vs. soft-delete) — PR #2.
 - Whether editing a published quiz's questions requires versioning — deferred.
 - Question ownership/authorship for authorization — PR #2.
+- Localized display names for Bible books (rendering concern) — deferred until a UI needs them.
 
 ---
 
@@ -155,14 +215,18 @@ All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (
 
 - [x] Quiz, Question, QuizQuestion modeled; questions reusable across quizzes (integration-tested).
 - [x] All invariants enforced by aggregates with unit coverage, including the per-type option rules.
-- [x] Domain events defined.
-- [x] `V3__quiz_domain.sql` applies incrementally on an existing database; Hibernate validates the mapping (Testcontainers).
+- [x] Content is multilingual: `LanguageCode` value object, per-language localizations for quiz, question, and option text; structure and gameplay stay language independent.
+- [x] Localization invariants enforced by the roots: one per language, default language always present, option coverage complete per language.
+- [x] Domain events defined; language independent.
+- [x] `V3__quiz_domain.sql` and `V4__content_i18n.sql` apply incrementally on an existing database with no data loss; Hibernate validates the mapping (Testcontainers).
 - [x] Quiz domain is framework-independent (ArchUnit).
 
 ---
 
 # Future Work
 
-- PR #2: Quiz CRUD (services above, request/response DTOs, ownership policy).
-- Question bank browsing and import/export (v1.1).
+- PR #2: Quiz CRUD (services above, request/response DTOs, ownership policy, localization management endpoints).
+- Participant language preference at session join (RFC-004) — the consumer of this model.
+- Question bank browsing and import/export (v1.1), including translations.
 - Question versioning if published-content editing demands it.
+- Localized Bible book display names, translation tooling, and Bible API integration — when demanded.
