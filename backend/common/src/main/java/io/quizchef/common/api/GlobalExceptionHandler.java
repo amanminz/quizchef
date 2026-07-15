@@ -7,6 +7,7 @@ import io.quizchef.common.exception.ResourceNotFoundException;
 import io.quizchef.common.exception.UnauthorizedException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.dao.OptimisticLockingFailureException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.http.converter.HttpMessageNotReadableException;
@@ -51,6 +52,30 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiError> handleUnreadableBody(HttpMessageNotReadableException exception) {
         return ResponseEntity.badRequest()
                 .body(ApiError.of("request.malformed", "Request body could not be read"));
+    }
+
+    /**
+     * Domain aggregates reject invalid construction with
+     * IllegalArgumentException; at the API boundary that is a client error,
+     * never a server fault (RFC-003).
+     */
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ApiError> handleInvalidArgument(IllegalArgumentException exception) {
+        log.info("Request rejected by domain validation: {}", exception.getMessage());
+        return ResponseEntity.badRequest()
+                .body(ApiError.of("request.invalid", exception.getMessage()));
+    }
+
+    /**
+     * An optimistic lock lost the race inside a single transaction window.
+     * Same contract as a stale client version: refresh and retry.
+     */
+    @ExceptionHandler(OptimisticLockingFailureException.class)
+    public ResponseEntity<ApiError> handleOptimisticLockingFailure(
+            OptimisticLockingFailureException exception) {
+        return ResponseEntity.status(HttpStatus.CONFLICT)
+                .body(ApiError.of("conflict.concurrent-modification",
+                        "The resource was modified by someone else. Refresh and try again."));
     }
 
     @ExceptionHandler(Exception.class)

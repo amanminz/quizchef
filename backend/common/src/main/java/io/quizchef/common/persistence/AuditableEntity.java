@@ -6,6 +6,7 @@ import jakarta.persistence.MappedSuperclass;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Transient;
+import jakarta.persistence.Version;
 import java.time.Instant;
 import java.util.Objects;
 import java.util.UUID;
@@ -21,12 +22,21 @@ import org.springframework.data.domain.Persistable;
  * (not merge) unsaved aggregates: without it every insert would run through
  * merge, firing lifecycle callbacks on an internal copy and costing an
  * extra SELECT.
+ *
+ * <p>Every entity is optimistically locked: concurrent modifications lose
+ * against the {@code version} column instead of silently overwriting each
+ * other. Clients read the version, send it back with updates, and receive
+ * 409 when someone else saved in between.
  */
 @MappedSuperclass
 public abstract class AuditableEntity implements Persistable<UUID> {
 
     @Id
     private UUID id;
+
+    @Version
+    @Column(nullable = false)
+    private long version;
 
     @Column(nullable = false, updatable = false)
     private Instant createdAt;
@@ -62,6 +72,10 @@ public abstract class AuditableEntity implements Persistable<UUID> {
     @Transient
     public boolean isNew() {
         return createdAt == null;
+    }
+
+    public long getVersion() {
+        return version;
     }
 
     public Instant getCreatedAt() {

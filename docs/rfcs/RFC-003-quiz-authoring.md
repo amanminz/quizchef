@@ -20,7 +20,7 @@ Updated
 
 # Summary
 
-Defines the Quiz bounded context: the Quiz aggregate (settings, lifecycle, localized content, and composition), the reusable Question aggregate with its typed structural rules, the value objects they embed, the domain events, and the persistence model. Content is multilingual from the start (Milestone 3 PR #1.5): structure is language neutral, displayable text lives in per-language localizations, and every aggregate carries a configurable default language. The domain is established first (Milestone 3 PR #1/#1.5) without any API; CRUD endpoints follow in PR #2.
+Defines the Quiz bounded context: the Quiz aggregate (settings, lifecycle, localized content, and composition), the reusable Question aggregate with its typed structural rules, the value objects they embed, the domain events, and the persistence model. Content is multilingual from the start (Milestone 3 PR #1.5): structure is language neutral, displayable text lives in per-language localizations, and every aggregate carries a configurable default language. The domain was established first (Milestone 3 PR #1/#1.5); PR #2 adds the author-facing quiz APIs — create, read, update, publish, archive — with owner-only mutations and optimistic locking. Question authoring APIs follow in PR #3.
 
 ---
 
@@ -107,9 +107,10 @@ Domain rules, enforced by the roots:
 
 Lifecycle invariants, enforced by the aggregate — never by controllers:
 
+- **Draft-first authoring**: content (localizations) and settings change only while DRAFT (`quiz.content.locked`, 409 otherwise). A published quiz is what participants signed up for; the only thing it may still change is visibility.
 - Publishing requires at least one question, and only a DRAFT can publish.
-- Published quizzes may gain questions but never lose them (`quiz.questions.locked`, 409) — participants may already rely on the composition.
-- Archived quizzes are read-only (`quiz.archived`, 409), including their localizations; archiving is terminal.
+- Published quizzes may gain questions but never lose them (`quiz.questions.locked`, 409) — participants may already rely on the composition. (Composition changes ride the question-authoring APIs of PR #3.)
+- Archiving is PUBLISHED → ARCHIVED only (`quiz.not-archivable`, 409 for drafts — a draft is edited or abandoned, not retired). Archived quizzes are read-only (`quiz.archived`, 409), including their localizations; archiving is terminal.
 - Adding a question twice is a conflict (`quiz.question.duplicate`).
 - Display order is assigned by the aggregate (append = max + 1), unique per quiz.
 
@@ -142,7 +143,7 @@ All records, all JPA embeddables:
 
 ## Domain events
 
-Definitions only, no consumers: `QuizCreatedEvent` (quizId, owner, occurredAt), `QuestionAddedToQuizEvent` (quizId, questionId, occurredAt), `QuizPublishedEvent` (quizId, occurredAt). Published by the application services of PR #2 per ADR-005.
+`QuizCreatedEvent` (quizId, owner, occurredAt), `QuestionAddedToQuizEvent` (quizId, questionId, occurredAt), `QuizPublishedEvent` (quizId, occurredAt), `QuizArchivedEvent` (quizId, occurredAt). Created/Published/Archived are published by the application services per ADR-005; `QuestionAddedToQuizEvent` waits for the attach API (PR #3). No consumers yet.
 
 Events reference aggregate ids only and are language independent — no localization events exist, and none are needed yet.
 
@@ -152,19 +153,45 @@ Events reference aggregate ids only and are language independent — no localiza
 
 `V4__content_i18n.sql` (content move, no data loss): adds `default_language` to `quizzes` and `questions`; creates `quiz_localizations` (PK quiz+language), `question_localizations` (PK question+language), and `option_localizations` (PK question+option+language), all `ON DELETE CASCADE` from their parent; copies every existing title, description, prompt, explanation, and option text into the default-language localization; then drops the old text columns. Aggregate identities are preserved — the migration is proven by an integration test that seeds a V3 database and migrates it. `option_localizations` has no composite FK to `question_options` deliberately: Hibernate rewrites both element collections independently, so option membership is enforced by the Question aggregate.
 
+`V5__optimistic_locking.sql` adds a `version BIGINT` column to every aggregate table (identities, credentials, user_profiles, identity_sessions, quizzes, questions), backing JPA `@Version` on `AuditableEntity`.
+
 Repositories: `QuizRepository`, `QuestionRepository` — plain, query methods arrive with the use cases that need them.
 
-## Application layer (PR #2 contract)
+## Application layer (implemented in PR #2)
 
-No services ship in this PR — empty placeholder classes would violate the no-dead-code rule (same reasoning as `AuthenticationResult`, introduced with its first consumer). PR #2 introduces, with these shapes:
+One application service per operation, per ADR-005 the only place aggregates are mutated, transactions opened, and events published:
 
 ```text
-CreateQuizApplicationService.create(CurrentUser, CreateQuizCommand)        → authorize(QUIZ_CREATE) → QuizCreatedEvent
-AddQuestionToQuizApplicationService.add(CurrentUser, AddQuestionCommand)   → authorize(QUIZ_EDIT) + ownership → QuestionAddedToQuizEvent
-PublishQuizApplicationService.publish(CurrentUser, PublishQuizCommand)     → authorize(QUIZ_EDIT) + ownership → QuizPublishedEvent
+CreateQuizApplicationService.create(CurrentUser, CreateQuizCommand)    → authorize(QUIZ_CREATE)             → QuizCreatedEvent
+UpdateQuizApplicationService.update(CurrentUser, UpdateQuizCommand)    → authorize(QUIZ_EDIT)  + ownership  → (no event)
+PublishQuizApplicationService.publish(CurrentUser, PublishQuizCommand) → authorize(QUIZ_EDIT)  + ownership  → QuizPublishedEvent
+ArchiveQuizApplicationService.archive(CurrentUser, ArchiveQuizCommand) → authorize(QUIZ_EDIT)  + ownership  → QuizArchivedEvent
+QuizQueryService.quiz(CurrentUser, quizId)                             → authorize(QUIZ_VIEW)  + visibility → (read only)
 ```
 
-All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (owner-or-admin) are decided in PR #2. Localization management (add/remove translation) rides the same edit authorization.
+Controllers resolve `CurrentUser` from `CurrentUserProvider` and delegate — zero authorization logic at the transport edge. `AddQuestionToQuizApplicationService` arrives with the attach API in PR #3.
+
+**Publication preconditions.** The aggregate enforces its own rules (DRAFT only, at least one question, default localization by construction). The service adds the single check that crosses aggregate boundaries: every attached question must be localized in the quiz's default language (`quiz.not-publishable`, 409, naming the offending question ids) — otherwise participants falling back to the default would face untranslated questions.
+
+**Ownership model.** The owner is always `CurrentUser.reference()` — never accepted from the client. Mutations are owner-only; a non-owner gets 404 for a private quiz (existence is not disclosed) and 403 (`quiz.ownership.required`) for one it can see. Reads follow visibility: owners always, everyone else only for non-PRIVATE quizzes (UNLISTED is reachable by id; PUBLIC additionally discoverable once listing exists). Admin moderation of foreign quizzes will be a dedicated permission later, not an ownership bypass — nobody inspects roles.
+
+**Optimistic locking.** Every aggregate carries a `@Version` (base entity). Read responses include the version; `PUT` requires it back and a stale value is rejected with 409 `quiz.concurrent-modification` before anything is applied — two authors editing the same draft can never silently overwrite each other. Same-instant races that slip past the check are caught by the JPA version at flush and surface as 409 `conflict.concurrent-modification`.
+
+**Update semantics.** `PUT /quizzes/{id}` treats omitted fields as unchanged; a provided localization list replaces the full set of translations (the aggregate refuses to drop the default language). Domain `IllegalArgumentException`s surface as 400 (`request.invalid`) via the global handler, as planned in PR #1.
+
+## Public API
+
+```text
+POST /api/v1/quizzes                  201  create a draft (owner = caller)
+GET  /api/v1/quizzes/{quizId}         200  metadata, settings, state, visibility, default language, localizations, ordered question ids, version
+PUT  /api/v1/quizzes/{quizId}         200  update visibility / settings / localizations (state-dependent)
+POST /api/v1/quizzes/{quizId}/publish 200  DRAFT → PUBLISHED
+POST /api/v1/quizzes/{quizId}/archive 200  PUBLISHED → ARCHIVED
+```
+
+There is no `DELETE`, deliberately. Published quizzes may have been played — sessions, scores, and history must stay reconstructable, so quizzes are retired by archiving, never destroyed. A hard delete would also cascade into the composition of other data (quiz_questions foreign keys) for no product benefit; drafts someone abandons simply stay drafts. If a true deletion need ever appears (privacy requests), it will be designed deliberately, not shipped as a default endpoint.
+
+The read API returns question ids only — questions are separate aggregates with their own (upcoming) resource; embedding them would couple the read models and bloat every quiz response.
 
 ---
 
@@ -198,15 +225,15 @@ All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (
 
 # Migration
 
-`V3__quiz_domain.sql` is additive; existing data is unaffected. `V4__content_i18n.sql` moves content into localization tables with no data loss (integration-tested against a seeded V3 database); existing quizzes and questions keep their identities and become default-language (`en`) localized.
+`V3__quiz_domain.sql` is additive; existing data is unaffected. `V4__content_i18n.sql` moves content into localization tables with no data loss (integration-tested against a seeded V3 database); existing quizzes and questions keep their identities and become default-language (`en`) localized. `V5__optimistic_locking.sql` is additive; existing rows start at version 0.
 
 ---
 
 # Open Questions
 
-- Question deletion semantics when referenced by quizzes (block vs. soft-delete) — PR #2.
+- Question deletion semantics when referenced by quizzes (block vs. soft-delete) — PR #3 (quiz deletion is decided: there is none).
 - Whether editing a published quiz's questions requires versioning — deferred.
-- Question ownership/authorship for authorization — PR #2.
+- Question ownership/authorship for authorization — PR #3.
 - Localized display names for Bible books (rendering concern) — deferred until a UI needs them.
 
 ---
@@ -220,12 +247,15 @@ All receive `CurrentUser` and consult `AuthorizationService`; ownership checks (
 - [x] Domain events defined; language independent.
 - [x] `V3__quiz_domain.sql` and `V4__content_i18n.sql` apply incrementally on an existing database with no data loss; Hibernate validates the mapping (Testcontainers).
 - [x] Quiz domain is framework-independent (ArchUnit).
+- [x] Authoring API: create/read/update/publish/archive with the draft-first lifecycle, owner-only mutations from `CurrentUser`, `AuthorizationService` for every operation, and OpenAPI documentation (integration-tested end to end).
+- [x] Optimistic locking on every aggregate; stale saves receive 409 instead of overwriting.
 
 ---
 
 # Future Work
 
-- PR #2: Quiz CRUD (services above, request/response DTOs, ownership policy, localization management endpoints).
+- PR #3: Question authoring (question CRUD, localization management, attach/detach on quizzes with `QuestionAddedToQuizEvent`, question deletion policy).
+- Quiz listing/browsing (owner's quizzes, PUBLIC discovery) — with the first UI that needs it.
 - Participant language preference at session join (RFC-004) — the consumer of this model.
 - Question bank browsing and import/export (v1.1), including translations.
 - Question versioning if published-content editing demands it.
