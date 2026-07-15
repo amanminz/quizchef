@@ -4,6 +4,14 @@ Status
 
 Draft
 
+<!-- Draft | Proposed | Accepted | Implemented | Superseded by RFC-XXX
+     Draft       — being written; nothing agreed.
+     Proposed    — complete and under review.
+     Accepted    — agreed; describes a plan, not the code.
+     Implemented — the code matches this document.
+     Superseded  — replaced by a later RFC; kept unedited for its reasoning.
+     See README.md for the lifecycle and the rules around it. -->
+
 Authors
 
 Owner
