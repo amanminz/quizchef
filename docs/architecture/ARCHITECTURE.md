@@ -451,17 +451,23 @@ Validation (aggregates enforce their own invariants).
 
 Live quiz execution.
 
-PIN generation.
+Two aggregates. **Session** — the run of a published quiz: PIN, host, lifecycle (CREATED → LOBBY → IN_PROGRESS → FINISHED → ARCHIVED), execution settings, and the ordered roster. It references the exact published quiz content it executes by a revision-safe id (`publishedQuizVersionId`), never "the latest quiz"; it owns the roster (ordering, membership, and per-session uniqueness of each participant's identity/guest token) but not quiz content or participant state.
+
+**Participant** — a durable player (ADR-003): survives disconnects, refreshes, and device switches. Identified by exactly one mechanism — a registered identity or a guest reconnection token, never a display name or a connection. Owns its own answers and cached score; connectivity is derived from its lifecycle state, never a stored flag.
+
+PIN generation (six digits, unique among active sessions, reusable after archival).
 
 Participants (backed by a Guest Identity or a Registered User).
 
-Participant tokens.
+Guest participant tokens (opaque reconnection credentials, never a business identity).
 
 Session recovery (reconnection, state restoration, connection rebinding).
 
 Leaderboard.
 
 Scoring.
+
+Transport is entirely absent from the domain (ADR-004): realtime behaviour is expressed as domain events and state; only the websocket module knows a connection exists. Reconnection, timers, gameplay progression, and scoring are later PRs (RFC-004).
 
 ---
 
