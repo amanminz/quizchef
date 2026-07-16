@@ -455,7 +455,11 @@ Two aggregates. **Session** — the run of a published quiz: PIN, host, lifecycl
 
 **Participant** — a durable player (ADR-003): survives disconnects, refreshes, and device switches. Identified by exactly one mechanism — a registered identity or a guest reconnection token, never a display name or a connection. Owns its own answers and cached score; connectivity is derived from its lifecycle state, never a stored flag.
 
-PIN generation (six digits, unique among active sessions, reusable after archival).
+Orchestration (not CRUD): create → open lobby → join → reconnect → start, one application service per step, publishing domain events that reach clients automatically through RFC-005. Host operations (create/lobby/start) require QUIZ_HOST *and* host ownership; join/reconnect/read are anonymous-friendly so guests are first-class.
+
+PIN generation through a `SessionCodeGenerator` port (six secure-random digits, never timestamps or sequences; unique among active sessions, reusable after archival) — swappable for room codes or invitation codes without touching orchestration.
+
+Guest lifecycle: an anonymous join creates a guest Participant and issues a reconnection token (returned once); the guest presents it to reconnect. A registered join is backed by the caller's identity. Both are one code path (ADR-003).
 
 Participants (backed by a Guest Identity or a Registered User).
 
