@@ -12,7 +12,7 @@ Every RFC carries a `Status`. It answers the first question any reader has: **do
 - [RFC-002 Identity and Access](RFC-002-identity-and-access.md) — **Implemented**
 - [RFC-003 Quiz Authoring](RFC-003-quiz-authoring.md) — **Implemented**
 - [RFC-004 Session Engine](RFC-004-session-engine.md) — **Accepted** (domain foundation implemented; transport/gameplay follow)
-- [RFC-005 Realtime Protocol](RFC-005-websocket-protocol.md) — **Draft**
+- [RFC-005 Realtime Protocol](RFC-005-websocket-protocol.md) — **Accepted** (protocol + transport foundation implemented; command handling/gameplay projections follow)
 - [RFC-006 Scoring Engine](RFC-006-scoring-engine.md) — **Draft**
 - [RFC-007 Media](RFC-007-media-storage.md) — **Draft**
 - [RFC-008 Deployment](RFC-008-deployment.md) — **Draft**
