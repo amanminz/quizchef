@@ -5,6 +5,7 @@ import io.quizchef.identity.domain.IdentityReference;
 import io.quizchef.session.domain.exception.DuplicateParticipantException;
 import io.quizchef.session.domain.exception.InvalidSessionTransitionException;
 import io.quizchef.session.domain.exception.ParticipantAlreadyJoinedException;
+import io.quizchef.session.domain.exception.SessionFullException;
 import io.quizchef.session.domain.exception.SessionNotStartableException;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.AttributeOverrides;
@@ -128,6 +129,9 @@ public class Session extends AuditableEntity {
         Objects.requireNonNull(participantId, "participantId must not be null");
         Objects.requireNonNull(key, "key must not be null");
         requireJoinable();
+        if (roster.size() >= sessionSettings.maxParticipants()) {
+            throw new SessionFullException(sessionSettings.maxParticipants());
+        }
         if (roster.stream().anyMatch(entry -> entry.participantId().equals(participantId))) {
             throw new DuplicateParticipantException(participantId);
         }

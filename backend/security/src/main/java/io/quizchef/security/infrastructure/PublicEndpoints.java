@@ -20,7 +20,13 @@ public final class PublicEndpoints {
             // The STOMP/SockJS handshake. The connection opens publicly;
             // per-message authorization (who may subscribe to which session
             // topic, who may send commands) arrives with Session APIs.
-            "/ws/**"
+            "/ws/**",
+            // Anonymous-friendly session endpoints: guests join and reconnect
+            // without an account, and anyone in a lobby can read its summary.
+            // These are single-segment /sessions/* (join = /sessions/*/join),
+            // so the host-only create/lobby/start endpoints stay authenticated.
+            "/api/v1/sessions/*",
+            "/api/v1/sessions/*/join"
     };
 
     private PublicEndpoints() {

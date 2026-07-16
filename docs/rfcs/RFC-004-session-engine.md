@@ -101,7 +101,7 @@ CREATED → LOBBY → IN_PROGRESS → FINISHED → ARCHIVED
 
 - `openLobby` (CREATED→LOBBY), `start` (LOBBY→IN_PROGRESS), `finish` (IN_PROGRESS→FINISHED), `archive` (FINISHED→ARCHIVED). Any other move throws `InvalidSessionTransitionException` (409).
 - `start()` requires at least one participant (`SessionNotStartableException`, 409).
-- Participants register while in LOBBY, and mid-session only when `allowLateJoin` is set.
+- Participants register while in LOBBY, and mid-session only when `allowLateJoin` is set; a registration is rejected once the roster reaches `maxParticipants` (`SessionFullException`, 409) — a roster invariant the Session owns (added with orchestration, PR #2).
 - FINISHED and ARCHIVED are immutable; archiving is terminal. Sessions are retained, never deleted (played history must stay reconstructable — same reasoning as quizzes).
 
 `currentQuestionId` / `currentPhase` / `currentQuestionTimer` exist as the typed home for progression but are undriven in this PR — the gameplay PR advances them.
@@ -138,24 +138,38 @@ This split — the aggregate enforces what it can see, the database is the autho
 
 ## Domain events
 
-Definitions only, no consumers (published by the future application services per ADR-005): `SessionCreatedEvent`, `LobbyOpenedEvent`, `ParticipantJoinedEvent`, `ParticipantDisconnectedEvent`, `ParticipantReconnectedEvent`, `SessionStartedEvent`, `SessionFinishedEvent`. Ids + `occurredAt`, transport-free — the websocket module will subscribe and translate them onto STOMP topics (RFC-005), never the reverse.
+`SessionCreatedEvent`, `LobbyOpenedEvent`, `ParticipantJoinedEvent`, `ParticipantDisconnectedEvent`, `ParticipantReconnectedEvent`, `SessionStartedEvent`, `SessionFinishedEvent`. Ids + `occurredAt`, transport-free — the websocket module subscribes and translates them onto STOMP topics (RFC-005), never the reverse. The orchestration services (below) publish Created / LobbyOpened / ParticipantJoined / ParticipantReconnected / SessionStarted today; Disconnected and Finished arrive with connection management and gameplay.
+
+**Planned: `SessionReadyEvent`.** A future event published when the host starts *and* all prerequisites are satisfied. Initially it would be equivalent to `SessionStartedEvent`, but it is the natural trigger for things that must happen once a session is truly ready to play — preloading question media, warming caches, notifying spectators, analytics, countdown initialization. Recorded here now so the orchestration vocabulary does not need revisiting when those capabilities land; not implemented in this milestone.
 
 ## Persistence — `V7__session_domain.sql`
 
 `sessions` (flattened host reference, settings, nullable execution-pointer/timer columns; CHECKs for the enums, PIN shape, and `max_participants` range; a **partial unique index** on `session_pin WHERE state <> 'ARCHIVED'` for active-unique/reusable-after-archive), `session_participants` (the roster: participant id + flattened key + join order; PK, unique join order, partial unique indexes on identity and guest token per session), `participants` (nullable identity/guest columns with an exactly-one CHECK, globally unique guest token; no `connected` column — it is derived), `participant_answers` (PK participant+question). Additive on top of V6.
 
-## Application layer (future — this PR ships none)
+## Orchestration (implemented in PR #2)
 
-No services here; empty placeholders would violate the no-dead-code rule. The future contracts, each receiving `CurrentUser` and consulting `AuthorizationService` (authorization lives in application services, never controllers):
+The lobby flow is not CRUD — it is orchestration: a host creates a session, opens a lobby, participants join and reconnect, and the host starts. One application service per step, per ADR-005 the only place aggregates mutate, transactions open, and events publish. Each host operation takes `CurrentUser` and consults `AuthorizationService`; controllers only resolve `CurrentUser` and delegate.
 
 ```text
-CreateSessionApplicationService.create(CurrentUser, CreateSessionCommand)  → authorize(QUIZ_HOST) → generate unique PIN, SessionCreatedEvent
-JoinSessionApplicationService.join(JoinSessionCommand)                     → resolve PIN → create Participant + roster entry → ParticipantJoinedEvent
-StartSessionApplicationService.start(CurrentUser, StartSessionCommand)     → authorize host → SessionStartedEvent
-FinishSessionApplicationService.finish(CurrentUser, FinishSessionCommand)  → authorize host → SessionFinishedEvent
+CreateSessionApplicationService.create(CurrentUser, CreateSessionCommand)      → authorize(QUIZ_HOST) + requirePublished(quiz) + unique PIN → SessionCreatedEvent
+OpenLobbyApplicationService.openLobby(CurrentUser, pin)                         → authorize(QUIZ_HOST) + host  → LobbyOpenedEvent
+JoinSessionApplicationService.join(CurrentUser, JoinSessionCommand)            → (anonymous-friendly) resolve PIN → Participant + roster entry → ParticipantJoinedEvent
+ReconnectParticipantApplicationService.reconnect(CurrentUser, ReconnectCommand) → resolve by token or identity → connect → ParticipantReconnectedEvent, SessionSnapshot
+StartSessionApplicationService.start(CurrentUser, sessionId)                    → authorize(QUIZ_HOST) + host  → SessionStartedEvent
+SessionQueryService.summary(sessionId)                                         → (public read by id) → SessionSummary
 ```
 
-PIN generation (retry on the active-unique index), host authorization (`QUIZ_HOST` already exists in the permission model), participant-vs-host resolution, and `SessionRecoveryService` (restore score/answers/current question/remaining time/leaderboard, rebind connection) are designed with the transport PR.
+**Realtime is automatic.** Services publish domain events; nothing calls `RealtimePublisher`. The RFC-005 projector subscribes and broadcasts `lobby.opened`, `participant.joined`, `participant.reconnected`, and `session.started` to the session topic. `SessionCreatedEvent` is not projected — no audience before anyone connects.
+
+**PIN generation is a port.** `SessionCodeGenerator` (application) produces a *candidate*; `CreateSessionApplicationService` checks uniqueness among active sessions and retries, with the partial unique index as the final authority for the rare race. The generator is ignorant of persistence, so numeric PINs can become alphanumeric room codes, organization prefixes, or invitation codes without touching orchestration. `RandomSessionCodeGenerator` (infrastructure) is six secure-random digits — never a timestamp or a sequence (guessable).
+
+**Authorization & the guest boundary.** Create / open-lobby / start require `QUIZ_HOST` *and* host ownership (holding the permission lets you host *your* sessions, not others'). Join, reconnect, and read are open — participants are anonymous-friendly and guests are first-class (ADR-003): an anonymous caller joins as a guest and is issued a reconnection token; an authenticated caller joins backed by their identity. Both flows are one code path. (`QUIZ_HOST` is held by `QUIZ_MASTER`/`ADMIN`; until login persists roles, tests mint host tokens directly, as elsewhere.)
+
+**Cross-module boundary.** The quiz's "is this content runnable?" check goes through `quiz.application.QuizPublicationQuery.requirePublished(...)` — session depends on quiz's *application* layer, not its repository, keeping the boundary clean.
+
+**Reconnection snapshot.** `reconnect` returns the RFC-005 replay contract, realized as the session module's own `SessionSnapshotView` (so session never depends on the websocket module — ADR-004). Generation is simple for now (in the lobby there is no question, timer, or score); `SessionRecoveryService` fills it out with gameplay.
+
+**Still future:** `FinishSessionApplicationService`, inbound STOMP command handlers (delegating to these services), per-message authorization, and `SessionRecoveryService`.
 
 ---
 
@@ -209,14 +223,18 @@ PIN generation (retry on the active-unique index), host authorization (`QUIZ_HOS
 - [x] Value objects (pin, settings, timer, guest token, answer, participant key) modeled and covered.
 - [x] Domain events defined; transport-free.
 - [x] `V7__session_domain.sql` applies incrementally on an existing (V6) database; Hibernate validates the mapping and a disconnected participant reloads intact (Testcontainers).
-- [x] No transport, APIs, timers, gameplay, or scoring (out of scope).
+- [x] Orchestration (PR #2): the full lobby flow — create, open lobby, join (guest + registered), reconnect, start — over REST, with host authorization, anonymous-friendly joins, PIN generation via a port, and realtime events flowing automatically through RFC-005 (integration-tested end to end).
+- [x] No gameplay, question progression, timers, answer submission, or scoring (out of scope).
 
 ---
 
 # Future Work
 
-- **PR #1.5 — Realtime Transport** (RFC-005): STOMP topics, the event→transport publisher, reconnection/state-sync payloads, single-active-connection enforcement.
-- **Application services**: create/join/start/finish, PIN generation, host authorization, `SessionRecoveryService`.
-- **Gameplay & scoring** (RFC-006): question progression, timers, answer submission, the scoring formula, leaderboards.
+- **Gameplay & scoring** (RFC-006): question progression, timers, answer submission, the scoring formula, leaderboards — and the reserved RFC-005 gameplay projections.
+- **`FinishSessionApplicationService`**, inbound STOMP command handlers (delegating to the orchestration services), and per-message authorization at the transport.
+- **`SessionRecoveryService`**: fill out the reconnection snapshot (current question, remaining time, submitted answer, leaderboard) once gameplay exists.
+- **`SessionReadyEvent`** (see Domain events): published when a started session is truly ready to play — the trigger for media preloading, cache warming, spectator notification, analytics, countdown.
+- **Single active connection policy**: joining from a new device invalidates the previous connection — belongs with connection management (transport).
 - **Promote `LanguageCode` to `common`** — it is a domain-agnostic i18n primitive currently in the quiz module and now reused by session; a dedicated refactor PR should move it to `common` so neither consumer depends on the other's module for it.
+- **`SessionCodeGenerator` → `RoomCodeGenerator`** — the port is already the right abstraction; if QuizChef grows live tournaments, breakout rooms, or practice rooms, a rename (and richer code formats) captures that without touching orchestration. No urgency.
 - Session/quiz **revisions** (their own RFC) — `publishedQuizVersionId` is already shaped for them.
