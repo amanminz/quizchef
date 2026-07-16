@@ -16,7 +16,11 @@ public final class PublicEndpoints {
             "/actuator/info",
             "/swagger-ui.html",
             "/swagger-ui/**",
-            "/v3/api-docs/**"
+            "/v3/api-docs/**",
+            // The STOMP/SockJS handshake. The connection opens publicly;
+            // per-message authorization (who may subscribe to which session
+            // topic, who may send commands) arrives with Session APIs.
+            "/ws/**"
     };
 
     private PublicEndpoints() {

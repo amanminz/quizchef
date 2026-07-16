@@ -493,11 +493,11 @@ Authorization.
 
 ## WebSocket
 
-Realtime communication.
+Realtime communication — transport only (ADR-004/005). The one module that knows STOMP exists.
 
-STOMP configuration.
+A versioned, transport-independent wire protocol (RFC-005): a `ProtocolMessage` envelope carrying `protocolVersion` (evolve clients and server independently), a stable dotted event vocabulary (`participant.reconnected`) decoupled from domain class names, centralized topics, and a reconnection-snapshot contract. Protocol events are *projections* of domain events — the public, frozen representation, never the internal event itself; domain entities are never serialized.
 
-Subscribes to domain events and delivers them to clients.
+The outbound path: subscribe to session domain events → map to protocol messages (`SessionProtocolMapper`) → publish through the `RealtimePublisher` port → the STOMP adapter resolves the topic and sends. The port names the audience (session / participant / host), never the destination, so the transport could become SSE or MQTT with no caller change. Inbound commands are the mirror image, delegating to application services (never handled here) — defined as protocol contracts, unimplemented until Session APIs.
 
 Connections are ephemeral transport. Participant state never lives here.
 

@@ -51,7 +51,7 @@ Live play is the product. It is also the most concurrency-heavy, failure-prone p
 
 # Non Goals
 
-- REST APIs, WebSocket/STOMP, host commands — transport is PR #1.5 (RFC-005).
+- REST APIs, WebSocket/STOMP, host commands — transport is PR #1.5, specified in **[RFC-005 Realtime Protocol](RFC-005-websocket-protocol.md)** (the wire protocol, topics, and STOMP adapter that project the domain events defined here). RFC-004 owns the session domain; RFC-005 owns how it reaches clients.
 - Timer execution, countdown, question progression, answer submission, scoring, leaderboards — later gameplay PRs (RFC-006).
 - Session recovery *logic* — the `SessionRecoveryService` is designed here, implemented with transport.
 - Authorization *implementation* — the future application services will consult `AuthorizationService`; documented below, not built.
