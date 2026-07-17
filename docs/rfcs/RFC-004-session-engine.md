@@ -22,7 +22,7 @@ Created
 
 Updated
 
-2026-07-17
+2026-07-18
 
 ---
 
@@ -206,6 +206,17 @@ AdvanceQuestionApplicationService.advance(user, sessionId)  → next question, o
 
 **Beans, not framework in the domain.** `SessionGameplayConfiguration` wires `ScoringService`, `LeaderboardService`, the active `ScoringPolicy.classic()`, and the `gameplayTaskScheduler` as beans while the domain classes stay Spring-free — the established pattern.
 
+## Participant-facing question content (frontend Phase 2 PR #4)
+
+Gameplay execution above answers *"is this answer right, and what happens next"* — it never told a device *what a question actually says*. The frontend's live gameplay PR needed that, and none of the existing reads covered it: `GameplayQuizQuery` (the scoring boundary) is language-neutral and includes correctness, which a participant's device must never see before reveal; the session summary carries only the current question's *id*. `CurrentQuestionQueryService` (`GET /api/v1/sessions/{id}/questions/current`) fills that gap — the session module's **display** boundary, alongside `GameplayQuizQuery`'s **scoring** boundary, both reading the quiz module through its own application layer, never its repository.
+
+It composes two application-layer reads and gates what they return by the session's own phase:
+
+- **`quiz.application.GameplayQuestionContentQuery`** (new, quiz module): the question's prompt and options in every authored language, structurally incapable of carrying correctness — its return type (`PlayableQuestionContentView`) simply has no field for it, so there is no gate to forget. No ownership check: the caller is the session engine, which already knows its own session references this published quiz; re-deriving quiz ownership here would duplicate authority that belongs to `QuizPublicationQuery` at creation time.
+- **`CurrentQuestionQueryService`** (session module): loads the session, requires `IN_PROGRESS` with a `currentQuestionId` (else 409 `session.no-current-question` — a legitimate "nothing to show yet" between questions or in the lobby, not a fault), fetches the content, and adds what only the session knows — position in the quiz, phase, and the server clock's remaining time (via the shared `Clock`, exactly like `SessionSnapshotAssembler`). **`correctOptionIds` is included only once the phase is `ANSWER_REVEALED` or `LEADERBOARD`** — the same moment `AnswerRevealedEvent` discloses it over the wire (ADR-006); before that the field is simply absent, never present-but-hidden.
+
+Public like the session summary and join endpoints: a session is reached by its unguessable id, and the players it serves are anonymous guests by nature (`PublicEndpoints`). This is a plain REST read, not a protocol addition — RFC-005's wire vocabulary is unchanged; the frontend calls this endpoint once per relevant realtime event (question started/closed/revealed/leaderboard) rather than the event itself carrying content, keeping the private-ack-carries-no-score discipline in RFC-005 intact.
+
 ---
 
 # Alternatives Considered
@@ -264,6 +275,7 @@ AdvanceQuestionApplicationService.advance(user, sessionId)  → next question, o
 - [x] Answer submission validated entirely server-side (participant exists, connected, question open, not already answered, valid options, host cannot answer); the server stamps response time and decides correctness; the acknowledgement carries no score and is private to the submitter (integration-tested).
 - [x] Reconnection restores active gameplay — current phase, question, remaining time, the participant's own answer and score, and the leaderboard (`SessionSnapshotAssembler`), verified by reconnecting mid-question in the full-game integration test.
 - [x] Scoring and leaderboard delivered per **[RFC-006](RFC-006-scoring-engine.md)**; every OpenAPI path for the gameplay endpoints is documented (verified in the integration test).
+- [x] Participant-facing question content (frontend Phase 2 PR #4): `GET /api/v1/sessions/{id}/questions/current` serves the question in play's prompt and options in every authored language, public and phase-gated — no correctness before `ANSWER_REVEALED`/`LEADERBOARD`, `409 session.no-current-question` between questions — verified end to end through every phase in the full-game integration test.
 
 ---
 

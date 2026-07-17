@@ -166,6 +166,57 @@ class GameplayIntegrationTest {
     }
 
     @Test
+    void currentQuestionContentIsPublicAndPhaseAware() throws Exception {
+        Identity hostIdentity = identityRepository.save(Identity.registered());
+        String hostToken = hostToken(hostIdentity);
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(hostIdentity.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        // Before the first question opens there is nothing to serve.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.no-current-question"));
+
+        // Open: anonymous read gets content and clock, never correctness.
+        openQuestion(hostToken, sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phase").value("QUESTION_OPEN"))
+                .andExpect(jsonPath("$.questionNumber").value(1))
+                .andExpect(jsonPath("$.totalQuestions").value(2))
+                .andExpect(jsonPath("$.remainingMillis")
+                        .value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.localizations[0].prompt").value("Prompt 1"))
+                .andExpect(jsonPath("$.localizations[0].optionTexts[0].text").value("True"))
+                .andExpect(jsonPath("$.options[0].correct").doesNotExist())
+                .andExpect(jsonPath("$.correctOptionIds").doesNotExist());
+
+        // Closed: clock stopped, correctness still withheld.
+        close(hostToken, sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phase").value("QUESTION_CLOSED"))
+                .andExpect(jsonPath("$.remainingMillis").value(0))
+                .andExpect(jsonPath("$.correctOptionIds").doesNotExist());
+
+        // Revealed: correctness now crosses the wire, matching answer.revealed.
+        reveal(hostToken, sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.correctOptionIds[0]")
+                        .value(quiz.questions().get(0).correctOptionId().toString()));
+
+        // The next question starts the cycle clean.
+        leaderboard(hostToken, sessionId);
+        advanceToNext(hostToken, sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questionNumber").value(2))
+                .andExpect(jsonPath("$.localizations[0].prompt").value("Prompt 2"))
+                .andExpect(jsonPath("$.correctOptionIds").doesNotExist());
+    }
+
+    @Test
     void openApiDocumentsTheGameplayEndpoints() throws Exception {
         JsonNode paths = objectMapper.readTree(mockMvc.perform(get("/v3/api-docs"))
                         .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
@@ -173,6 +224,7 @@ class GameplayIntegrationTest {
 
         assertThat(paths.has("/api/v1/sessions/{id}/questions/start")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/questions/advance")).isTrue();
+        assertThat(paths.has("/api/v1/sessions/{id}/questions/current")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/leaderboard")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/answers")).isTrue();
         // answering is anonymous-friendly; host commands require bearer auth
