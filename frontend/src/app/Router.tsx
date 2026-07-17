@@ -9,6 +9,7 @@ import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/LoginPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { PlayPage } from "@/pages/PlayPage";
+import { PlaySessionPage } from "@/pages/PlaySessionPage";
 import { QuizQuestionsPage } from "@/pages/QuizQuestionsPage";
 import { QuizReviewPage } from "@/pages/QuizReviewPage";
 import { QuizzesPage } from "@/pages/QuizzesPage";
@@ -30,6 +31,7 @@ export const routes: RouteObject[] = [
       { path: "/", element: <HomePage /> },
       { path: "/login", element: <LoginPage /> },
       { path: "/play", element: <PlayPage /> },
+      { path: "/play/:pin", element: <PlaySessionPage /> },
       { path: "/not-found", element: <NotFoundPage /> },
       { path: "*", element: <NotFoundPage /> }
     ]
