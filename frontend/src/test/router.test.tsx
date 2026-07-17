@@ -30,7 +30,12 @@ describe("routing", () => {
     "/quizzes/new",
     "/quizzes/some-id",
     "/quizzes/some-id/questions",
-    "/quizzes/some-id/review"
+    "/quizzes/some-id/review",
+    "/sessions",
+    "/sessions/new",
+    "/sessions/some-id",
+    "/sessions/some-id/lobby",
+    "/sessions/some-id/play"
   ])("redirects unauthenticated visitors from %s to login", async (route) => {
     renderApp(route);
     expect(await screen.findByRole("heading", { name: /sign in/i })).toBeInTheDocument();

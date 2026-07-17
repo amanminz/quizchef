@@ -59,7 +59,12 @@ export const handlers = [
   http.get("/api/v1/quizzes/mine", () =>
     HttpResponse.json(emptyQuizPage())
   ),
-  http.get("/api/v1/questions", () => HttpResponse.json(emptyQuestionPage()))
+  http.get("/api/v1/questions", () => HttpResponse.json(emptyQuestionPage())),
+  // Session cards resolve quiz titles by id; tests that care override this.
+  // Must stay after /quizzes/mine — MSW matches in order.
+  http.get("/api/v1/quizzes/:quizId", () =>
+    HttpResponse.json(apiError("quiz.not-found", "Quiz not found"), { status: 404 })
+  )
 ];
 
 export function emptyQuizPage(): QuizPageResponse {

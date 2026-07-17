@@ -12,6 +12,10 @@ import { PlayPage } from "@/pages/PlayPage";
 import { QuizQuestionsPage } from "@/pages/QuizQuestionsPage";
 import { QuizReviewPage } from "@/pages/QuizReviewPage";
 import { QuizzesPage } from "@/pages/QuizzesPage";
+import { CreateSessionPage } from "@/pages/CreateSessionPage";
+import { SessionDetailsPage } from "@/pages/SessionDetailsPage";
+import { SessionLivePage } from "@/pages/SessionLivePage";
+import { SessionLobbyPage } from "@/pages/SessionLobbyPage";
 import { SessionsPage } from "@/pages/SessionsPage";
 
 /**
@@ -42,7 +46,11 @@ export const routes: RouteObject[] = [
           { path: "/quizzes/:quizId", element: <EditQuizMetadataPage /> },
           { path: "/quizzes/:quizId/questions", element: <QuizQuestionsPage /> },
           { path: "/quizzes/:quizId/review", element: <QuizReviewPage /> },
-          { path: "/sessions", element: <SessionsPage /> }
+          { path: "/sessions", element: <SessionsPage /> },
+          { path: "/sessions/new", element: <CreateSessionPage /> },
+          { path: "/sessions/:sessionId", element: <SessionDetailsPage /> },
+          { path: "/sessions/:sessionId/lobby", element: <SessionLobbyPage /> },
+          { path: "/sessions/:sessionId/play", element: <SessionLivePage /> }
         ]
       }
     ]

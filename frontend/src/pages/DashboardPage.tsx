@@ -1,18 +1,21 @@
-import { LayoutDashboard } from "lucide-react";
+import { BookOpen, Radio } from "lucide-react";
+import { Link } from "react-router-dom";
 import { useCurrentUser } from "@/auth/useCurrentUser";
+import { Button } from "@/components/common/Button";
 import {
   Card,
   CardContent,
   CardDescription,
+  CardFooter,
   CardHeader,
   CardTitle
 } from "@/components/common/Card";
-import { EmptyState } from "@/components/common/EmptyState";
 import { ErrorPanel } from "@/components/common/ErrorPanel";
 import { PageContainer } from "@/components/common/PageContainer";
 import { SectionHeader } from "@/components/common/SectionHeader";
 import { Spinner } from "@/components/common/Spinner";
 
+/** The host's home: the two workflows the platform offers, one card each. */
 export function DashboardPage() {
   const { data: currentUser, isPending, isError, error, refetch } = useCurrentUser();
 
@@ -26,7 +29,46 @@ export function DashboardPage() {
       )}
       {isError && <ErrorPanel error={error} onRetry={() => void refetch()} />}
       {currentUser && (
-        <div className="grid gap-6 sm:grid-cols-2">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+          <Card>
+            <CardHeader>
+              <Radio aria-hidden className="mb-1 h-6 w-6 text-primary" />
+              <CardTitle>Host a session</CardTitle>
+              <CardDescription>
+                Run a published quiz live — open a lobby, share the code, start when everyone is
+                in.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter>
+              <Link to="/sessions/new">
+                <Button size="sm">New Session</Button>
+              </Link>
+              <Link to="/sessions">
+                <Button variant="secondary" size="sm">
+                  My Sessions
+                </Button>
+              </Link>
+            </CardFooter>
+          </Card>
+          <Card>
+            <CardHeader>
+              <BookOpen aria-hidden className="mb-1 h-6 w-6 text-primary" />
+              <CardTitle>Author quizzes</CardTitle>
+              <CardDescription>
+                Create quizzes, compose questions, and publish when they are ready to host.
+              </CardDescription>
+            </CardHeader>
+            <CardFooter>
+              <Link to="/quizzes/new">
+                <Button size="sm">New Quiz</Button>
+              </Link>
+              <Link to="/quizzes">
+                <Button variant="secondary" size="sm">
+                  My Quizzes
+                </Button>
+              </Link>
+            </CardFooter>
+          </Card>
           <Card>
             <CardHeader>
               <CardTitle>Signed in</CardTitle>
@@ -37,11 +79,6 @@ export function DashboardPage() {
               <p>Roles: {currentUser.roles?.join(", ")}</p>
             </CardContent>
           </Card>
-          <EmptyState
-            icon={LayoutDashboard}
-            title="Nothing here yet"
-            description="Quiz authoring and live sessions arrive in the next frontend PRs."
-          />
         </div>
       )}
     </PageContainer>
