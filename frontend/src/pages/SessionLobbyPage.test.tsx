@@ -150,7 +150,8 @@ describe("SessionLobbyPage", () => {
     await waitFor(() => {
       expect(currentPath()).toBe(`/sessions/${holder.session.sessionId}/play`);
     });
-    expect(await screen.findByText(/the session is live/i)).toBeInTheDocument();
+    // No question has opened yet — the gameplay page's countdown state.
+    expect(await screen.findByText(/get ready/i)).toBeInTheDocument();
   });
 
   it("stays in the lobby and shows the error when the server refuses the start", async () => {

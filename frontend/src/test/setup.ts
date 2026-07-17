@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { useAuthStore } from "@/auth/authStore";
+import { usePlayerSessionStore } from "@/features/gameplay/playerSessionStore";
 import { useHostedSessionsStore } from "@/features/sessions/hostedSessionsStore";
 import { useConnectionStore } from "@/realtime/connectionStore";
 import { server } from "@/test/server";
@@ -44,6 +45,7 @@ afterEach(() => {
   useAuthStore.setState({ token: null, sessionExpired: false });
   useConnectionStore.setState({ status: "disconnected" });
   useHostedSessionsStore.setState({ sessionIds: [] });
+  usePlayerSessionStore.setState({ bySessionPin: {} });
   useUiPreferencesStore.setState({ theme: "system" });
 });
 

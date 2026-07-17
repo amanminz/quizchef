@@ -22,7 +22,12 @@ describe("routing", () => {
 
   it("keeps public play reachable without authentication", async () => {
     renderApp("/play");
-    expect(await screen.findByText(/joining a game is coming/i)).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: /join a game/i })).toBeInTheDocument();
+  });
+
+  it("keeps a public play-by-pin route reachable without authentication", async () => {
+    renderApp("/play/042317");
+    expect(await screen.findByLabelText(/your name/i)).toBeInTheDocument();
   });
 
   it.each([
