@@ -7,6 +7,7 @@ import type {
   LeaderboardResponse,
   ParticipantSessionResponse,
   ReconnectRequest,
+  SessionResultsResponse,
   SessionSnapshotResponse,
   SessionSummaryResponse,
   SubmitAnswerRequest
@@ -105,13 +106,27 @@ export const sessionApi = {
   },
 
   /**
-   * The question in play, participant-safe (no correctness until
-   * revealed). Public — anonymous guests read it too. Throws
+   * The question in play, participant-safe (no correctness or explanation
+   * until revealed). Public — anonymous guests read it too. Throws
    * `session.no-current-question` (409) between questions.
    */
   async currentQuestion(sessionId: string): Promise<CurrentQuestionResponse> {
     const { data } = await apiClient.get<CurrentQuestionResponse>(
       `/api/v1/sessions/${sessionId}/questions/current`
+    );
+    return data;
+  },
+
+  /**
+   * The standings read — interim (once revealed / on the leaderboard) and
+   * final (after FINISHED) share this one shape. Public; throws
+   * `session.results.not-available` (409) while a question is still being
+   * played. Distinct from `showLeaderboard`, the host's phase-transitioning
+   * command — this never changes anything.
+   */
+  async results(sessionId: string): Promise<SessionResultsResponse> {
+    const { data } = await apiClient.get<SessionResultsResponse>(
+      `/api/v1/sessions/${sessionId}/results`
     );
     return data;
   }

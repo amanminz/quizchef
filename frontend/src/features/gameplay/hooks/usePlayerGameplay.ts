@@ -5,6 +5,7 @@ import { sessionApi } from "@/api/sessionApi";
 import { useAnswerSubmission } from "@/features/gameplay/hooks/useAnswerSubmission";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
 import { useJoinSession } from "@/features/gameplay/hooks/useJoinSession";
+import { useResults } from "@/features/gameplay/hooks/useResults";
 import { usePlayerSessionStore } from "@/features/gameplay/playerSessionStore";
 import type { JoinSessionRequest } from "@/types/api";
 
@@ -71,10 +72,18 @@ export function usePlayerGameplay(pin: string) {
     reconnectMutation.data
   );
 
+  const resultsQuery = useResults(stored?.sessionId, gameplay.phase);
+  // The participant's own row in the server's standings — a lookup, never
+  // a computation: rank and score are the server's verdicts (ADR-006).
+  const ownEntry = resultsQuery.data?.entries?.find(
+    (entry) => entry.participantId === stored?.participantId
+  );
+
   const join = (request: JoinSessionRequest) => joinMutation.mutateAsync({ pin, request });
 
   return {
     hasJoined: stored !== undefined,
+    participantId: stored?.participantId,
     displayName: stored?.displayName,
     preferredLanguage: stored?.preferredLanguage,
     join,
@@ -83,6 +92,10 @@ export function usePlayerGameplay(pin: string) {
     isReconnecting: reconnectMutation.isPending && reconnectMutation.data === undefined,
     reconnectError: reconnectMutation.error,
     retryReconnect: () => reconnectMutation.mutate(),
+    results: resultsQuery.data,
+    resultsError: resultsQuery.error,
+    refetchResults: resultsQuery.refetch,
+    ownEntry,
     ...gameplay,
     ...answerSubmission
   };

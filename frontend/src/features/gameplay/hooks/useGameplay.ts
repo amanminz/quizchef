@@ -23,16 +23,27 @@ const QUESTION_PROGRESSION_EVENTS = new Set<ProtocolMessage["type"]>([
   "leaderboard.updated"
 ]);
 
+/** Events after which the standings read may have new content. */
+const RESULTS_EVENTS = new Set<ProtocolMessage["type"]>([
+  "answer.revealed",
+  "leaderboard.updated",
+  "session.finished"
+]);
+
 function announcementFor(message: ProtocolMessage): string | null {
   switch (message.type) {
     case "question.started":
       return "A new question has started.";
     case "question.closed":
       return "The question has closed.";
+    case "answer.revealed":
+      return "The correct answer has been revealed.";
+    case "leaderboard.updated":
+      return "The leaderboard has been updated.";
     case "session.started":
       return "The session has started.";
     case "session.finished":
-      return "The session has finished.";
+      return "The quiz is complete.";
     default:
       return null;
   }
@@ -81,6 +92,9 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
       if (QUESTION_PROGRESSION_EVENTS.has(message.type)) {
         void queryClient.invalidateQueries({ queryKey: sessionKeys.detail(sessionId) });
         void queryClient.invalidateQueries({ queryKey: gameplayKeys.currentQuestion(sessionId) });
+      }
+      if (RESULTS_EVENTS.has(message.type)) {
+        void queryClient.invalidateQueries({ queryKey: gameplayKeys.results(sessionId) });
       }
     },
     [queryClient, sessionId]
