@@ -1,6 +1,7 @@
 import { ChevronRight } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
 import { useQuiz } from "@/features/quizzes/hooks/useQuiz";
+import { useSession } from "@/features/sessions/hooks/useSession";
 
 interface Crumb {
   label: string;
@@ -11,20 +12,23 @@ const STATIC_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
   quizzes: "Quizzes",
   sessions: "Sessions",
-  new: "New Quiz",
   questions: "Questions",
-  review: "Review"
+  review: "Review",
+  lobby: "Lobby",
+  play: "Live"
 };
 
 /**
  * Route-aware breadcrumb trail for the dashboard area. Lives in layouts/,
  * not components/navigation/, because it knows the app's actual routes
- * (quiz titles included) — the generic nav components stay route-agnostic.
+ * (quiz titles and session PINs included) — the generic nav components
+ * stay route-agnostic.
  */
 export function Breadcrumbs() {
   const location = useLocation();
-  const params = useParams<{ quizId?: string }>();
+  const params = useParams<{ quizId?: string; sessionId?: string }>();
   const { data: quiz } = useQuiz(params.quizId);
+  const { data: session } = useSession(params.sessionId);
 
   const segments = location.pathname.split("/").filter(Boolean);
   if (segments.length <= 1) {
@@ -41,6 +45,14 @@ export function Breadcrumbs() {
     path += `/${segment}`;
     if (segment === params.quizId) {
       crumbs.push({ label: quizTitle ?? "Quiz", href: path });
+    } else if (segment === params.sessionId) {
+      crumbs.push({
+        label: session?.sessionPin ? `Session ${session.sessionPin}` : "Session",
+        href: path
+      });
+    } else if (segment === "new") {
+      // "new" appears under both /quizzes and /sessions.
+      crumbs.push({ label: segments[0] === "sessions" ? "New Session" : "New Quiz", href: path });
     } else {
       crumbs.push({ label: STATIC_LABELS[segment] ?? segment, href: path });
     }
