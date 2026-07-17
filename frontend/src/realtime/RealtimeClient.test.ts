@@ -1,66 +1,7 @@
-import type { Client, IMessage, StompConfig, messageCallbackType } from "@stomp/stompjs";
+import type { IMessage } from "@stomp/stompjs";
 import { describe, expect, it, vi } from "vitest";
 import { RealtimeClient, type RealtimeConnectionState } from "@/realtime/RealtimeClient";
-import type { ProtocolMessage } from "@/types/protocol";
-
-/**
- * A scriptable stand-in for the STOMP client: the test drives connect,
- * disconnect, and incoming frames by hand.
- */
-class FakeStomp {
-  config!: StompConfig;
-  connected = false;
-  readonly subscriptions = new Map<string, messageCallbackType>();
-  readonly unsubscribed: string[] = [];
-
-  asClient(): Client {
-    return this as unknown as Client;
-  }
-
-  activate(): void {
-    // Connection completes only when the test calls simulateConnect().
-  }
-
-  async deactivate(): Promise<void> {
-    this.connected = false;
-  }
-
-  subscribe(destination: string, callback: messageCallbackType) {
-    this.subscriptions.set(destination, callback);
-    return {
-      id: destination,
-      unsubscribe: () => {
-        this.subscriptions.delete(destination);
-        this.unsubscribed.push(destination);
-      }
-    };
-  }
-
-  simulateConnect(): void {
-    this.connected = true;
-    this.config.onConnect?.({} as never);
-  }
-
-  simulateConnectionLost(): void {
-    this.connected = false;
-    this.subscriptions.clear();
-    this.config.onWebSocketClose?.({} as never);
-  }
-
-  deliver(destination: string, message: ProtocolMessage): void {
-    this.subscriptions.get(destination)?.({ body: JSON.stringify(message) } as IMessage);
-  }
-}
-
-function protocolMessage(type: ProtocolMessage["type"]): ProtocolMessage {
-  return {
-    protocolVersion: 1,
-    messageId: "m-1",
-    sessionId: "s-1",
-    occurredAt: new Date().toISOString(),
-    type
-  };
-}
+import { FakeStomp, protocolMessage } from "@/test/fakeStomp";
 
 function createClient() {
   const fake = new FakeStomp();

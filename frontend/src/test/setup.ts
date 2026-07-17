@@ -2,6 +2,7 @@ import "@testing-library/jest-dom/vitest";
 import { cleanup } from "@testing-library/react";
 import { afterAll, afterEach, beforeAll } from "vitest";
 import { useAuthStore } from "@/auth/authStore";
+import { useHostedSessionsStore } from "@/features/sessions/hostedSessionsStore";
 import { useConnectionStore } from "@/realtime/connectionStore";
 import { server } from "@/test/server";
 import { useUiPreferencesStore } from "@/theme/uiPreferencesStore";
@@ -42,6 +43,7 @@ afterEach(() => {
   localStorage.clear();
   useAuthStore.setState({ token: null, sessionExpired: false });
   useConnectionStore.setState({ status: "disconnected" });
+  useHostedSessionsStore.setState({ sessionIds: [] });
   useUiPreferencesStore.setState({ theme: "system" });
 });
 

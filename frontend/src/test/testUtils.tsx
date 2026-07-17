@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import { MemoryRouter, useLocation, useRoutes } from "react-router-dom";
 import { routes } from "@/app/Router";
 import { AuthProvider } from "@/auth/AuthProvider";
+import type { RealtimeClient } from "@/realtime/RealtimeClient";
 import { RealtimeProvider } from "@/realtime/RealtimeProvider";
 
 function TestRoutes() {
@@ -24,8 +25,14 @@ function LocationProbe() {
  * declarative MemoryRouter (same tree, no data-router Request machinery,
  * which clashes with MSW under jsdom); the app itself runs the data router.
  * Retries are off so failure paths assert immediately.
+ *
+ * Realtime tests pass a client built by fakeRealtimeClient() so the fake
+ * STOMP transport can script connects and deliver frames.
  */
-export function renderApp(initialRoute = "/") {
+export function renderApp(
+  initialRoute = "/",
+  options: { realtimeClient?: RealtimeClient } = {}
+) {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } }
   });
@@ -33,7 +40,7 @@ export function renderApp(initialRoute = "/") {
   const view = render(
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RealtimeProvider>
+        <RealtimeProvider client={options.realtimeClient}>
           <MemoryRouter initialEntries={[initialRoute]}>
             <TestRoutes />
             <LocationProbe />
