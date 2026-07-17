@@ -78,9 +78,43 @@ class SessionRealtimeProjectorTest {
         assertThat(publisher.broadcasts).extracting(ProtocolMessage::messageId).doesNotHaveDuplicates();
     }
 
+    @Test
+    void projectsGameplayEventsWithTheirPayloads() {
+        UUID questionId = UUID.randomUUID();
+        projector.on(new io.quizchef.session.domain.event.QuestionStartedEvent(
+                sessionId, questionId, NOW.plusSeconds(30), 30, NOW));
+        projector.on(new io.quizchef.session.domain.event.QuestionClosedEvent(sessionId, questionId, NOW));
+        projector.on(new io.quizchef.session.domain.event.AnswerRevealedEvent(
+                sessionId, questionId, java.util.Set.of(UUID.randomUUID()), NOW));
+        projector.on(new io.quizchef.session.domain.event.LeaderboardUpdatedEvent(
+                sessionId, java.util.List.of(), NOW));
+
+        assertThat(publisher.broadcasts)
+                .extracting(ProtocolMessage::type)
+                .containsExactly(ProtocolMessageType.QUESTION_STARTED,
+                        ProtocolMessageType.QUESTION_CLOSED,
+                        ProtocolMessageType.ANSWER_REVEALED,
+                        ProtocolMessageType.LEADERBOARD_UPDATED);
+        assertThat(((io.quizchef.websocket.api.event.QuestionStartedPayload)
+                publisher.broadcasts.getFirst().payload()).durationSeconds()).isEqualTo(30);
+    }
+
+    @Test
+    void sendsTheAnswerAcknowledgementToTheSubmittingParticipantOnly() {
+        UUID questionId = UUID.randomUUID();
+        projector.on(new io.quizchef.session.domain.event.AnswerSubmittedEvent(
+                sessionId, participantId, questionId, NOW));
+
+        assertThat(publisher.broadcasts).isEmpty();
+        assertThat(publisher.participantMessages).containsOnlyKeys(participantId);
+        assertThat(publisher.participantMessages.get(participantId).type())
+                .isEqualTo(ProtocolMessageType.ANSWER_ACCEPTED);
+    }
+
     private static final class CapturingPublisher implements RealtimePublisher {
 
         private final List<ProtocolMessage> broadcasts = new ArrayList<>();
+        private final java.util.Map<UUID, ProtocolMessage> participantMessages = new java.util.HashMap<>();
 
         @Override
         public void publish(ProtocolMessage message) {
@@ -89,7 +123,7 @@ class SessionRealtimeProjectorTest {
 
         @Override
         public void publishToParticipant(UUID participantId, ProtocolMessage message) {
-            throw new AssertionError("no per-participant messages expected in this PR");
+            participantMessages.put(participantId, message);
         }
 
         @Override

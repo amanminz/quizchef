@@ -13,8 +13,9 @@ import com.fasterxml.jackson.annotation.JsonValue;
  * class can never break the wire contract.
  *
  * <p>The gameplay types ({@code question.*}, {@code answer.revealed},
- * {@code leaderboard.updated}) are reserved here as the settled vocabulary;
- * their payloads and producers arrive with the gameplay PRs (RFC-006).
+ * {@code leaderboard.updated}, and the private {@code
+ * participant.answer.accepted}) are projected from the gameplay domain events
+ * (RFC-004); scoring specifics live in RFC-006.
  */
 public enum ProtocolMessageType {
 
@@ -28,11 +29,12 @@ public enum ProtocolMessageType {
     PARTICIPANT_DISCONNECTED("participant.disconnected"),
     PARTICIPANT_RECONNECTED("participant.reconnected"),
 
-    // Gameplay — reserved vocabulary; producers/payloads arrive with RFC-006.
+    // Gameplay.
     QUESTION_STARTED("question.started"),
     QUESTION_CLOSED("question.closed"),
     ANSWER_REVEALED("answer.revealed"),
     LEADERBOARD_UPDATED("leaderboard.updated"),
+    ANSWER_ACCEPTED("participant.answer.accepted"),
 
     // Reconnection — the replay/sync snapshot delivered to one participant.
     SESSION_SNAPSHOT("session.snapshot");

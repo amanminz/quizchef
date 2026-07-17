@@ -37,9 +37,12 @@ class ReconnectParticipantApplicationServiceTest {
     private final SessionRepository sessionRepository = mock(SessionRepository.class);
     private final ParticipantRepository participantRepository = mock(ParticipantRepository.class);
     private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
+    private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
+    private final SessionSnapshotAssembler snapshotAssembler = new SessionSnapshotAssembler(
+            participantRepository, new io.quizchef.session.domain.LeaderboardService(), clock);
     private final ReconnectParticipantApplicationService service =
             new ReconnectParticipantApplicationService(sessionRepository, participantRepository,
-                    eventPublisher, Clock.fixed(NOW, ZoneOffset.UTC));
+                    snapshotAssembler, eventPublisher, clock);
 
     private final CurrentUser hostUser = host();
 

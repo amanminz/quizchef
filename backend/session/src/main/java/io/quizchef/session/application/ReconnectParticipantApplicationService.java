@@ -34,15 +34,18 @@ public class ReconnectParticipantApplicationService {
 
     private final SessionRepository sessionRepository;
     private final ParticipantRepository participantRepository;
+    private final SessionSnapshotAssembler snapshotAssembler;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
 
     public ReconnectParticipantApplicationService(SessionRepository sessionRepository,
                                                   ParticipantRepository participantRepository,
+                                                  SessionSnapshotAssembler snapshotAssembler,
                                                   DomainEventPublisher eventPublisher,
                                                   Clock clock) {
         this.sessionRepository = sessionRepository;
         this.participantRepository = participantRepository;
+        this.snapshotAssembler = snapshotAssembler;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
     }
@@ -58,7 +61,7 @@ public class ReconnectParticipantApplicationService {
         eventPublisher.publish(new ParticipantReconnectedEvent(
                 session.getId(), participant.getId(), clock.instant()));
         log.info("Participant {} reconnected to session {}", participant.getId(), session.getId());
-        return SessionSnapshotView.of(session, participant);
+        return snapshotAssembler.assemble(session, participant);
     }
 
     private Participant findParticipant(CurrentUser currentUser, ReconnectSessionCommand command) {
