@@ -4,10 +4,11 @@ import type { GameplayPhase } from "@/features/gameplay/types";
 import { useSession } from "@/features/sessions/hooks/useSession";
 
 /**
- * The gameplay finite state machine (the PR's central recommendation):
- * every gameplay component reads `phase` from here rather than inferring
- * it independently from session state, question phase, and loading flags
- * scattered across components.
+ * The gameplay finite state machine (PR #4's central recommendation,
+ * extended by PR #5 with the results phases): every gameplay component
+ * reads `phase` from here rather than inferring it independently from
+ * session state, question phase, and loading flags scattered across
+ * components.
  */
 export function useGameplayState(sessionId: string | undefined) {
   const sessionQuery = useSession(sessionId);
@@ -36,6 +37,13 @@ export function useGameplayState(sessionId: string | undefined) {
     if (question?.phase === "QUESTION_OPEN") {
       return "QUESTION_OPEN";
     }
+    if (question?.phase === "ANSWER_REVEALED") {
+      return "ANSWER_REVEALED";
+    }
+    if (question?.phase === "LEADERBOARD") {
+      return "LEADERBOARD";
+    }
+    // QUESTION_CLOSED, or the question read hasn't landed yet.
     return "WAITING";
   })();
 

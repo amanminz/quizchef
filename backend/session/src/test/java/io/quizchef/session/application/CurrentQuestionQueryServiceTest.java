@@ -71,6 +71,8 @@ class CurrentQuestionQueryServiceTest {
         assertThat(view.remainingMillis()).isEqualTo(20_000L);
         assertThat(view.endsAt()).isEqualTo(NOW.plusSeconds(20));
         assertThat(view.correctOptionIds()).isNull();
+        // The explanation is reveal-time material — withheld while open.
+        assertThat(view.content().localizations().getFirst().explanation()).isNull();
     }
 
     @Test
@@ -89,6 +91,8 @@ class CurrentQuestionQueryServiceTest {
         session.revealAnswer();
         CurrentQuestionView revealed = service.currentQuestion(session.getId());
         assertThat(revealed.correctOptionIds()).containsExactly(CORRECT_OPTION);
+        assertThat(revealed.content().localizations().getFirst().explanation())
+                .isEqualTo("Jonah 1:17");
     }
 
     private static Session inProgressWithOpenQuestion() {
@@ -116,6 +120,7 @@ class CurrentQuestionQueryServiceTest {
                 List.of(new PlayableQuestionContentView.PlayableOptionView(CORRECT_OPTION, 1),
                         new PlayableQuestionContentView.PlayableOptionView(WRONG_OPTION, 2)),
                 List.of(new PlayableQuestionContentView.PlayableLocalizationView("en", "Prompt 1",
+                        "Jonah 1:17",
                         List.of(new PlayableQuestionContentView.PlayableOptionTextView(CORRECT_OPTION, "True"),
                                 new PlayableQuestionContentView.PlayableOptionTextView(WRONG_OPTION, "False")))));
     }

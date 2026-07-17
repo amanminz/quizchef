@@ -543,6 +543,16 @@ Component → Hook → Service (api/* | RealtimeClient) → Backend
 
 **State ownership additions.** `playerSessionStore` (Zustand, persisted, keyed by session PIN) holds a participant's join identity — mirroring `hostedSessionsStore`'s "ids only" discipline — and the FSM's `phase` is deliberately **not** stored anywhere: it is recomputed from the query cache on every render so it can never drift from the facts it summarizes. A question's in-progress answer selection lives in component state (`AnswerGrid`) until submitted, per the same table's existing "component-local UI" row.
 
+**The completed gameplay lifecycle** (Phase 2 PR #5 — Phase 2 feature-complete). The FSM's final form, extended from PR #4 and never redesigned:
+
+```text
+LOBBY -> COUNTDOWN -> QUESTION_OPEN -> WAITING -> ANSWER_REVEALED -> LEADERBOARD -> (next question ...) -> FINISHED
+```
+
+`WAITING` narrowed to exactly the backend's `QUESTION_CLOSED` once the later phases gained real screens; the host's single action now issues one visible server command per phase (Reveal Answer -> Show Leaderboard -> Next Question / Finish Quiz) instead of PR #4's invisible chain — the frontend still never advances the game, it only asks the server to.
+
+**Results ownership.** Standings live in one TanStack Query entry over the backend's results read (`GET /sessions/{id}/results` — added because the leaderboard previously existed only as a host-only phase-transitioning command plus a broadcast, neither of which survives a refresh or exists after FINISHED). Rankings, scores, the winner, and the podium render the server's rows verbatim — never computed, sorted, or re-ranked client-side; `answer.revealed`/`leaderboard.updated`/`session.finished` invalidate the entry and the refetch learns the new truth, the same event-then-reconcile pattern as the rest of gameplay. Both roles' completion screens render purely from the summary + results reads, which is what makes refresh-during-results recovery trivial: a fresh mount needs no event history. The one client-side computation on any results surface is a display diff of two consecutive server snapshots (score deltas, rank movement) and a set-equality verdict of the viewer's own accepted submission against the revealed correct set — both render server facts; neither invents one.
+
 **Design tokens** (`theme/tokens.css`): semantic HSL variables consumed through Tailwind; dark mode is a `data-theme` attribute swap driven by the persisted UI preference.
 
 ---

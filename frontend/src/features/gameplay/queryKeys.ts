@@ -1,11 +1,13 @@
 /**
- * Query keys for the gameplay feature — the question in play. Session
- * summaries themselves stay under the sessions feature's own `sessionKeys`
- * (reused, not duplicated): gameplay only adds the one resource sessions
- * doesn't have.
+ * Query keys for the gameplay feature — the question in play and the
+ * standings read. Session summaries themselves stay under the sessions
+ * feature's own `sessionKeys` (reused, not duplicated): gameplay only adds
+ * the resources sessions doesn't have.
  */
 export const gameplayKeys = {
   all: ["gameplay"] as const,
   currentQuestions: () => [...gameplayKeys.all, "current-question"] as const,
-  currentQuestion: (sessionId: string) => [...gameplayKeys.currentQuestions(), sessionId] as const
+  currentQuestion: (sessionId: string) => [...gameplayKeys.currentQuestions(), sessionId] as const,
+  allResults: () => [...gameplayKeys.all, "results"] as const,
+  results: (sessionId: string) => [...gameplayKeys.allResults(), sessionId] as const
 };

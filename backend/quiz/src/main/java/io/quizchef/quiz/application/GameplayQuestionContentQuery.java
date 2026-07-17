@@ -17,12 +17,14 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * The quiz module's display boundary for gameplay: hands the session module
- * a question's participant-safe content (prompt and options, every
- * language) so it can be served to the players of a running session. No
- * ownership check by design — the caller is the session engine, whose
+ * a question's participant-safe content (prompt, options, and explanation,
+ * every language) so it can be served to the players of a running session.
+ * No ownership check by design — the caller is the session engine, whose
  * session already references the published quiz; the quiz module is not
- * the place to re-derive that authority. Sanitization is structural: the
- * returned view has no field that could carry correctness or explanations.
+ * the place to re-derive that authority. Sanitization is structural for
+ * correctness — the returned view has no field that could carry it — and
+ * phase-gated for the explanation, which the session layer strips until
+ * the reveal (CurrentQuestionQueryService).
  */
 @Service
 public class GameplayQuestionContentQuery {
@@ -64,6 +66,7 @@ public class GameplayQuestionContentQuery {
         return new PlayableLocalizationView(
                 localization.languageCode().value(),
                 localization.prompt(),
+                localization.explanation(),
                 optionTexts);
     }
 }

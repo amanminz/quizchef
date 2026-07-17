@@ -7,22 +7,30 @@ import { PageContainer } from "@/components/common/PageContainer";
 import { Spinner } from "@/components/common/Spinner";
 import { WorkflowHeader } from "@/components/common/WorkflowHeader";
 import { AnswerGrid } from "@/features/gameplay/components/AnswerGrid";
+import { AnswerRevealCard } from "@/features/gameplay/components/AnswerRevealCard";
+import { CompletionBanner } from "@/features/gameplay/components/CompletionBanner";
 import { CountdownOverlay } from "@/features/gameplay/components/CountdownOverlay";
+import { FinalStatistics } from "@/features/gameplay/components/FinalStatistics";
 import { GameConnectionBanner } from "@/features/gameplay/components/GameConnectionBanner";
+import { LeaderboardTable } from "@/features/gameplay/components/LeaderboardTable";
+import { PlayAgainCard } from "@/features/gameplay/components/PlayAgainCard";
+import { Podium } from "@/features/gameplay/components/Podium";
 import { QuestionCard } from "@/features/gameplay/components/QuestionCard";
 import { QuestionSkeleton } from "@/features/gameplay/components/QuestionSkeleton";
 import { QuestionTransition } from "@/features/gameplay/components/QuestionTransition";
+import { SessionSummaryCard } from "@/features/gameplay/components/SessionSummaryCard";
+import { WinnerCard } from "@/features/gameplay/components/WinnerCard";
 import { useGameHost } from "@/features/gameplay/hooks/useGameHost";
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
 import { useQuizTitle } from "@/features/sessions/hooks/useQuizTitle";
 
 /**
- * The host's gameplay screen. Host never answers questions — the options
- * render read-only, purely so the host sees exactly what participants
- * see — and monitors participant count, progress, and the timer. The one
- * action, `nextStep`, sequences whatever host commands the current phase
- * requires (see `useGameHost`); it is never optimistic, and its result is
- * always what the next render reflects, never an assumption made here.
+ * The host's gameplay screen, now spanning the full lifecycle: question →
+ * reveal → leaderboard → next → … → final results. Host never answers —
+ * options render read-only so the host sees what participants see — and
+ * the one action, `nextStep`, issues exactly the host command the current
+ * phase calls for (see `useGameHost`); never optimistic, its result is
+ * always what the next render reflects.
  */
 export function SessionLivePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
@@ -67,13 +75,28 @@ export function SessionLivePage() {
       )}
 
       {!host.isLoadingSession && host.sessionError == null && (
-        <HostGameplayBody host={host} />
+        <HostGameplayBody host={host} quizTitle={quizTitle} />
       )}
     </PageContainer>
   );
 }
 
-function HostGameplayBody({ host }: { host: ReturnType<typeof useGameHost> }) {
+function ParticipantCount({ count }: { count: number }) {
+  return (
+    <div className="flex items-center gap-2 text-sm text-muted-foreground">
+      <Users aria-hidden className="h-4 w-4" />
+      {count} participant{count === 1 ? "" : "s"}
+    </div>
+  );
+}
+
+function HostGameplayBody({
+  host,
+  quizTitle
+}: {
+  host: ReturnType<typeof useGameHost>;
+  quizTitle: string | undefined;
+}) {
   switch (host.phase) {
     case "LOBBY":
       return (
@@ -97,11 +120,7 @@ function HostGameplayBody({ host }: { host: ReturnType<typeof useGameHost> }) {
       }
       return (
         <div className="flex flex-col gap-4">
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Users aria-hidden className="h-4 w-4" />
-            {host.session?.participantCount ?? 0} participant
-            {host.session?.participantCount === 1 ? "" : "s"}
-          </div>
+          <ParticipantCount count={host.session?.participantCount ?? 0} />
           <QuestionTransition transitionKey={host.question.questionId ?? ""}>
             <QuestionCard question={host.question}>
               <AnswerGrid question={host.question} onSubmit={() => undefined} readOnly />
@@ -109,18 +128,71 @@ function HostGameplayBody({ host }: { host: ReturnType<typeof useGameHost> }) {
           </QuestionTransition>
         </div>
       );
-    case "FINISHED":
+    case "ANSWER_REVEALED":
+      if (!host.question) {
+        return <QuestionSkeleton />;
+      }
       return (
-        <EmptyState
-          icon={Gamepad2}
-          title="The session has finished"
-          description="Results and the final leaderboard arrive with the next milestone."
-          action={
-            <Link to="/sessions">
-              <Button variant="secondary">Back to sessions</Button>
-            </Link>
-          }
-        />
+        <div className="flex flex-col gap-4">
+          <ParticipantCount count={host.session?.participantCount ?? 0} />
+          <QuestionCard question={host.question}>
+            <AnswerRevealCard question={host.question} />
+          </QuestionCard>
+        </div>
+      );
+    case "LEADERBOARD":
+      if (host.resultsError != null) {
+        return (
+          <ErrorPanel
+            title="Leaderboard unavailable"
+            error={host.resultsError}
+            onRetry={() => void host.refetchResults()}
+          />
+        );
+      }
+      if (!host.results) {
+        return (
+          <div className="flex justify-center py-16">
+            <Spinner size="lg" className="text-primary" />
+          </div>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-4">
+          <ParticipantCount count={host.session?.participantCount ?? 0} />
+          <LeaderboardTable entries={host.results.entries ?? []} caption="Current standings" />
+        </div>
+      );
+    case "FINISHED":
+      if (host.resultsError != null) {
+        return (
+          <ErrorPanel
+            title="Results unavailable"
+            error={host.resultsError}
+            onRetry={() => void host.refetchResults()}
+          />
+        );
+      }
+      if (!host.results) {
+        return (
+          <div className="flex justify-center py-16">
+            <Spinner size="lg" className="text-primary" />
+          </div>
+        );
+      }
+      return (
+        <div className="flex flex-col gap-6">
+          <CompletionBanner />
+          <WinnerCard winner={host.results.entries?.[0]} />
+          <Podium entries={host.results.entries ?? []} />
+          <FinalStatistics results={host.results} />
+          <LeaderboardTable entries={host.results.entries ?? []} caption="Final standings" />
+          <SessionSummaryCard
+            quizTitle={quizTitle}
+            results={host.results}
+            actions={<PlayAgainCard role="host" />}
+          />
+        </div>
       );
     default:
       return null;

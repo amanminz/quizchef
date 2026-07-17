@@ -33,7 +33,12 @@ public final class PublicEndpoints {
             // The question in play, participant-safe (no correctness until
             // revealed) — players are anonymous; the unguessable session id
             // gates it, same rationale as the summary read above.
-            "/api/v1/sessions/*/questions/current"
+            "/api/v1/sessions/*/questions/current",
+            // The standings read (phase-gated server-side; interim and final
+            // results) — same audience and rationale. Deliberately NOT the
+            // host's POST /leaderboard path: that is a phase-transitioning
+            // command and stays authenticated.
+            "/api/v1/sessions/*/results"
     };
 
     private PublicEndpoints() {

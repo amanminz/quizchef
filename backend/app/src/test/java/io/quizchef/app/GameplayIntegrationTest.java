@@ -177,7 +177,8 @@ class GameplayIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("session.no-current-question"));
 
-        // Open: anonymous read gets content and clock, never correctness.
+        // Open: anonymous read gets content and clock — never correctness,
+        // never the explanation (it routinely gives the answer away).
         openQuestion(hostToken, sessionId);
         mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
                 .andExpect(status().isOk())
@@ -188,6 +189,7 @@ class GameplayIntegrationTest {
                         .value(org.hamcrest.Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$.localizations[0].prompt").value("Prompt 1"))
                 .andExpect(jsonPath("$.localizations[0].optionTexts[0].text").value("True"))
+                .andExpect(jsonPath("$.localizations[0].explanation").doesNotExist())
                 .andExpect(jsonPath("$.options[0].correct").doesNotExist())
                 .andExpect(jsonPath("$.correctOptionIds").doesNotExist());
 
@@ -199,12 +201,13 @@ class GameplayIntegrationTest {
                 .andExpect(jsonPath("$.remainingMillis").value(0))
                 .andExpect(jsonPath("$.correctOptionIds").doesNotExist());
 
-        // Revealed: correctness now crosses the wire, matching answer.revealed.
+        // Revealed: correctness and the explanation now cross the wire.
         reveal(hostToken, sessionId);
         mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.correctOptionIds[0]")
-                        .value(quiz.questions().get(0).correctOptionId().toString()));
+                        .value(quiz.questions().get(0).correctOptionId().toString()))
+                .andExpect(jsonPath("$.localizations[0].explanation").value("Because of 1"));
 
         // The next question starts the cycle clean.
         leaderboard(hostToken, sessionId);
@@ -217,6 +220,53 @@ class GameplayIntegrationTest {
     }
 
     @Test
+    void resultsReadIsPublicAndPhaseGated() throws Exception {
+        Identity hostIdentity = identityRepository.save(Identity.registered());
+        String hostToken = hostToken(hostIdentity);
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(hostIdentity.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        // While the question is open, standings would leak who answered
+        // correctly before the reveal — withheld.
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.results.not-available"));
+
+        // Revealed: an anonymous refresh recovers the same standings the
+        // leaderboard.updated broadcast carries, names included.
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.currentPhase").value("ANSWER_REVEALED"))
+                .andExpect(jsonPath("$.totalQuestions").value(2))
+                .andExpect(jsonPath("$.participantCount").value(2))
+                .andExpect(jsonPath("$.entries[0].participantId").value(guestA))
+                .andExpect(jsonPath("$.entries[0].displayName").value("Ann"))
+                .andExpect(jsonPath("$.entries[0].rank").value(1))
+                .andExpect(jsonPath("$.entries[0].score")
+                        .value(org.hamcrest.Matchers.greaterThan(0)));
+
+        // Finish the game: the final results stay readable forever after.
+        leaderboard(hostToken, sessionId);
+        advanceToNext(hostToken, sessionId);
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+        leaderboard(hostToken, sessionId);
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FINISHED"));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("FINISHED"))
+                .andExpect(jsonPath("$.currentPhase").doesNotExist())
+                .andExpect(jsonPath("$.entries[0].displayName").value("Ann"));
+    }
+
+    @Test
     void openApiDocumentsTheGameplayEndpoints() throws Exception {
         JsonNode paths = objectMapper.readTree(mockMvc.perform(get("/v3/api-docs"))
                         .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
@@ -225,6 +275,7 @@ class GameplayIntegrationTest {
         assertThat(paths.has("/api/v1/sessions/{id}/questions/start")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/questions/advance")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/questions/current")).isTrue();
+        assertThat(paths.has("/api/v1/sessions/{id}/results")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/leaderboard")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/answers")).isTrue();
         // answering is anonymous-friendly; host commands require bearer auth
@@ -344,7 +395,7 @@ class GameplayIntegrationTest {
             Option correct = Option.of(true, 1);
             Option wrong = Option.of(false, 2);
             Question question = questionRepository.save(Question.create(
-                    new QuestionLocalization(en, "Q" + i, "Prompt " + i, null),
+                    new QuestionLocalization(en, "Q" + i, "Prompt " + i, "Because of " + i),
                     owner, QuestionType.TRUE_FALSE, Difficulty.EASY,
                     List.of(correct, wrong),
                     List.of(correct.localized(en, "True"), wrong.localized(en, "False"))));

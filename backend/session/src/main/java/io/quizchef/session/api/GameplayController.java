@@ -5,6 +5,7 @@ import io.quizchef.identity.domain.CurrentUserProvider;
 import io.quizchef.session.application.AdvanceQuestionApplicationService;
 import io.quizchef.session.application.CloseQuestionApplicationService;
 import io.quizchef.session.application.CurrentQuestionQueryService;
+import io.quizchef.session.application.SessionResultsQueryService;
 import io.quizchef.session.application.RevealAnswerApplicationService;
 import io.quizchef.session.application.ShowLeaderboardApplicationService;
 import io.quizchef.session.application.StartQuestionApplicationService;
@@ -42,6 +43,7 @@ public class GameplayController {
     private final AdvanceQuestionApplicationService advanceQuestionApplicationService;
     private final SubmitAnswerApplicationService submitAnswerApplicationService;
     private final CurrentQuestionQueryService currentQuestionQueryService;
+    private final SessionResultsQueryService sessionResultsQueryService;
     private final CurrentUserProvider currentUserProvider;
 
     public GameplayController(StartQuestionApplicationService startQuestionApplicationService,
@@ -51,6 +53,7 @@ public class GameplayController {
                              AdvanceQuestionApplicationService advanceQuestionApplicationService,
                              SubmitAnswerApplicationService submitAnswerApplicationService,
                              CurrentQuestionQueryService currentQuestionQueryService,
+                             SessionResultsQueryService sessionResultsQueryService,
                              CurrentUserProvider currentUserProvider) {
         this.startQuestionApplicationService = startQuestionApplicationService;
         this.closeQuestionApplicationService = closeQuestionApplicationService;
@@ -59,7 +62,30 @@ public class GameplayController {
         this.advanceQuestionApplicationService = advanceQuestionApplicationService;
         this.submitAnswerApplicationService = submitAnswerApplicationService;
         this.currentQuestionQueryService = currentQuestionQueryService;
+        this.sessionResultsQueryService = sessionResultsQueryService;
         this.currentUserProvider = currentUserProvider;
+    }
+
+    @GetMapping("/{id}/results")
+    @Operation(
+            summary = "Read the session's standings",
+            description = "The ranked standings (the same rows leaderboard.updated broadcasts) with "
+                    + "the counts a results screen frames them with — interim between questions and "
+                    + "final after FINISHED share this one read. Open by session id, like the summary "
+                    + "and current-question reads. Phase-gated for the same ADR-006 reason correctness "
+                    + "is: readable only once the current question's answer is revealed (or the "
+                    + "leaderboard is showing, or the session has finished) — standings mid-question "
+                    + "would leak who answered correctly before the reveal.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The current standings"),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Results not readable yet "
+                    + "(session.results.not-available)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionResultsResponse results(@PathVariable UUID id) {
+        return SessionResultsResponse.from(sessionResultsQueryService.results(id));
     }
 
     @GetMapping("/{id}/questions/current")

@@ -516,6 +516,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the session's standings
+         * @description The ranked standings (the same rows leaderboard.updated broadcasts) with the counts a results screen frames them with — interim between questions and final after FINISHED share this one read. Open by session id, like the summary and current-question reads. Phase-gated for the same ADR-006 reason correctness is: readable only once the current question's answer is revealed (or the leaderboard is showing, or the session has finished) — standings mid-question would leak who answered correctly before the reveal.
+         */
+        get: operations["results"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/questions/current": {
         parameters: {
             query?: never;
@@ -1017,6 +1037,22 @@ export interface components {
              */
             permissions?: ("QUIZ_VIEW" | "QUIZ_CREATE" | "QUIZ_EDIT" | "QUIZ_DELETE" | "QUIZ_HOST" | "USER_PROFILE_READ" | "USER_PROFILE_UPDATE")[];
         };
+        SessionResultsResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** @enum {string} */
+            state?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
+            /**
+             * @description The gameplay phase while IN_PROGRESS; null once FINISHED
+             * @enum {string}
+             */
+            currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            /** Format: int32 */
+            totalQuestions?: number;
+            /** Format: int32 */
+            participantCount?: number;
+            entries?: components["schemas"]["LeaderboardEntryDto"][];
+        };
         CurrentQuestionResponse: {
             /** Format: uuid */
             sessionId?: string;
@@ -1057,6 +1093,8 @@ export interface components {
             /** @example en */
             languageCode?: string;
             prompt?: string;
+            /** @description The author's explanation; null until the answer is revealed */
+            explanation?: string;
             optionTexts?: components["schemas"]["PlayableOptionTextDto"][];
         };
         PlayableOptionDto: {
@@ -2678,6 +2716,46 @@ export interface operations {
             };
             /** @description Unknown session */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    results: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current standings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionResultsResponse"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Results not readable yet (session.results.not-available) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

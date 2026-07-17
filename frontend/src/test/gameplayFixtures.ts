@@ -1,6 +1,8 @@
 import type {
   CurrentQuestionResponse,
+  LeaderboardEntryDto,
   ParticipantSessionResponse,
+  SessionResultsResponse,
   SessionSnapshotResponse
 } from "@/types/api";
 
@@ -41,6 +43,57 @@ export function currentQuestionResponse(
       }
     ],
     correctOptionIds: undefined,
+    ...overrides
+  };
+}
+
+/**
+ * The same question after the reveal: correctness and the explanation are
+ * on the wire, exactly as the phase-gated endpoint serves them.
+ */
+export function revealedQuestionResponse(
+  base: CurrentQuestionResponse,
+  overrides: Partial<CurrentQuestionResponse> = {}
+): CurrentQuestionResponse {
+  return {
+    ...base,
+    phase: "ANSWER_REVEALED",
+    endsAt: undefined,
+    remainingMillis: 0,
+    correctOptionIds: [base.options![0].optionId!],
+    localizations: base.localizations?.map((localization) => ({
+      ...localization,
+      explanation: "Jonah 1:17 tells the story."
+    })),
+    ...overrides
+  };
+}
+
+export function leaderboardEntry(
+  overrides: Partial<LeaderboardEntryDto> = {}
+): LeaderboardEntryDto {
+  return {
+    participantId: nextId("participant"),
+    displayName: "Ann",
+    score: 750,
+    rank: 1,
+    ...overrides
+  };
+}
+
+export function sessionResultsResponse(
+  overrides: Partial<SessionResultsResponse> = {}
+): SessionResultsResponse {
+  return {
+    sessionId: nextId("session"),
+    state: "IN_PROGRESS",
+    currentPhase: "LEADERBOARD",
+    totalQuestions: 2,
+    participantCount: 2,
+    entries: [
+      leaderboardEntry({ displayName: "Ann", score: 750, rank: 1 }),
+      leaderboardEntry({ displayName: "Ben", score: 320, rank: 2 })
+    ],
     ...overrides
   };
 }

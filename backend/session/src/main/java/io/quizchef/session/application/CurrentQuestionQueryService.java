@@ -24,8 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
  * guests by nature. What the response admits is phase-gated here, in one
  * place: content only while a question is actually in play (never during
  * the lobby, never by probing a PIN'd session before start), correct
- * option ids only once revealed. Time remaining comes from the shared
- * {@link Clock} (ADR-006) — the client renders it, never decides it.
+ * option ids and the author's explanation only once revealed — both are
+ * reveal-time material; an explanation routinely gives the answer away.
+ * Time remaining comes from the shared {@link Clock} (ADR-006) — the
+ * client renders it, never decides it.
  */
 @Service
 public class CurrentQuestionQueryService {
@@ -69,8 +71,20 @@ public class CurrentQuestionQueryService {
                 quiz.questionTimeLimitSeconds(),
                 open ? session.getCurrentQuestionTimer().endsAt() : null,
                 open ? remainingMillis(session) : 0L,
-                content,
+                revealed ? content : withoutExplanations(content),
                 revealed ? correctOptionIds(quiz, questionId) : null);
+    }
+
+    /** Explanations are reveal-time material — withheld while answers are still possible. */
+    private static PlayableQuestionContentView withoutExplanations(PlayableQuestionContentView content) {
+        return new PlayableQuestionContentView(
+                content.questionId(),
+                content.questionType(),
+                content.defaultLanguage(),
+                content.options(),
+                content.localizations().stream()
+                        .map(PlayableQuestionContentView.PlayableLocalizationView::withoutExplanation)
+                        .toList());
     }
 
     private long remainingMillis(Session session) {
