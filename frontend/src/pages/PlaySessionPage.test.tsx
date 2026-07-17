@@ -7,7 +7,10 @@ import { sessionTopic } from "@/realtime/SessionSubscriptions";
 import { fakeRealtimeClient, protocolMessage } from "@/test/fakeStomp";
 import {
   currentQuestionResponse,
+  leaderboardEntry,
   participantSessionResponse,
+  revealedQuestionResponse,
+  sessionResultsResponse,
   sessionSnapshotResponse
 } from "@/test/gameplayFixtures";
 import { apiError } from "@/test/handlers";
@@ -344,5 +347,267 @@ describe("PlaySessionPage", () => {
 
     expect(await screen.findByLabelText(/your name/i)).toBeInTheDocument();
     expect(usePlayerSessionStore.getState().bySessionPin[PIN]).toBeUndefined();
+  });
+
+  it("shows the participant a correct verdict, their answer, and the explanation at the reveal", async () => {
+    const base = currentQuestionResponse();
+    const question = revealedQuestionResponse(base);
+    const correctOptionId = base.options![0].optionId!;
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-1",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "ANSWER_REVEALED",
+            // The participant answered correctly — restored by the snapshot.
+            submittedOptionIds: [correctOptionId]
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText("Correct!")).toBeInTheDocument();
+    expect(screen.getByText("Correct answer")).toBeInTheDocument();
+    expect(screen.getByText("Your answer")).toBeInTheDocument();
+    expect(screen.getByText(/jonah 1:17 tells the story/i)).toBeInTheDocument();
+  });
+
+  it("shows an incorrect verdict when the submitted answer misses", async () => {
+    const base = currentQuestionResponse();
+    const question = revealedQuestionResponse(base);
+    const wrongOptionId = base.options![1].optionId!;
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-1",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "ANSWER_REVEALED",
+            submittedOptionIds: [wrongOptionId]
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText("Not quite.")).toBeInTheDocument();
+  });
+
+  it("renders the leaderboard with the participant's own row highlighted", async () => {
+    const question = currentQuestionResponse({ phase: "LEADERBOARD" });
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "LEADERBOARD"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "LEADERBOARD"
+          })
+        )
+      ),
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: session.sessionId,
+            currentPhase: "LEADERBOARD",
+            entries: [
+              leaderboardEntry({ displayName: "Ann", score: 750, rank: 1 }),
+              leaderboardEntry({
+                participantId: record.participantId,
+                displayName: "Aman",
+                score: 320,
+                rank: 2
+              })
+            ]
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByRole("table")).toBeInTheDocument();
+    // Rendered verbatim from the server: rank order and scores.
+    expect(screen.getByText("Ann")).toBeInTheDocument();
+    expect(screen.getByText("You")).toBeInTheDocument();
+    expect(screen.getByText(/you're in/i)).toHaveTextContent("#2");
+  });
+
+  it("updates the standings when a leaderboard.updated broadcast arrives", async () => {
+    const question = currentQuestionResponse({ phase: "LEADERBOARD" });
+    const holder = {
+      session: sessionSummary({
+        sessionId: question.sessionId,
+        state: "IN_PROGRESS",
+        currentQuestionId: question.questionId,
+        currentPhase: "LEADERBOARD" as const
+      }),
+      score: 320
+    };
+    const record = {
+      sessionId: holder.session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    server.use(
+      http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
+        HttpResponse.json(holder.session)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
+        HttpResponse.json(question)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: holder.session.sessionId,
+            currentPhase: "LEADERBOARD",
+            entries: [
+              leaderboardEntry({
+                participantId: record.participantId,
+                displayName: "Aman",
+                score: holder.score,
+                rank: 1
+              })
+            ]
+          })
+        )
+      ),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: holder.session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "LEADERBOARD"
+          })
+        )
+      )
+    );
+    const { client, fake } = fakeRealtimeClient();
+
+    renderApp(`/play/${PIN}`, { realtimeClient: client });
+    // The score renders in both the position line and the table row.
+    expect((await screen.findAllByText("320")).length).toBeGreaterThan(0);
+    act(() => fake.simulateConnect());
+
+    // The push says the standings changed; the refetch learns the new truth.
+    holder.score = 820;
+    act(() => {
+      fake.deliver(
+        sessionTopic(holder.session.sessionId!),
+        protocolMessage("leaderboard.updated", holder.session.sessionId!, {
+          entries: []
+        })
+      );
+    });
+
+    expect((await screen.findAllByText("820")).length).toBeGreaterThan(0);
+  });
+
+  it("recovers the completion screen on a fresh mount after the session finished", async () => {
+    const session = sessionSummary({ state: "FINISHED", currentQuestionId: undefined });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            sessionState: "FINISHED",
+            currentPhase: undefined
+          })
+        )
+      ),
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: session.sessionId,
+            state: "FINISHED",
+            currentPhase: undefined,
+            entries: [
+              leaderboardEntry({ displayName: "Ann", score: 750, rank: 1 }),
+              leaderboardEntry({
+                participantId: record.participantId,
+                displayName: "Aman",
+                score: 320,
+                rank: 2
+              })
+            ]
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
+    expect(screen.getByText("Your rank")).toBeInTheDocument();
+    expect(screen.getByText("#2")).toBeInTheDocument();
+    expect(screen.getByRole("link", { name: /play another quiz/i })).toBeInTheDocument();
+    // The podium shows the server's top ranks.
+    expect(screen.getByLabelText("Podium")).toBeInTheDocument();
   });
 });
