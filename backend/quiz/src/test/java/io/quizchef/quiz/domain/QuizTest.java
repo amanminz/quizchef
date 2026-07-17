@@ -13,6 +13,7 @@ import io.quizchef.quiz.domain.exception.QuizContentLockedException;
 import io.quizchef.quiz.domain.exception.QuizNotArchivableException;
 import io.quizchef.quiz.domain.exception.QuizNotPublishableException;
 import io.quizchef.quiz.domain.exception.QuizQuestionsLockedException;
+import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -135,6 +136,55 @@ class QuizTest {
     }
 
     @Test
+    void reorderRepositionsQuestionsInTheGivenOrder() {
+        Quiz quiz = quiz();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        UUID third = UUID.randomUUID();
+        quiz.addQuestion(first);
+        quiz.addQuestion(second);
+        quiz.addQuestion(third);
+
+        quiz.reorder(List.of(third, first, second));
+
+        assertThat(quiz.questions())
+                .extracting(QuizQuestion::questionId, QuizQuestion::displayOrder)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(third, 1),
+                        org.assertj.core.groups.Tuple.tuple(first, 2),
+                        org.assertj.core.groups.Tuple.tuple(second, 3));
+    }
+
+    @Test
+    void reorderRejectsAnythingOtherThanTheCurrentQuestionSet() {
+        Quiz quiz = quiz();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        quiz.addQuestion(first);
+        quiz.addQuestion(second);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> quiz.reorder(List.of(first)));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> quiz.reorder(List.of(first, first)));
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> quiz.reorder(List.of(first, second, UUID.randomUUID())));
+    }
+
+    @Test
+    void reorderIsLockedOncePublished() {
+        Quiz quiz = quiz();
+        UUID first = UUID.randomUUID();
+        UUID second = UUID.randomUUID();
+        quiz.addQuestion(first);
+        quiz.addQuestion(second);
+        quiz.publish();
+
+        assertThatExceptionOfType(QuizQuestionsLockedException.class)
+                .isThrownBy(() -> quiz.reorder(List.of(second, first)));
+    }
+
+    @Test
     void shouldNotPublishWithoutQuestions() {
         assertThatExceptionOfType(QuizNotPublishableException.class)
                 .isThrownBy(() -> quiz().publish());
@@ -207,6 +257,8 @@ class QuizTest {
                 .isThrownBy(() -> quiz.removeLocalization(KN));
         assertThatExceptionOfType(QuizArchivedException.class)
                 .isThrownBy(() -> quiz.addQuestion(UUID.randomUUID()));
+        assertThatExceptionOfType(QuizArchivedException.class)
+                .isThrownBy(() -> quiz.reorder(List.of()));
         assertThatExceptionOfType(QuizArchivedException.class).isThrownBy(quiz::publish);
         assertThatExceptionOfType(QuizArchivedException.class)
                 .isThrownBy(() -> quiz.changeVisibility(QuizVisibility.PUBLIC));

@@ -30,6 +30,7 @@ import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 /**
  * A reusable question: its own aggregate, never owned by a quiz.
@@ -93,10 +94,17 @@ public class Question extends AuditableEntity {
     @CollectionTable(name = "question_options", joinColumns = @JoinColumn(name = "question_id"))
     private List<Option> options = new ArrayList<>();
 
+    /**
+     * {@code @BatchSize} turns per-row lazy loads into batched IN-queries
+     * when a page of the library is searched and each row's summary needs
+     * its title (default localization) — without it, listing a page of N
+     * questions triggers N extra queries.
+     */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "question_localizations", joinColumns = @JoinColumn(name = "question_id"))
     @AttributeOverride(name = "languageCode.value",
             column = @Column(name = "language_code", nullable = false, length = 20))
+    @BatchSize(size = 50)
     private List<QuestionLocalization> localizations = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.LAZY)
@@ -116,6 +124,7 @@ public class Question extends AuditableEntity {
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "question_tags", joinColumns = @JoinColumn(name = "question_id"))
     @Column(name = "tag_id", nullable = false)
+    @BatchSize(size = 50)
     private Set<UUID> tagIds = new LinkedHashSet<>();
 
     private Question(UUID id, QuestionLocalization defaultContent, IdentityReference ownerIdentity,
