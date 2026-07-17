@@ -1,20 +1,35 @@
 import { apiClient } from "@/api/axios";
 import type {
-  CreateQuestionRequest,
   CreateQuizRequest,
-  QuestionResponse,
+  PageParams,
+  QuizPageResponse,
   QuizResponse,
-  UpdateQuestionRequest,
+  QuizState,
   UpdateQuizRequest
 } from "@/types/api";
 
+export interface QuizListFilters extends PageParams {
+  state?: QuizState;
+  /** Case-insensitive match against any localization's title. */
+  search?: string;
+}
+
 /**
- * Quiz authoring endpoints (RFC-003). Mirrors the API exactly — there are
- * no list endpoints on the backend yet, so none are invented here.
+ * Quiz authoring endpoints (RFC-003). Mirrors the API exactly — composition
+ * (attach/detach/reorder questions) lives here too, since it acts on the
+ * quiz's own composition; question CRUD is `questionApi`.
  */
 export const quizApi = {
   async create(request: CreateQuizRequest): Promise<QuizResponse> {
     const { data } = await apiClient.post<QuizResponse>("/api/v1/quizzes", request);
+    return data;
+  },
+
+  /** "My Quizzes" — owner-scoped, filtered, paged. There is no list-all endpoint. */
+  async listMine(filters: QuizListFilters = {}): Promise<QuizPageResponse> {
+    const { data } = await apiClient.get<QuizPageResponse>("/api/v1/quizzes/mine", {
+      params: filters
+    });
     return data;
   },
 
@@ -38,37 +53,27 @@ export const quizApi = {
     return data;
   },
 
-  async createQuestion(request: CreateQuestionRequest): Promise<QuestionResponse> {
-    const { data } = await apiClient.post<QuestionResponse>("/api/v1/questions", request);
+  /** Attaches a draft or published question (not archived) to the end of the composition. */
+  async attachQuestion(quizId: string, questionId: string): Promise<QuizResponse> {
+    const { data } = await apiClient.post<QuizResponse>(`/api/v1/quizzes/${quizId}/questions`, {
+      questionId
+    });
     return data;
   },
 
-  async getQuestionById(questionId: string): Promise<QuestionResponse> {
-    const { data } = await apiClient.get<QuestionResponse>(`/api/v1/questions/${questionId}`);
-    return data;
-  },
-
-  async updateQuestion(
-    questionId: string,
-    request: UpdateQuestionRequest
-  ): Promise<QuestionResponse> {
-    const { data } = await apiClient.put<QuestionResponse>(
-      `/api/v1/questions/${questionId}`,
-      request
+  /** Detaches a question. Draft quizzes only. */
+  async detachQuestion(quizId: string, questionId: string): Promise<QuizResponse> {
+    const { data } = await apiClient.delete<QuizResponse>(
+      `/api/v1/quizzes/${quizId}/questions/${questionId}`
     );
     return data;
   },
 
-  async publishQuestion(questionId: string): Promise<QuestionResponse> {
-    const { data } = await apiClient.post<QuestionResponse>(
-      `/api/v1/questions/${questionId}/publish`
-    );
-    return data;
-  },
-
-  async archiveQuestion(questionId: string): Promise<QuestionResponse> {
-    const { data } = await apiClient.post<QuestionResponse>(
-      `/api/v1/questions/${questionId}/archive`
+  /** Reorders the composition. Draft quizzes only; must name every current question exactly once. */
+  async reorderQuestions(quizId: string, questionIds: string[]): Promise<QuizResponse> {
+    const { data } = await apiClient.patch<QuizResponse>(
+      `/api/v1/quizzes/${quizId}/questions/order`,
+      { questionIds }
     );
     return data;
   }
