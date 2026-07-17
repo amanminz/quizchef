@@ -22,13 +22,16 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.hibernate.annotations.BatchSize;
 
 /**
  * An authored quiz: settings, lifecycle, localized content, and the
@@ -73,14 +76,22 @@ public class Quiz extends AuditableEntity {
     @Embedded
     private QuizSettings settings;
 
+    /**
+     * {@code @BatchSize} turns per-row lazy loads into batched IN-queries
+     * when a page of quizzes is listed and each row's summary needs its
+     * title (default localization) — without it, listing a page of N
+     * quizzes triggers N extra queries (RFC-003 "mine" listing).
+     */
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "quiz_localizations", joinColumns = @JoinColumn(name = "quiz_id"))
     @AttributeOverride(name = "languageCode.value",
             column = @Column(name = "language_code", nullable = false, length = 20))
+    @BatchSize(size = 50)
     private List<QuizLocalization> localizations = new ArrayList<>();
 
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "quiz_questions", joinColumns = @JoinColumn(name = "quiz_id"))
+    @BatchSize(size = 50)
     private List<QuizQuestion> questions = new ArrayList<>();
 
     private Quiz(UUID id, QuizLocalization defaultContent, IdentityReference ownerIdentity) {
@@ -163,6 +174,34 @@ public class Quiz extends AuditableEntity {
         if (!removed) {
             throw new IllegalArgumentException("Question %s is not part of this quiz".formatted(questionId));
         }
+    }
+
+    /**
+     * Reorders the composition. Draft only — like every other authored-content
+     * change (localize, updateSettings), unlike {@link #addQuestion} which is
+     * deliberately allowed post-publish. The given list must name exactly the
+     * quiz's current questions, each once; positions are reassigned 1..n in
+     * the given order.
+     */
+    public void reorder(List<UUID> orderedQuestionIds) {
+        requireModifiable();
+        if (state == QuizState.PUBLISHED) {
+            throw new QuizQuestionsLockedException();
+        }
+        Objects.requireNonNull(orderedQuestionIds, "orderedQuestionIds must not be null");
+        Set<UUID> current = new HashSet<>();
+        questions.forEach(question -> current.add(question.questionId()));
+        Set<UUID> provided = new HashSet<>(orderedQuestionIds);
+        if (provided.size() != orderedQuestionIds.size() || !provided.equals(current)) {
+            throw new IllegalArgumentException(
+                    "orderedQuestionIds must contain exactly the quiz's current questions, each once");
+        }
+        List<QuizQuestion> reordered = new ArrayList<>(orderedQuestionIds.size());
+        for (int index = 0; index < orderedQuestionIds.size(); index++) {
+            reordered.add(new QuizQuestion(orderedQuestionIds.get(index), index + 1));
+        }
+        this.questions.clear();
+        this.questions.addAll(reordered);
     }
 
     public void publish() {

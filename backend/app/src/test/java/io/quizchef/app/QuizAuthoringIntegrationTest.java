@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quizchef.identity.domain.Identity;
+import io.quizchef.identity.domain.IdentityReference;
 import io.quizchef.identity.domain.IdentitySession;
 import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.identity.domain.Role;
@@ -23,12 +24,10 @@ import io.quizchef.quiz.domain.Option;
 import io.quizchef.quiz.domain.Question;
 import io.quizchef.quiz.domain.QuestionLocalization;
 import io.quizchef.quiz.domain.QuestionType;
-import io.quizchef.quiz.domain.Quiz;
 import io.quizchef.quiz.domain.event.QuizArchivedEvent;
 import io.quizchef.quiz.domain.event.QuizCreatedEvent;
 import io.quizchef.quiz.domain.event.QuizPublishedEvent;
 import io.quizchef.quiz.infrastructure.persistence.QuestionRepository;
-import io.quizchef.quiz.infrastructure.persistence.QuizRepository;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -123,9 +122,6 @@ class QuizAuthoringIntegrationTest {
     private JwtTokenGenerator tokenGenerator;
 
     @Autowired
-    private QuizRepository quizRepository;
-
-    @Autowired
     private QuestionRepository questionRepository;
 
     @Autowired
@@ -143,7 +139,8 @@ class QuizAuthoringIntegrationTest {
 
     @Test
     void fullAuthoringWorkflow() throws Exception {
-        String token = quizMasterToken();
+        AuthenticatedAuthor author = quizMasterAuthor();
+        String token = author.token();
 
         // create a draft
         JsonNode quiz = readJson(mockMvc.perform(post("/api/v1/quizzes")
@@ -192,11 +189,11 @@ class QuizAuthoringIntegrationTest {
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("quiz.not-publishable"));
 
-        // author questions and attach them (question APIs arrive in the next PR)
-        UUID first = questionRepository.save(sampleQuestion("en")).getId();
-        UUID second = questionRepository.save(sampleQuestion("en")).getId();
-        attachQuestion(quizId, first);
-        attachQuestion(quizId, second);
+        // author questions and attach them over HTTP
+        UUID first = questionRepository.save(sampleQuestion("en", author.identity())).getId();
+        UUID second = questionRepository.save(sampleQuestion("en", author.identity())).getId();
+        attachQuestion(token, quizId, first);
+        attachQuestion(token, quizId, second);
 
         // publish
         JsonNode publishedQuiz = readJson(mockMvc.perform(post("/api/v1/quizzes/" + quizId + "/publish")
@@ -262,7 +259,8 @@ class QuizAuthoringIntegrationTest {
 
     @Test
     void publishRequiresQuestionsLocalizedInTheQuizDefaultLanguage() throws Exception {
-        String token = quizMasterToken();
+        AuthenticatedAuthor author = quizMasterAuthor();
+        String token = author.token();
         JsonNode quiz = readJson(mockMvc.perform(post("/api/v1/quizzes")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
                         .contentType(MediaType.APPLICATION_JSON)
@@ -276,8 +274,8 @@ class QuizAuthoringIntegrationTest {
                 .andReturn().getResponse().getContentAsString());
         String quizId = quiz.get("id").asText();
 
-        Question englishOnly = questionRepository.save(sampleQuestion("en"));
-        attachQuestion(quizId, englishOnly.getId());
+        Question englishOnly = questionRepository.save(sampleQuestion("en", author.identity()));
+        attachQuestion(token, quizId, englishOnly.getId());
 
         mockMvc.perform(post("/api/v1/quizzes/" + quizId + "/publish")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
@@ -425,11 +423,25 @@ class QuizAuthoringIntegrationTest {
     }
 
     private String quizMasterToken() {
+        return quizMasterAuthor().token();
+    }
+
+    private record AuthenticatedAuthor(String token, IdentityReference identity) {
+    }
+
+    /**
+     * A quiz-master token together with the identity reference behind it —
+     * needed wherever a test also authors a question directly through the
+     * repository (bypassing the question API) and must own it, since
+     * attaching now enforces question ownership.
+     */
+    private AuthenticatedAuthor quizMasterAuthor() {
         Identity identity = identityRepository.save(Identity.registered());
         IdentitySession session = identitySessionRepository.save(
                 IdentitySession.start(identity.getId(), "JUnit", "127.0.0.1", null));
-        return tokenGenerator.generate(identity.getId(), session.getId(), IdentityType.REGISTERED,
+        String token = tokenGenerator.generate(identity.getId(), session.getId(), IdentityType.REGISTERED,
                 Set.of(Role.USER, Role.QUIZ_MASTER)).token();
+        return new AuthenticatedAuthor(token, identity.reference());
     }
 
     private String registerAndLogin() throws Exception {
@@ -457,11 +469,14 @@ class QuizAuthoringIntegrationTest {
         return objectMapper.readTree(body).get("token").asText();
     }
 
-    private void attachQuestion(String quizId, UUID questionId) {
-        transactionTemplate.executeWithoutResult(status -> {
-            Quiz quiz = quizRepository.findById(UUID.fromString(quizId)).orElseThrow();
-            quiz.addQuestion(questionId);
-        });
+    private void attachQuestion(String token, String quizId, UUID questionId) throws Exception {
+        mockMvc.perform(post("/api/v1/quizzes/" + quizId + "/questions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"questionId": "%s"}
+                                """.formatted(questionId)))
+                .andExpect(status().isOk());
     }
 
     private void localizeQuestionIn(UUID questionId, String language) {
@@ -476,13 +491,13 @@ class QuizAuthoringIntegrationTest {
         });
     }
 
-    private Question sampleQuestion(String language) {
+    private Question sampleQuestion(String language, IdentityReference owner) {
         LanguageCode languageCode = LanguageCode.of(language);
         Option trueOption = Option.of(true, 1);
         Option falseOption = Option.of(false, 2);
         return Question.create(
                 new QuestionLocalization(languageCode, "Jonah", "Jonah was swallowed by a great fish.", null),
-                identityRepository.save(Identity.registered()).reference(),
+                owner,
                 QuestionType.TRUE_FALSE, Difficulty.EASY,
                 List.of(trueOption, falseOption),
                 List.of(trueOption.localized(languageCode, "True"),

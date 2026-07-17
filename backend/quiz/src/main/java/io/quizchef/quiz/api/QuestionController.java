@@ -8,9 +8,14 @@ import io.quizchef.quiz.application.CreateQuestionApplicationService;
 import io.quizchef.quiz.application.PublishQuestionApplicationService;
 import io.quizchef.quiz.application.PublishQuestionCommand;
 import io.quizchef.quiz.application.QuestionQueryService;
+import io.quizchef.quiz.application.QuestionSearchQuery;
 import io.quizchef.quiz.application.QuestionView;
 import io.quizchef.quiz.application.UpdateQuestionApplicationService;
+import io.quizchef.quiz.domain.Difficulty;
+import io.quizchef.quiz.domain.LanguageCode;
+import io.quizchef.quiz.domain.QuestionState;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.ExampleObject;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -20,7 +25,11 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -28,6 +37,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -104,6 +114,40 @@ public class QuestionController {
         return ResponseEntity
                 .created(URI.create("/api/v1/questions/" + view.id()))
                 .body(QuestionResponse.from(view));
+    }
+
+    @GetMapping
+    @Operation(
+            summary = "Search the caller's own question library",
+            description = "Read-only browse/picker endpoint: filterable and paged. Every filter is "
+                    + "optional. Sortable only by updatedAt, createdAt, or state (title lives in "
+                    + "per-language localizations, not a root column). Requires QUIZ_VIEW; only the "
+                    + "caller's own questions are searched — there is no cross-author library yet.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "A page of matching questions"),
+            @ApiResponse(responseCode = "400", description = "Unsupported sort property, or unknown language tag",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Authenticated but lacking QUIZ_VIEW",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public QuestionPageResponse library(
+            @RequestParam(required = false) QuestionState state,
+            @RequestParam(required = false) Difficulty difficulty,
+            @Parameter(description = "BCP-47 tag; matches questions with a localization in this language")
+            @RequestParam(required = false) String language,
+            @RequestParam(required = false) List<UUID> tags,
+            @Parameter(description = "Case-insensitive match against any localization's title or prompt")
+            @RequestParam(required = false) String search,
+            @PageableDefault(size = 20, sort = "updatedAt", direction = Sort.Direction.DESC)
+            Pageable pageable) {
+        LanguageCode languageCode = language == null ? null : LanguageCode.of(language);
+        QuestionSearchQuery filter = new QuestionSearchQuery(state, difficulty, languageCode, tags, search);
+        return QuestionPageResponse.from(questionQueryService
+                .library(currentUserProvider.currentUser(), filter, pageable)
+                .map(QuestionSummaryResponse::from));
     }
 
     @GetMapping("/{questionId}")
