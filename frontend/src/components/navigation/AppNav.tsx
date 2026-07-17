@@ -7,10 +7,17 @@ const links = [
   { to: "/sessions", label: "Sessions" }
 ];
 
-/** The authenticated area's primary navigation. */
-export function AppNav() {
+export interface AppNavProps {
+  orientation?: "horizontal" | "vertical";
+}
+
+/** The authenticated area's primary navigation — a sidebar on desktop, usable inline anywhere. */
+export function AppNav({ orientation = "horizontal" }: AppNavProps) {
   return (
-    <nav aria-label="Primary" className="flex items-center gap-1">
+    <nav
+      aria-label="Primary"
+      className={cn("flex gap-1", orientation === "vertical" ? "flex-col" : "items-center")}
+    >
       {links.map((link) => (
         <NavLink
           key={link.to}

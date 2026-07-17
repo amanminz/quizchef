@@ -7,9 +7,12 @@ Implemented
 <!-- Draft | Proposed | Accepted | Implemented | Superseded by RFC-XXX
      Implemented — the React platform foundation (Phase 2 PR #1) ships:
      routing, providers, auth, API layer, realtime client, state ownership,
-     design tokens, shared components, and the test stack. Feature UIs
-     (authoring, lobby, gameplay) are later PRs building ON this — they do
-     not hold this RFC back. See README.md for the lifecycle.
+     design tokens, shared components, and the test stack. Phase 2 PR #2
+     (Quiz Authoring) is the platform's first feature, built on top without
+     changing any of the PR #1 contracts — it established the features/
+     module convention this RFC now documents. Lobby and gameplay UI are
+     later PRs; they do not hold this RFC back. See README.md for the
+     lifecycle.
      Note: the Phase 2 spec named this "RFC-007", but RFC-007 is Media
      Storage and RFC-008 is Deployment; the next free number is 009. -->
 
@@ -31,7 +34,7 @@ Updated
 
 Defines the architecture of the QuizChef web frontend: a React 19 + TypeScript + Vite application in `frontend/` that is a **client of the platform, never part of it**. The backend is server-authoritative for everything that matters (ADR-006); the frontend renders state, submits commands, and receives projections. This RFC fixes the five contracts every future frontend PR builds on — the layering, the route table, **state ownership**, the API layer (with OpenAPI-generated types), and the realtime layer (one `RealtimeClient` over RFC-005) — plus the testing strategy that keeps them honest.
 
-Phase 2 PR #1 implements all of it as **infrastructure only**: no quiz authoring UI, no lobby, no gameplay. Pages exist as placeholders behind real routing, real auth, and a real design system.
+Phase 2 PR #1 implemented all of it as **infrastructure only**: no quiz authoring UI, no lobby, no gameplay. Phase 2 PR #2 (Quiz Authoring) is the first feature built on it, and in doing so establishes the **feature module** convention (`features/<name>/`) this RFC now documents alongside the original five contracts — lobby and gameplay will follow the same shape.
 
 ---
 
@@ -54,9 +57,10 @@ The backend stayed clean for eight PRs because its boundaries were written down 
 
 # Non Goals
 
-- Feature UIs — quiz authoring (PR #2), lobby, gameplay, leaderboard, results are later Phase 2 PRs.
+- Lobby, gameplay, leaderboard, results UI — later Phase 2 PRs, building on the feature-module convention PR #2 established.
+- Question authoring (create/edit) — Phase 2 PR #2's question picker is read/search/compose only; question CRUD UI is a future PR (the API surface already exists, `questionApi.create`/`update`/`publish`/`archive`).
 - Token refresh and server-side logout — the backend has neither (RFC-002 Future Work); see Authentication for what happens instead.
-- Accessibility polish, animations, media, church branding (deferred by the phase spec; the primitives are accessible-by-default where cheap: labeled fields, roles, focus rings, native `<dialog>`).
+- Full accessibility audit, animations, media, church branding (deferred by the phase spec; the primitives are accessible-by-default where cheap: labeled fields, roles, focus rings, native `<dialog>`, keyboard-operable drag-and-drop).
 - Offline support beyond an indicator; PWA concerns.
 
 ---
@@ -76,34 +80,41 @@ Components never call `axios` or touch a STOMP session; they call hooks, hooks c
 ```text
 frontend/src/
   app/        App, Providers (stack + query retry policy), Router (route table)
-  api/        axios instance, apiError mapping, identityApi / quizApi / sessionApi
+  api/        axios instance, apiError mapping, identityApi / quizApi / questionApi / sessionApi
   auth/       AuthContext, AuthProvider, useAuth, useCurrentUser, RequireAuth, authStore
   realtime/   RealtimeClient, RealtimeContext, RealtimeProvider, useRealtime, SessionSubscriptions, connectionStore
   hooks/      cross-cutting hooks (useOnlineStatus)
-  layouts/    PublicLayout, DashboardLayout
-  pages/      one component per route (placeholders this PR)
-  components/ common/ forms/ feedback/ navigation/ — generic only, nothing quiz-specific
+  layouts/    PublicLayout, DashboardLayout, Breadcrumbs (route-aware, not generic — see below)
+  pages/      one component per route
+  components/ common/ forms/ feedback/ navigation/ — generic only, nothing feature-specific
+  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/ is the first)
   theme/      tokens.css, uiPreferencesStore, useApplyTheme
   types/      api.gen.ts (generated), api.ts (aliases), protocol.ts (RFC-005, hand-written by design)
   utils/      cn, env, validation
-  test/       setup, MSW server + handlers, testUtils
+  test/       setup, MSW server + handlers, testUtils, quizFixtures
 ```
+
+**The `features/` convention (added Phase 2 PR #2).** `components/` stays generic by rule (RFC-009 already said "nothing quiz-specific"); a real feature needs its own hooks, presentational components, and query-key registry, and none of those belong in the cross-cutting `hooks/`/`components/` folders either. `features/<name>/` is where they live: `features/quizzes/hooks/` (query hooks + orchestration hooks), `features/quizzes/components/` (feature-specific presentational components), `features/quizzes/queryKeys.ts` (the one place a query's key and a mutation's invalidation target are defined, so they can't drift from each other by a typo). Lobby and gameplay will each get their own `features/<name>/` the same way.
 
 ## Routing
 
 React Router v7, data router in the app (`createBrowserRouter`), one exported route table:
 
 ```text
-/            home            public
-/login       sign in         public
-/play        join a game     public (guests are first-class, ADR-003)
-/dashboard   host home       RequireAuth
-/quizzes     authoring       RequireAuth
-/sessions    hosting         RequireAuth
-/not-found + catch-all       public
+/                          home                       public
+/login                     sign in                    public
+/play                      join a game                public (guests are first-class, ADR-003)
+/dashboard                 host home                  RequireAuth
+/quizzes                   "My Quizzes"                RequireAuth
+/quizzes/new               create a draft             RequireAuth
+/quizzes/:quizId           edit metadata               RequireAuth
+/quizzes/:quizId/questions compose (search + reorder)  RequireAuth
+/quizzes/:quizId/review    read-only summary + publish RequireAuth
+/sessions                  hosting                    RequireAuth
+/not-found + catch-all                                public
 ```
 
-`RequireAuth` is a layout route: unauthenticated visitors are redirected to `/login` carrying the path they wanted, and login returns them there. The route table is exported so tests mount the identical tree in a memory router.
+`RequireAuth` is a layout route: unauthenticated visitors are redirected to `/login` carrying the path they wanted, and login returns them there. The route table is exported so tests mount the identical tree in a memory router. `/quizzes/new` is registered before `/quizzes/:quizId`, but the order is cosmetic — React Router (like the backend's own routing) resolves a literal segment over a variable one at the same level regardless of declaration order.
 
 ## State ownership
 
@@ -132,7 +143,7 @@ The proof of the rule: `useCurrentUser` is a TanStack Query over `/users/me`; th
 
 One axios instance (`api/axios.ts`) centralizes the base URL (same-origin by default; the dev server proxies `/api` and `/ws` to the backend), JWT injection from the auth store, a 10s timeout, and **error mapping**: every failure becomes an `ApiClientError` carrying the backend's stable `code`, the HTTP status, and field errors — callers switch on codes, never on transport artifacts. **Retries belong to TanStack Query alone** (Providers: 4xx never retried, network/5xx twice), so no request is ever retried at two layers.
 
-**Generated types.** `OpenApiSpecExportTest` (backend) exports the live OpenAPI document to `backend/app/build/openapi.json`; `npm run generate:api` turns it into `types/api.gen.ts` (committed, so the frontend builds standalone). The api modules (`identityApi`, `quizApi`, `sessionApi`) mirror the 25 real endpoints exactly — no invented list endpoints, no hand-written DTOs. When the backend API changes, the pipeline makes the frontend fail to compile instead of silently drifting.
+**Generated types.** `OpenApiSpecExportTest` (backend) exports the live OpenAPI document to `backend/app/build/openapi.json`; `npm run generate:api` turns it into `types/api.gen.ts` (committed, so the frontend builds standalone). The api modules (`identityApi`, `quizApi`, `questionApi`, `sessionApi`) mirror the real endpoints exactly — no invented list endpoints, no hand-written DTOs. `quizApi` and `questionApi` were one module through PR #1 (nothing consumed the question calls yet); PR #2 split them along the same boundary the backend's own `QuizController`/`QuestionController` draw, once composition (`attachQuestion`/`detachQuestion`/`reorderQuestions` — quiz-side, since they act on the quiz's own composition) and search (`questionApi.search`) needed real homes. When the backend API changes, the pipeline makes the frontend fail to compile instead of silently drifting.
 
 ## Realtime layer
 
@@ -152,7 +163,21 @@ One axios instance (`api/axios.ts`) centralizes the base URL (same-origin by def
 
 ## Shared components
 
-Generic only: `Button` (cva variants, loading state), `Card` family, `Modal` (native `<dialog>` — platform focus trap/ESC/top-layer), `ConfirmDialog`, `Spinner`, `LoadingOverlay`, `PageContainer`, `SectionHeader`, `EmptyState`, `ErrorPanel`, `FormField` (react-hook-form-ready), `ErrorBoundary`, `OfflineIndicator`, `AppNav`. Nothing quiz-specific exists in `components/` — feature components will live with their features.
+Generic only: `Button` (cva variants, loading state), `Card` family, `Modal` (native `<dialog>` — platform focus trap/ESC/top-layer), `ConfirmDialog`, `Spinner`, `LoadingOverlay`, `PageContainer`, `SectionHeader`, `EmptyState`, `ErrorPanel`, `FormField` (react-hook-form-ready), `ErrorBoundary`, `OfflineIndicator`, `AppNav` (gained an `orientation` prop for the sidebar, Phase 2 PR #2). Added for PR #2, still generic — reusable by any future multi-step workflow, not quiz-specific: `WorkflowHeader` (title, status slot, actions), `ProgressStepper` (step indicator), `EntityStatusBadge` (label + tone — callers map their own lifecycle to a tone, it knows no domain enum). `ConfirmActionDialog` from the original PR #2 task spec is not a new component: `ConfirmDialog` already covered it exactly, reused rather than duplicated. Nothing feature-specific exists in `components/` — feature components live in `features/<name>/components/`.
+
+## Quiz authoring (Phase 2 PR #2)
+
+The platform's first feature, and the template the next ones (lobby, gameplay) will copy.
+
+**Orchestration hooks are the only coordination layer.** Per the layering rule, pages render and hooks coordinate — for a real feature, that split needs two hook tiers, not one: `features/quizzes/hooks/useQuizzes` / `useQuiz` / `usePublishQuiz` / `useArchiveQuiz` / `useQuestionLibrary` are thin TanStack Query wrappers (one query or mutation each); `useQuizAuthoring`, `useQuestionSelection`, `useQuizPublishing` sit above them and are what pages actually call — each owns one page's worth of workflow (create+edit metadata; compose questions; review+publish) and returns exactly the data and actions that page renders. A page component never calls `useMutation` directly.
+
+**Optimistic updates are scoped to what's naturally reversible.** Attach, detach, and reorder (`useQuestionSelection`) update the cached quiz composition immediately via TanStack Query's `onMutate`/`onError`/`onSettled` and roll back to the last known server state if the request fails; `onSettled` always refetches regardless of outcome, so the client reconciles to the server's truth even after a successful mutation (ADR-006 spirit: optimistic UI is a rendering convenience, never a source of truth). Create, publish, and archive (`useQuizAuthoring`, `usePublishQuiz`, `useArchiveQuiz`) are lifecycle transitions, not composition edits — they stay server-confirmed with no optimistic UI, so a user is never shown a "published" state that a 409 then contradicts.
+
+**Client-side validation previews the server's own rule, never replaces it.** `useQuizPublishing` computes a "not ready to publish" warning by checking the same condition `PublishQuizApplicationService` enforces server-side (every attached question must carry the quiz's default language, RFC-003) — reading it from the already-fetched question summaries, entirely client-side. It is a UX preview, not a gate: the Publish button disables on the obvious case (no questions), but the request still goes to the server and a 409 is handled like any other mutation error, never assumed away.
+
+**Drag-and-drop reordering** (`/quizzes/:quizId/questions`) uses `@dnd-kit/core` + `@dnd-kit/sortable` — a new dependency, added because the workflow spec requires real drag-and-drop with keyboard support and nothing already in the stack covers it. `dnd-kit`'s `KeyboardSensor` (alongside `PointerSensor`) gives keyboard operability for free rather than as an afterthought. The draggable wrapper (`SortableQuestionRow`) is kept separate from the presentational `QuestionRow` — the row itself stays DnD-library-agnostic.
+
+**Breadcrumbs are route-aware, so they don't live in `components/navigation/`.** `layouts/Breadcrumbs.tsx` resolves a quiz's title (via the same `useQuiz` query the page uses — same cache, no extra request) to render it in the trail. `components/navigation/AppNav`, by contrast, stays a static, feature-ignorant link list. The distinction: `layouts/` may know about app structure and features; `components/` never does.
 
 ## Forms & validation
 
@@ -164,7 +189,11 @@ Four layers, each with one job: the **axios interceptor** normalizes every API f
 
 ## Testing strategy
 
-Vitest + Testing Library + MSW (network mocked at the boundary — the app's real axios stack runs). `renderApp()` mounts the **real route table inside the real provider stack** in a memory router, so tests exercise routing, auth, queries, and interceptors together; MSW's `onUnhandledRequest: "error"` fails any test that talks to an unmocked endpoint. `RealtimeClient` is tested against a scriptable fake STOMP client injected through its factory seam (connect/reconnect/resubscribe/dispatch/unsubscribe). 23 tests cover routing, the full login/logout/expiry flows, API error mapping, the realtime lifecycle, and the error boundary. One deliberate wrinkle: tests mount the route tree through the declarative `MemoryRouter` because the data router's Request machinery clashes with MSW under jsdom — same tree, same guards, no lost coverage.
+Vitest + Testing Library + MSW (network mocked at the boundary — the app's real axios stack runs). `renderApp()` mounts the **real route table inside the real provider stack** in a memory router, so tests exercise routing, auth, queries, and interceptors together; MSW's `onUnhandledRequest: "error"` fails any test that talks to an unmocked endpoint. `RealtimeClient` is tested against a scriptable fake STOMP client injected through its factory seam (connect/reconnect/resubscribe/dispatch/unsubscribe). One deliberate wrinkle: tests mount the route tree through the declarative `MemoryRouter` because the data router's Request machinery clashes with MSW under jsdom — same tree, same guards, no lost coverage.
+
+**51 tests** (23 from PR #1 + 28 from PR #2's authoring workflow): routing/auth/API-client/realtime/error-boundary from PR #1, plus every authoring page (list lifecycle-sectioning and its own empty/error states, create validation and error surfacing, metadata load/save/version-conflict, question search/attach/detach, publish/archive behind confirmation with its precondition warning) and every new route's auth redirect. **`useQuestionSelection`'s reorder is tested at the hook level** (`renderHook`, a scriptable MSW handler with an artificial delay to make the optimistic window observable) rather than by simulating a drag gesture in jsdom — dnd-kit's pointer events don't translate meaningfully to jsdom's synthetic event system, and the actual logic under test (optimistic update → rollback on failure) lives in the hook, not in dnd-kit's own gesture handling (which the library's own tests already cover).
+
+**jsdom gap found and fixed once, for every future test:** jsdom implements no `<dialog>` imperative API (`showModal`/`close`) — PR #1 built `Modal`/`ConfirmDialog` on native `<dialog>` but no PR #1 test ever opened one. PR #2's confirmation flows were the first to exercise that path, so the polyfill was added to the shared `test/setup.ts` (same pattern as the pre-existing `matchMedia` stand-in) rather than worked around per test.
 
 ---
 
@@ -184,14 +213,21 @@ Vitest + Testing Library + MSW (network mocked at the boundary — the app's rea
 
 **Auto-connecting realtime at app boot** — rejected: a visitor reading the home page holds no session; connections are opened by the features that need them.
 
+**Optimistic UI for every mutation, including publish/archive** — rejected: those are lifecycle transitions with real business significance (RFC-003), not reversible edits. Showing "published" before the server confirms it risks a visible flicker back to "draft" on a 409, which is a worse experience than a brief, honest loading state.
+
+**A native HTML5 drag-and-drop API (`draggable` + drag events) instead of a library** — rejected: no built-in keyboard operability, inconsistent touch support, and a materially worse API for sortable-list reordering specifically. `@dnd-kit` costs one dependency and buys correct behavior across input modes for free.
+
+**Feature-specific hooks/components inside the existing `hooks/`/`components/` folders** — rejected: RFC-009 already draws that line ("generic only, nothing feature-specific") for a reason — a folder that mixes generic and feature-specific code stops being a safe place to add something reusable without checking it isn't accidentally quiz-aware. `features/<name>/` gives feature code an unambiguous home.
+
 ---
 
 # Risks
 
 - **The generated-types pipeline needs the backend build** (`OpenApiSpecExportTest` → `generate:api`). Mitigated: `api.gen.ts` is committed, so the frontend builds without the backend; regeneration is a documented two-command step. CI wiring for drift detection is future work.
 - **localStorage JWT** is readable by successful XSS. Accepted and documented; session-bound tokens cap the damage, and no third-party scripts run.
-- **Single bundle (~750 kB min)** — fine for the platform shell; route-level code splitting (`React.lazy`) is listed as future work before feature pages fatten it.
+- **Single bundle (~864 kB min, up from ~750 kB after PR #2)** — still fine for church scale, but the code-splitting future work is now more urgent than "before feature pages fatten it" — they have.
 - **jsdom test wrinkle**: tests use the declarative router (data-router Requests clash with MSW under jsdom). If a future PR adopts loaders/actions, the test harness must revisit this.
+- **The question picker fetches an unfiltered library page (`size: 200`) to resolve already-selected questions' summaries** for the composition list, alongside the filtered page the picker itself shows — fine at authoring scale (mirrors the backend's own "fine at authoring scale" call on unfiltered load-then-filter, RFC-003), revisit only if an author's library genuinely grows past a few hundred questions.
 
 ---
 
@@ -211,15 +247,17 @@ Vitest + Testing Library + MSW (network mocked at the boundary — the app's rea
 - [x] Realtime: `RealtimeClient` with explicit connect, auto-reconnect + resubscription, heartbeats, RFC-005 parsing + version check, topic helpers; no gameplay subscriptions.
 - [x] State ownership implemented as specified (token/connection/UI in Zustand; server state in Query; no duplication).
 - [x] Design tokens with dark mode; shared generic components; zod + react-hook-form with shared schemas.
-- [x] 23 tests green across providers, routing, auth, API client, realtime, error boundary; ESLint zero warnings; `tsc` clean.
-- [x] No feature UI (quiz/lobby/gameplay pages are placeholders).
+- [x] 51 tests green across providers, routing, auth, API client, realtime, error boundary, and the full quiz authoring workflow; ESLint zero warnings; `tsc` clean.
+- [x] Quiz authoring workflow (Phase 2 PR #2): list, create, edit metadata, search/attach/detach/reorder questions, review, publish, archive — end to end against the real backend, no mocks standing in for missing endpoints, no hand-written DTOs, no remaining TODOs for authoring capabilities.
+- [x] `features/` module convention established and documented; optimistic updates scoped to composition only, never lifecycle transitions.
 
 ---
 
 # Future Work
 
-- **Quiz authoring UI (Phase 2 PR #2)** — the first feature consumer of this platform.
-- **Route-level code splitting** once feature pages land.
+- **Lobby and session-hosting UI (Phase 2 PR #3)** — the second `features/` module, following the convention PR #2 established.
+- **Question authoring UI** (create/edit) — the picker only searches and composes; the API surface exists, the UI doesn't yet.
+- **Route-level code splitting** — was "before feature pages fatten the bundle"; they have, this is now due.
 - **OpenAPI drift check in CI** — regenerate `api.gen.ts` and fail on diff.
 - **Registration page** — the endpoint and validation schemas exist; the page arrives with the first onboarding-focused PR.
 - **Connect-time JWT on the realtime channel** when RFC-005 per-message authorization lands.

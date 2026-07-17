@@ -24,4 +24,16 @@ describe("routing", () => {
     renderApp("/play");
     expect(await screen.findByText(/joining a game is coming/i)).toBeInTheDocument();
   });
+
+  it.each([
+    "/quizzes",
+    "/quizzes/new",
+    "/quizzes/some-id",
+    "/quizzes/some-id/questions",
+    "/quizzes/some-id/review"
+  ])("redirects unauthenticated visitors from %s to login", async (route) => {
+    renderApp(route);
+    expect(await screen.findByRole("heading", { name: /sign in/i })).toBeInTheDocument();
+    expect(currentPath()).toBe("/login");
+  });
 });

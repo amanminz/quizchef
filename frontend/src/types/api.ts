@@ -19,9 +19,16 @@ export type CurrentUserResponse = Schemas["CurrentUserResponse"];
 export type CreateQuizRequest = Schemas["CreateQuizRequest"];
 export type UpdateQuizRequest = Schemas["UpdateQuizRequest"];
 export type QuizResponse = Schemas["QuizResponse"];
+export type QuizSummaryResponse = Schemas["QuizSummaryResponse"];
+export type QuizPageResponse = Schemas["QuizPageResponse"];
+export type AddQuestionRequest = Schemas["AddQuestionRequest"];
+export type ReorderQuestionsRequest = Schemas["ReorderQuestionsRequest"];
+
 export type CreateQuestionRequest = Schemas["CreateQuestionRequest"];
 export type UpdateQuestionRequest = Schemas["UpdateQuestionRequest"];
 export type QuestionResponse = Schemas["QuestionResponse"];
+export type QuestionSummaryResponse = Schemas["QuestionSummaryResponse"];
+export type QuestionPageResponse = Schemas["QuestionPageResponse"];
 
 export type CreateSessionRequest = Schemas["CreateSessionRequest"];
 export type SessionSummaryResponse = Schemas["SessionSummaryResponse"];
@@ -32,3 +39,27 @@ export type SessionSnapshotResponse = Schemas["SessionSnapshotResponse"];
 export type SubmitAnswerRequest = Schemas["SubmitAnswerRequest"];
 export type AnswerAcceptedResponse = Schemas["AnswerAcceptedResponse"];
 export type LeaderboardResponse = Schemas["LeaderboardResponse"];
+
+/**
+ * The backend has no named enum schemas — every state/type/difficulty
+ * travels as an inline string union on each DTO. These aliases give the
+ * same literal values one shared name for filter/param typing; they carry
+ * no data shape of their own, so they don't count as hand-maintained DTOs.
+ */
+export type QuizState = NonNullable<QuizSummaryResponse["state"]>;
+export type QuestionState = NonNullable<QuestionSummaryResponse["state"]>;
+export type Difficulty = NonNullable<QuestionSummaryResponse["difficulty"]>;
+export type QuestionType = NonNullable<QuestionSummaryResponse["questionType"]>;
+
+/**
+ * Flat pagination/sort params matching Spring's `Pageable` query
+ * convention (`page`, `size`, `sort=property,direction`) — never the
+ * generated `Pageable` schema shape directly, which axios would serialize
+ * as nested `pageable[page]=` bracket notation Spring cannot parse.
+ */
+export interface PageParams {
+  page?: number;
+  size?: number;
+  /** e.g. "updatedAt,desc" — the backend allow-lists updatedAt/createdAt/state only. */
+  sort?: string;
+}

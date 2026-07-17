@@ -21,6 +21,19 @@ if (!window.matchMedia) {
     }) as MediaQueryList;
 }
 
+// jsdom doesn't implement the <dialog> element's imperative API - Modal
+// (and anything built on it, like ConfirmDialog) needs showModal/close to
+// exist and toggle the `open` attribute the way a real browser would.
+if (!HTMLDialogElement.prototype.showModal) {
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement) {
+    this.setAttribute("open", "");
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement) {
+    this.removeAttribute("open");
+    this.dispatchEvent(new Event("close"));
+  };
+}
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 
 afterEach(() => {
