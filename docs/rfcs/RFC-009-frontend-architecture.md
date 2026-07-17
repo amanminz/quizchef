@@ -10,8 +10,10 @@ Implemented
      design tokens, shared components, and the test stack. Phase 2 PR #2
      (Quiz Authoring) is the platform's first feature, built on top without
      changing any of the PR #1 contracts — it established the features/
-     module convention this RFC now documents. Lobby and gameplay UI are
-     later PRs; they do not hold this RFC back. See README.md for the
+     module convention this RFC now documents. Phase 2 PR #3 (Host
+     Dashboard & Session Creation) is the second feature module and the
+     first realtime consumer; it too changed no PR #1 contract. Gameplay UI
+     is a later PR; it does not hold this RFC back. See README.md for the
      lifecycle.
      Note: the Phase 2 spec named this "RFC-007", but RFC-007 is Media
      Storage and RFC-008 is Deployment; the next free number is 009. -->
@@ -34,7 +36,7 @@ Updated
 
 Defines the architecture of the QuizChef web frontend: a React 19 + TypeScript + Vite application in `frontend/` that is a **client of the platform, never part of it**. The backend is server-authoritative for everything that matters (ADR-006); the frontend renders state, submits commands, and receives projections. This RFC fixes the five contracts every future frontend PR builds on — the layering, the route table, **state ownership**, the API layer (with OpenAPI-generated types), and the realtime layer (one `RealtimeClient` over RFC-005) — plus the testing strategy that keeps them honest.
 
-Phase 2 PR #1 implemented all of it as **infrastructure only**: no quiz authoring UI, no lobby, no gameplay. Phase 2 PR #2 (Quiz Authoring) is the first feature built on it, and in doing so establishes the **feature module** convention (`features/<name>/`) this RFC now documents alongside the original five contracts — lobby and gameplay will follow the same shape.
+Phase 2 PR #1 implemented all of it as **infrastructure only**: no quiz authoring UI, no lobby, no gameplay. Phase 2 PR #2 (Quiz Authoring) is the first feature built on it, and in doing so establishes the **feature module** convention (`features/<name>/`) this RFC now documents alongside the original five contracts. Phase 2 PR #3 (Host Dashboard & Session Creation) is the second feature module and the first consumer of the realtime layer — its lobby realized the "live session projections" row of the state-ownership table; gameplay follows the same shape.
 
 ---
 
@@ -57,7 +59,7 @@ The backend stayed clean for eight PRs because its boundaries were written down 
 
 # Non Goals
 
-- Lobby, gameplay, leaderboard, results UI — later Phase 2 PRs, building on the feature-module convention PR #2 established.
+- Gameplay, leaderboard, results UI — Phase 2 PR #4, building on the feature-module convention PR #2 established and the realtime patterns PR #3's lobby established. (The lobby itself shipped in PR #3.)
 - Question authoring (create/edit) — Phase 2 PR #2's question picker is read/search/compose only; question CRUD UI is a future PR (the API surface already exists, `questionApi.create`/`update`/`publish`/`archive`).
 - Token refresh and server-side logout — the backend has neither (RFC-002 Future Work); see Authentication for what happens instead.
 - Full accessibility audit, animations, media, church branding (deferred by the phase spec; the primitives are accessible-by-default where cheap: labeled fields, roles, focus rings, native `<dialog>`, keyboard-operable drag-and-drop).
@@ -87,11 +89,11 @@ frontend/src/
   layouts/    PublicLayout, DashboardLayout, Breadcrumbs (route-aware, not generic — see below)
   pages/      one component per route
   components/ common/ forms/ feedback/ navigation/ — generic only, nothing feature-specific
-  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/ is the first)
+  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/, sessions/)
   theme/      tokens.css, uiPreferencesStore, useApplyTheme
   types/      api.gen.ts (generated), api.ts (aliases), protocol.ts (RFC-005, hand-written by design)
   utils/      cn, env, validation
-  test/       setup, MSW server + handlers, testUtils, quizFixtures
+  test/       setup, MSW server + handlers, testUtils, quizFixtures, sessionFixtures, fakeStomp
 ```
 
 **The `features/` convention (added Phase 2 PR #2).** `components/` stays generic by rule (RFC-009 already said "nothing quiz-specific"); a real feature needs its own hooks, presentational components, and query-key registry, and none of those belong in the cross-cutting `hooks/`/`components/` folders either. `features/<name>/` is where they live: `features/quizzes/hooks/` (query hooks + orchestration hooks), `features/quizzes/components/` (feature-specific presentational components), `features/quizzes/queryKeys.ts` (the one place a query's key and a mutation's invalidation target are defined, so they can't drift from each other by a typo). Lobby and gameplay will each get their own `features/<name>/` the same way.
@@ -110,7 +112,11 @@ React Router v7, data router in the app (`createBrowserRouter`), one exported ro
 /quizzes/:quizId           edit metadata               RequireAuth
 /quizzes/:quizId/questions compose (search + reorder)  RequireAuth
 /quizzes/:quizId/review    read-only summary + publish RequireAuth
-/sessions                  hosting                    RequireAuth
+/sessions                  hosting dashboard           RequireAuth
+/sessions/new              create a session            RequireAuth
+/sessions/:sessionId       session details             RequireAuth
+/sessions/:sessionId/lobby the host's lobby            RequireAuth
+/sessions/:sessionId/play  gameplay (placeholder)      RequireAuth
 /not-found + catch-all                                public
 ```
 
@@ -126,11 +132,13 @@ The load-bearing table. Each kind of state has exactly one owner, and the same d
 | Current route | React Router |
 | Backend resources (current user, quizzes, sessions…) | TanStack Query |
 | Realtime connection status | Zustand (`connectionStore`) |
-| Live session projections (future gameplay) | TanStack Query, updated from realtime events |
+| Live session projections (lobby today, gameplay next) | TanStack Query, updated from realtime events |
+| Transient lobby presence (the event-built roster) | Realtime only (`useParticipants` component state) |
+| Hosted-session ids (which sessions this browser created) | Zustand (`hostedSessionsStore`, persisted) |
 | UI preferences (theme) | Zustand (`uiPreferencesStore`, persisted) |
 | Component-local UI (open modal, form input) | React state |
 
-The proof of the rule: `useCurrentUser` is a TanStack Query over `/users/me`; the auth store holds **only the token**. Logging in stores a token and invalidates queries — it never copies the user into Zustand. When gameplay arrives, realtime events will **invalidate or write into the query cache**, so server state keeps exactly one home even when it is pushed rather than fetched.
+The proof of the rule: `useCurrentUser` is a TanStack Query over `/users/me`; the auth store holds **only the token**. Logging in stores a token and invalidates queries — it never copies the user into Zustand. The lobby (Phase 2 PR #3) realized the "projections" row: realtime events **invalidate or write into the query cache**, so server state keeps exactly one home even when it is pushed rather than fetched. The two PR #3 additions honor the same exclusivity: `hostedSessionsStore` holds only ids (a client-side fact — session data stays in Query), and the event-built roster is deliberately not server state at all (see Session hosting below).
 
 ## Authentication
 
@@ -177,7 +185,23 @@ The platform's first feature, and the template the next ones (lobby, gameplay) w
 
 **Drag-and-drop reordering** (`/quizzes/:quizId/questions`) uses `@dnd-kit/core` + `@dnd-kit/sortable` — a new dependency, added because the workflow spec requires real drag-and-drop with keyboard support and nothing already in the stack covers it. `dnd-kit`'s `KeyboardSensor` (alongside `PointerSensor`) gives keyboard operability for free rather than as an afterthought. The draggable wrapper (`SortableQuestionRow`) is kept separate from the presentational `QuestionRow` — the row itself stays DnD-library-agnostic.
 
-**Breadcrumbs are route-aware, so they don't live in `components/navigation/`.** `layouts/Breadcrumbs.tsx` resolves a quiz's title (via the same `useQuiz` query the page uses — same cache, no extra request) to render it in the trail. `components/navigation/AppNav`, by contrast, stays a static, feature-ignorant link list. The distinction: `layouts/` may know about app structure and features; `components/` never does.
+**Breadcrumbs are route-aware, so they don't live in `components/navigation/`.** `layouts/Breadcrumbs.tsx` resolves a quiz's title (via the same `useQuiz` query the page uses — same cache, no extra request) to render it in the trail; PR #3 taught it session PINs the same way. `components/navigation/AppNav`, by contrast, stays a static, feature-ignorant link list. The distinction: `layouts/` may know about app structure and features; `components/` never does.
+
+## Session hosting (Phase 2 PR #3)
+
+The second feature module (`features/sessions/`) and the platform's first realtime consumer. The workflow: published quiz → create session → review details → open lobby → start. It integrates **only the endpoints the backend has** — where the phase spec asked for more, the UI adapts to the contract rather than inventing one:
+
+- **No session list endpoint exists**, so the dashboard is a local registry: `hostedSessionsStore` (Zustand, persisted) holds the **ids** of sessions this browser created, and `useSessions` hydrates each through its own `GET /sessions/{id}` detail query. Only ids live in the store — session data stays in Query, keeping the ownership table honest. Ids the server no longer knows (404 — sessions expire from the Redis-backed store) prune themselves. When a backend list endpoint lands, the store is deleted and `useSessions` becomes one query; nothing else changes.
+- **`CreateSessionRequest` carries only `publishedQuizVersionId`** (the quiz's own id today — `QuizPublicationQuery`), so "configure a session" is honest review, not input: `ConfigurationSection` renders the server-assigned settings read-only, and the create page offers exactly one choice — which published quiz to run. Validation is server-authoritative; a quiz unpublished between listing and create surfaces as the 409 it is.
+- **There is no cancel endpoint**, so there is no cancel button — unstarted sessions age out server-side. Documented, not faked.
+
+**The lobby is a realtime application with one division of truth.** The session summary query establishes initial state and remains the single home of server state; from then on STOMP events are the change feed. `useLobby` (the orchestration hook, the lobby page's only call) subscribes through `SessionSubscriptions` — pages never construct destinations — and answers every lifecycle or roster event by **invalidating the summary query**: the push says *that* something changed, the refetch says *what* it now is (ADR-006's spirit — the server stays the authority even over its own notifications). Nothing polls; between events the summary is simply never refetched.
+
+**Presence is the one thing realtime owns outright.** `useParticipants` builds the roster purely from `participant.joined/disconnected/reconnected` events — transient by design: it exists only while the lobby is mounted. The events carry only participant ids (RFC-005 keeps roster churn cheap), so entries render as deterministic id-derived avatars; the server's `participantCount` stays the headline number, and participants who joined before the view subscribed appear as an explicit "joined before this view opened" row rather than as fabricated entries. Disconnects dim an entry, never remove it (ADR-003 durable participants).
+
+**Start is server-confirmed with no optimistic transition.** The button enables when the server-reported summary says startable (in LOBBY with ≥ 1 participant — the same precondition `StartSessionApplicationService` enforces, previewed as UX exactly like `useQuizPublishing` does); the page navigates to the gameplay route only when the cached state says `IN_PROGRESS`, whether that truth arrived as the start response or as a `session.started` broadcast — one navigation trigger, driven by server state. The gameplay route itself is a deliberate placeholder: this PR ends at "the host successfully launches a live session"; question presentation, timers, and the leaderboard are PR #4.
+
+**The lobby owns the realtime connection lifecycle for now** — connect on mount, disconnect on unmount; a dropped connection shows a banner while `RealtimeClient` reconnects and resubscribes below the feature code. When gameplay lands, connection ownership moves up to span lobby → gameplay. Host and participant workflows will share presentational components but never orchestration hooks: `useLobby`/`useHostControls` are host-only by design — the participant's `/play` experience gets its own hooks in the gameplay PR.
 
 ## Forms & validation
 
@@ -191,7 +215,7 @@ Four layers, each with one job: the **axios interceptor** normalizes every API f
 
 Vitest + Testing Library + MSW (network mocked at the boundary — the app's real axios stack runs). `renderApp()` mounts the **real route table inside the real provider stack** in a memory router, so tests exercise routing, auth, queries, and interceptors together; MSW's `onUnhandledRequest: "error"` fails any test that talks to an unmocked endpoint. `RealtimeClient` is tested against a scriptable fake STOMP client injected through its factory seam (connect/reconnect/resubscribe/dispatch/unsubscribe). One deliberate wrinkle: tests mount the route tree through the declarative `MemoryRouter` because the data router's Request machinery clashes with MSW under jsdom — same tree, same guards, no lost coverage.
 
-**51 tests** (23 from PR #1 + 28 from PR #2's authoring workflow): routing/auth/API-client/realtime/error-boundary from PR #1, plus every authoring page (list lifecycle-sectioning and its own empty/error states, create validation and error surfacing, metadata load/save/version-conflict, question search/attach/detach, publish/archive behind confirmation with its precondition warning) and every new route's auth redirect. **`useQuestionSelection`'s reorder is tested at the hook level** (`renderHook`, a scriptable MSW handler with an artificial delay to make the optimistic window observable) rather than by simulating a drag gesture in jsdom — dnd-kit's pointer events don't translate meaningfully to jsdom's synthetic event system, and the actual logic under test (optimistic update → rollback on failure) lives in the hook, not in dnd-kit's own gesture handling (which the library's own tests already cover).
+**75 tests** (23 from PR #1 + 28 from PR #2's authoring workflow + 24 from PR #3's hosting workflow): routing/auth/API-client/realtime/error-boundary from PR #1, plus every authoring page (list lifecycle-sectioning and its own empty/error states, create validation and error surfacing, metadata load/save/version-conflict, question search/attach/detach, publish/archive behind confirmation with its precondition warning) and every new route's auth redirect. PR #3 covers the hosting workflow end to end: the dashboard's lifecycle sectioning, empty state, and 404 pruning; create-session (published-only listing, metadata panel, the server-confirmed create, the 409 surface); session details with open-lobby and its authorization failure; and the lobby against the fake STOMP transport — roster join/disconnect events with the event-then-reconcile refetch, the pre-subscription count row, the reconnect banner, the start flow's server confirmation, its 403 rejection, and the remote `session.started` navigation. The fake transport moved from `RealtimeClient.test.ts` into `test/fakeStomp.ts` once the lobby tests needed it, and `renderApp` gained an injection seam for a fake-backed `RealtimeClient`. **`useQuestionSelection`'s reorder is tested at the hook level** (`renderHook`, a scriptable MSW handler with an artificial delay to make the optimistic window observable) rather than by simulating a drag gesture in jsdom — dnd-kit's pointer events don't translate meaningfully to jsdom's synthetic event system, and the actual logic under test (optimistic update → rollback on failure) lives in the hook, not in dnd-kit's own gesture handling (which the library's own tests already cover).
 
 **jsdom gap found and fixed once, for every future test:** jsdom implements no `<dialog>` imperative API (`showModal`/`close`) — PR #1 built `Modal`/`ConfirmDialog` on native `<dialog>` but no PR #1 test ever opened one. PR #2's confirmation flows were the first to exercise that path, so the polyfill was added to the shared `test/setup.ts` (same pattern as the pre-existing `matchMedia` stand-in) rather than worked around per test.
 
@@ -225,7 +249,9 @@ Vitest + Testing Library + MSW (network mocked at the boundary — the app's rea
 
 - **The generated-types pipeline needs the backend build** (`OpenApiSpecExportTest` → `generate:api`). Mitigated: `api.gen.ts` is committed, so the frontend builds without the backend; regeneration is a documented two-command step. CI wiring for drift detection is future work.
 - **localStorage JWT** is readable by successful XSS. Accepted and documented; session-bound tokens cap the damage, and no third-party scripts run.
-- **Single bundle (~864 kB min, up from ~750 kB after PR #2)** — still fine for church scale, but the code-splitting future work is now more urgent than "before feature pages fatten it" — they have.
+- **Single bundle (~918 kB min after PR #3, up from ~864 kB)** — still fine for church scale, but the code-splitting future work is now more urgent than "before feature pages fatten it" — they have.
+- **The hosted-session registry is per-browser.** A host who switches devices (or clears storage) loses the dashboard's memory of their sessions — the sessions themselves live on, reachable by id/PIN. This is the honest cost of not inventing a list endpoint; it disappears the day the backend grows one.
+- **The lobby roster shows ids, not names.** RFC-005's roster events deliberately carry only the participant id; until a roster read model or richer join event exists, the lobby renders id-derived avatars and the count row. Acceptable for the host's "how many are in?" question; revisit with the gameplay PR, which needs display names anyway (leaderboard).
 - **jsdom test wrinkle**: tests use the declarative router (data-router Requests clash with MSW under jsdom). If a future PR adopts loaders/actions, the test harness must revisit this.
 - **The question picker fetches an unfiltered library page (`size: 200`) to resolve already-selected questions' summaries** for the composition list, alongside the filtered page the picker itself shows — fine at authoring scale (mirrors the backend's own "fine at authoring scale" call on unfiltered load-then-filter, RFC-003), revisit only if an author's library genuinely grows past a few hundred questions.
 
@@ -247,15 +273,17 @@ Vitest + Testing Library + MSW (network mocked at the boundary — the app's rea
 - [x] Realtime: `RealtimeClient` with explicit connect, auto-reconnect + resubscription, heartbeats, RFC-005 parsing + version check, topic helpers; no gameplay subscriptions.
 - [x] State ownership implemented as specified (token/connection/UI in Zustand; server state in Query; no duplication).
 - [x] Design tokens with dark mode; shared generic components; zod + react-hook-form with shared schemas.
-- [x] 51 tests green across providers, routing, auth, API client, realtime, error boundary, and the full quiz authoring workflow; ESLint zero warnings; `tsc` clean.
+- [x] 75 tests green across providers, routing, auth, API client, realtime, error boundary, and the full quiz authoring and session hosting workflows; ESLint zero warnings; `tsc` clean.
 - [x] Quiz authoring workflow (Phase 2 PR #2): list, create, edit metadata, search/attach/detach/reorder questions, review, publish, archive — end to end against the real backend, no mocks standing in for missing endpoints, no hand-written DTOs, no remaining TODOs for authoring capabilities.
 - [x] `features/` module convention established and documented; optimistic updates scoped to composition only, never lifecycle transitions.
+- [x] Session hosting workflow (Phase 2 PR #3): create a session from a published quiz, review details, open the lobby, watch presence arrive over STOMP, start server-confirmed — realtime-driven lobby with reconnect handling, no polling, no optimistic lifecycle transitions, no invented API contracts, no gameplay UI.
 
 ---
 
 # Future Work
 
-- **Lobby and session-hosting UI (Phase 2 PR #3)** — the second `features/` module, following the convention PR #2 established.
+- **Live gameplay UI (Phase 2 PR #4)** — question presentation, countdowns against `endsAt`, reveal, leaderboard; takes over the realtime connection lifecycle from the lobby and gives the participant `/play` flow its own hooks.
+- **Backend session-list (and roster) endpoints** — retire `hostedSessionsStore` and the lobby's "joined before this view opened" row; both exist only because the contracts don't yet.
 - **Question authoring UI** (create/edit) — the picker only searches and composes; the API surface exists, the UI doesn't yet.
 - **Route-level code splitting** — was "before feature pages fatten the bundle"; they have, this is now due.
 - **OpenAPI drift check in CI** — regenerate `api.gen.ts` and fail on diff.
