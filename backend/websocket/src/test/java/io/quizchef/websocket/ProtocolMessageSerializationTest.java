@@ -46,7 +46,7 @@ class ProtocolMessageSerializationTest {
     void everyMessageTypeHasADottedLowercaseWireName() {
         for (ProtocolMessageType type : ProtocolMessageType.values()) {
             assertThat(type.wireName())
-                    .matches("[a-z]+\\.[a-z]+")
+                    .matches("[a-z]+(\\.[a-z]+)+")
                     .as("wire name for %s", type);
         }
     }

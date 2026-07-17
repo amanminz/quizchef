@@ -149,9 +149,57 @@ public class Session extends AuditableEntity {
         this.state = SessionState.IN_PROGRESS;
     }
 
+    /**
+     * Opens a question for answering. Allowed at the start of play (no phase
+     * yet) and between questions (from LEADERBOARD). The server owns the
+     * timer (ADR-006) — the caller supplies one built from the server clock.
+     */
+    public void openQuestion(UUID questionId, QuestionTimer timer) {
+        requireState(SessionState.IN_PROGRESS, "open a question in");
+        if (currentPhase != null && currentPhase != SessionPhase.LEADERBOARD) {
+            throw new InvalidSessionTransitionException(state, "open a question during " + currentPhase);
+        }
+        Objects.requireNonNull(questionId, "questionId must not be null");
+        Objects.requireNonNull(timer, "timer must not be null");
+        this.currentQuestionId = questionId;
+        this.currentQuestionTimer = timer;
+        this.currentPhase = SessionPhase.QUESTION_OPEN;
+    }
+
+    /**
+     * Closes the current question to further answers.
+     */
+    public void closeQuestion() {
+        requirePhase(SessionPhase.QUESTION_OPEN, "close the question");
+        this.currentPhase = SessionPhase.QUESTION_CLOSED;
+    }
+
+    public void revealAnswer() {
+        requirePhase(SessionPhase.QUESTION_CLOSED, "reveal the answer");
+        this.currentPhase = SessionPhase.ANSWER_REVEALED;
+    }
+
+    public void showLeaderboard() {
+        requirePhase(SessionPhase.ANSWER_REVEALED, "show the leaderboard");
+        this.currentPhase = SessionPhase.LEADERBOARD;
+    }
+
+    /**
+     * True while the given question is open for answers — the one gate answer
+     * acceptance passes through (ADR-006).
+     */
+    public boolean acceptsAnswersFor(UUID questionId) {
+        return state == SessionState.IN_PROGRESS
+                && currentPhase == SessionPhase.QUESTION_OPEN
+                && questionId.equals(currentQuestionId);
+    }
+
     public void finish() {
         requireState(SessionState.IN_PROGRESS, "finish");
         this.state = SessionState.FINISHED;
+        this.currentPhase = null;
+        this.currentQuestionId = null;
+        this.currentQuestionTimer = null;
     }
 
     public void archive() {
@@ -207,6 +255,13 @@ public class Session extends AuditableEntity {
     private void requireState(SessionState expected, String action) {
         if (state != expected) {
             throw new InvalidSessionTransitionException(state, action);
+        }
+    }
+
+    private void requirePhase(SessionPhase expected, String action) {
+        if (state != SessionState.IN_PROGRESS || currentPhase != expected) {
+            throw new InvalidSessionTransitionException(state,
+                    action + " (phase " + currentPhase + ")");
         }
     }
 }

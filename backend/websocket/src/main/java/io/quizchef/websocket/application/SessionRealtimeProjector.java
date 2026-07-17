@@ -1,9 +1,14 @@
 package io.quizchef.websocket.application;
 
+import io.quizchef.session.domain.event.AnswerRevealedEvent;
+import io.quizchef.session.domain.event.AnswerSubmittedEvent;
+import io.quizchef.session.domain.event.LeaderboardUpdatedEvent;
 import io.quizchef.session.domain.event.LobbyOpenedEvent;
 import io.quizchef.session.domain.event.ParticipantDisconnectedEvent;
 import io.quizchef.session.domain.event.ParticipantJoinedEvent;
 import io.quizchef.session.domain.event.ParticipantReconnectedEvent;
+import io.quizchef.session.domain.event.QuestionClosedEvent;
+import io.quizchef.session.domain.event.QuestionStartedEvent;
 import io.quizchef.session.domain.event.SessionFinishedEvent;
 import io.quizchef.session.domain.event.SessionStartedEvent;
 import org.springframework.context.event.EventListener;
@@ -60,5 +65,36 @@ public class SessionRealtimeProjector {
     @EventListener
     void on(ParticipantReconnectedEvent event) {
         realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
+    }
+
+    @EventListener
+    void on(QuestionStartedEvent event) {
+        realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
+    }
+
+    @EventListener
+    void on(QuestionClosedEvent event) {
+        realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
+    }
+
+    @EventListener
+    void on(AnswerRevealedEvent event) {
+        realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
+    }
+
+    @EventListener
+    void on(LeaderboardUpdatedEvent event) {
+        realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
+    }
+
+    /**
+     * The answer acknowledgement is private — it goes to the submitting
+     * participant only, never the whole session (ADR-006: no score leaks, and
+     * an opponent learns nothing from your submission).
+     */
+    @EventListener
+    void on(AnswerSubmittedEvent event) {
+        realtimePublisher.publishToParticipant(
+                event.participantId(), SessionProtocolMapper.toMessage(event));
     }
 }

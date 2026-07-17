@@ -24,9 +24,6 @@ public record SessionSnapshotResponse(
         List<LeaderboardEntryDto> leaderboard
 ) {
 
-    public record LeaderboardEntryDto(UUID participantId, String displayName, int score, int rank) {
-    }
-
     static SessionSnapshotResponse from(SessionSnapshotView view) {
         return new SessionSnapshotResponse(
                 view.sessionId(),
@@ -37,9 +34,6 @@ public record SessionSnapshotResponse(
                 view.remainingMillis(),
                 view.participantScore(),
                 view.submittedOptionIds(),
-                view.leaderboard().stream()
-                        .map(entry -> new LeaderboardEntryDto(
-                                entry.participantId(), entry.displayName(), entry.score(), entry.rank()))
-                        .toList());
+                view.leaderboard().stream().map(LeaderboardEntryDto::from).toList());
     }
 }

@@ -465,13 +465,15 @@ Participants (backed by a Guest Identity or a Registered User).
 
 Guest participant tokens (opaque reconnection credentials, never a business identity).
 
-Session recovery (reconnection, state restoration, connection rebinding).
+**Execution engine (ADR-006, RFC-004).** Live play is a server-authoritative phase machine inside IN_PROGRESS: QUESTION_OPEN → QUESTION_CLOSED → ANSWER_REVEALED → LEADERBOARD → … → FINISHED. Every transition is a Session aggregate method; illegal transitions throw. Host progression commands (start / close / reveal / show-leaderboard / advance) are one application service each over REST; the engine chooses question order while the host drives the pace, and advancing past the last question finishes the session. The server owns the question timer — built from the shared `Clock`, armed by a scheduler that closes an expired question idempotently against a manual close. No client ever computes timing, correctness, or score.
 
-Leaderboard.
+**Answer submission** is validated entirely server-side: the participant must exist, be connected, and answer the open question exactly once with valid options (a host has no participant and cannot answer). The server stamps the response time from its `Clock`, decides correctness itself, computes the points, and records a durable answer that maintains the participant's cached score (ADR-003). The acknowledgement carries no score and is private to the submitter.
 
-Scoring.
+**Scoring and leaderboard (RFC-006).** Framework-independent domain services: a `ScoringService` driven by a swappable `ScoringPolicy` (base + speed bonus × difficulty multiplier, never negative), and a `LeaderboardService` that projects standings ordered by score, then earliest-to-reach-it, then join order — always computed from cached scores, never persisted.
 
-Transport is entirely absent from the domain (ADR-004): realtime behaviour is expressed as domain events and state; only the websocket module knows a connection exists. Reconnection, timers, gameplay progression, and scoring are later PRs (RFC-004).
+**Session recovery** (reconnection, state restoration): `SessionSnapshotAssembler` rebuilds the replay snapshot — current phase, question, remaining time, the participant's own answer and score, and the leaderboard — so reconnecting mid-question restores active gameplay, not just lobby membership.
+
+Transport is entirely absent from the domain (ADR-004): realtime behaviour is expressed as domain events and state; only the websocket module knows a connection exists.
 
 ---
 
@@ -501,7 +503,7 @@ Realtime communication — transport only (ADR-004/005). The one module that kno
 
 A versioned, transport-independent wire protocol (RFC-005): a `ProtocolMessage` envelope carrying `protocolVersion` (evolve clients and server independently), a stable dotted event vocabulary (`participant.reconnected`) decoupled from domain class names, centralized topics, and a reconnection-snapshot contract. Protocol events are *projections* of domain events — the public, frozen representation, never the internal event itself; domain entities are never serialized.
 
-The outbound path: subscribe to session domain events → map to protocol messages (`SessionProtocolMapper`) → publish through the `RealtimePublisher` port → the STOMP adapter resolves the topic and sends. The port names the audience (session / participant / host), never the destination, so the transport could become SSE or MQTT with no caller change. Inbound commands are the mirror image, delegating to application services (never handled here) — defined as protocol contracts, unimplemented until Session APIs.
+The outbound path: subscribe to session domain events → map to protocol messages (`SessionProtocolMapper`) → publish through the `RealtimePublisher` port → the STOMP adapter resolves the topic and sends. This now covers the whole game — lobby, lifecycle, and the gameplay events (`question.started`, `question.closed`, `answer.revealed`, `leaderboard.updated`) — plus the private `participant.answer.accepted` ack routed to the submitter's topic only (no score leaks). The port names the audience (session / participant / host), never the destination, so the transport could become SSE or MQTT with no caller change. Inbound commands run over REST today; a mirror-image STOMP inbound channel delegating to the same application services is the remaining transport work (RFC-005).
 
 Connections are ephemeral transport. Participant state never lives here.
 

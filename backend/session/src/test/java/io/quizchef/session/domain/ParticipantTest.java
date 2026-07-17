@@ -99,6 +99,20 @@ class ParticipantTest {
     }
 
     @Test
+    void reconnectIsIdempotentWhileLive() {
+        Participant participant = registered();
+        participant.connect(T1);
+        participant.recordAnswer(answer(600));
+
+        participant.connect(T2);
+
+        assertThat(participant.isConnected()).isTrue();
+        assertThat(participant.getLastSeenAt()).isEqualTo(T2);
+        assertThat(participant.getTotalScore()).isEqualTo(600);
+        assertThat(participant.answers()).hasSize(1);
+    }
+
+    @Test
     void rejectsInvalidTransitions() {
         Participant participant = registered();
 

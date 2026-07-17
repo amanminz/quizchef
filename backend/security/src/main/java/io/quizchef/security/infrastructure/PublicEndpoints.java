@@ -26,7 +26,10 @@ public final class PublicEndpoints {
             // These are single-segment /sessions/* (join = /sessions/*/join),
             // so the host-only create/lobby/start endpoints stay authenticated.
             "/api/v1/sessions/*",
-            "/api/v1/sessions/*/join"
+            "/api/v1/sessions/*/join",
+            // Participants (guests included) submit answers without an account;
+            // per-message identity binding arrives with the STOMP command layer.
+            "/api/v1/sessions/*/answers"
     };
 
     private PublicEndpoints() {

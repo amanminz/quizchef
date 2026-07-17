@@ -1,0 +1,172 @@
+package io.quizchef.session.api;
+
+import io.quizchef.common.api.ApiError;
+import io.quizchef.identity.domain.CurrentUserProvider;
+import io.quizchef.session.application.AdvanceQuestionApplicationService;
+import io.quizchef.session.application.CloseQuestionApplicationService;
+import io.quizchef.session.application.RevealAnswerApplicationService;
+import io.quizchef.session.application.ShowLeaderboardApplicationService;
+import io.quizchef.session.application.StartQuestionApplicationService;
+import io.quizchef.session.application.SubmitAnswerApplicationService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.security.SecurityRequirement;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
+import java.util.UUID;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+
+/**
+ * Live gameplay endpoints: host progression commands and the participant
+ * answer. Validate, delegate, respond — the server owns all game state
+ * (ADR-006); nothing is computed here.
+ */
+@RestController
+@RequestMapping("/api/v1/sessions")
+@Tag(name = "Gameplay", description = "Running a live session: open/close/reveal questions, leaderboard, answers")
+public class GameplayController {
+
+    private final StartQuestionApplicationService startQuestionApplicationService;
+    private final CloseQuestionApplicationService closeQuestionApplicationService;
+    private final RevealAnswerApplicationService revealAnswerApplicationService;
+    private final ShowLeaderboardApplicationService showLeaderboardApplicationService;
+    private final AdvanceQuestionApplicationService advanceQuestionApplicationService;
+    private final SubmitAnswerApplicationService submitAnswerApplicationService;
+    private final CurrentUserProvider currentUserProvider;
+
+    public GameplayController(StartQuestionApplicationService startQuestionApplicationService,
+                             CloseQuestionApplicationService closeQuestionApplicationService,
+                             RevealAnswerApplicationService revealAnswerApplicationService,
+                             ShowLeaderboardApplicationService showLeaderboardApplicationService,
+                             AdvanceQuestionApplicationService advanceQuestionApplicationService,
+                             SubmitAnswerApplicationService submitAnswerApplicationService,
+                             CurrentUserProvider currentUserProvider) {
+        this.startQuestionApplicationService = startQuestionApplicationService;
+        this.closeQuestionApplicationService = closeQuestionApplicationService;
+        this.revealAnswerApplicationService = revealAnswerApplicationService;
+        this.showLeaderboardApplicationService = showLeaderboardApplicationService;
+        this.advanceQuestionApplicationService = advanceQuestionApplicationService;
+        this.submitAnswerApplicationService = submitAnswerApplicationService;
+        this.currentUserProvider = currentUserProvider;
+    }
+
+    @PostMapping("/{id}/questions/start")
+    @Operation(
+            summary = "Open the first question",
+            description = "Host only. Opens the quiz's first question and arms the server timer. The "
+                    + "engine chooses the question; the host drives the pace.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session, now QUESTION_OPEN"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Not startable here (session.invalid-transition, "
+                    + "session.not-startable)", content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse startQuestion(@PathVariable UUID id) {
+        return SessionSummaryResponse.from(startQuestionApplicationService.start(
+                currentUserProvider.currentUser(), id));
+    }
+
+    @PostMapping("/{id}/questions/close")
+    @Operation(
+            summary = "Close the current question",
+            description = "Host only. Stops accepting answers early; the timer would otherwise close it.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session, now QUESTION_CLOSED"),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "No question is open (session.invalid-transition)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse closeQuestion(@PathVariable UUID id) {
+        return SessionSummaryResponse.from(closeQuestionApplicationService.close(
+                currentUserProvider.currentUser(), id));
+    }
+
+    @PostMapping("/{id}/questions/reveal")
+    @Operation(
+            summary = "Reveal the correct answer",
+            description = "Host only. Broadcasts the correct options for the closed question.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session, now ANSWER_REVEALED"),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "The question is not closed (session.invalid-transition)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse revealAnswer(@PathVariable UUID id) {
+        return SessionSummaryResponse.from(revealAnswerApplicationService.reveal(
+                currentUserProvider.currentUser(), id));
+    }
+
+    @PostMapping("/{id}/leaderboard")
+    @Operation(
+            summary = "Show the leaderboard",
+            description = "Host only. Projects and broadcasts the standings, and returns them. The "
+                    + "leaderboard is computed, never stored.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The current standings"),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "The answer is not revealed yet (session.invalid-transition)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public LeaderboardResponse showLeaderboard(@PathVariable UUID id) {
+        return LeaderboardResponse.from(showLeaderboardApplicationService.show(
+                currentUserProvider.currentUser(), id));
+    }
+
+    @PostMapping("/{id}/questions/advance")
+    @Operation(
+            summary = "Advance to the next question, or finish",
+            description = "Host only. From the leaderboard, opens the next question in order, or finishes "
+                    + "the session when the quiz is exhausted.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "QUESTION_OPEN for the next question, or FINISHED"),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Not at the leaderboard (session.invalid-transition)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse advanceQuestion(@PathVariable UUID id) {
+        return SessionSummaryResponse.from(advanceQuestionApplicationService.advance(
+                currentUserProvider.currentUser(), id));
+    }
+
+    @PostMapping("/{id}/answers")
+    @Operation(
+            summary = "Submit an answer",
+            description = "Open to participants (anonymous-friendly). The server validates the answer, "
+                    + "stamps the response time, and scores it — the response confirms receipt and "
+                    + "carries no score.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "Answer accepted (no score returned)"),
+            @ApiResponse(responseCode = "400", description = "Validation failed (empty or invalid options)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown participant (session.participant.not-found)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Not accepted — question not open, already "
+                    + "answered (session.answer.not-accepted), or not connected (session.participant.not-connected)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public AnswerAcceptedResponse submitAnswer(@PathVariable UUID id,
+                                               @Valid @RequestBody SubmitAnswerRequest request) {
+        return AnswerAcceptedResponse.from(submitAnswerApplicationService.submit(request.toCommand()));
+    }
+}

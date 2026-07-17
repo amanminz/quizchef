@@ -5,9 +5,11 @@ Status
 Accepted
 
 <!-- Draft | Proposed | Accepted | Implemented | Superseded by RFC-XXX
-     Accepted — the protocol and transport foundation (M4 PR #1.5) are
-     implemented; command handling and gameplay projections follow.
-     Flips to Implemented when realtime is feature-complete.
+     Accepted — the protocol + transport foundation (M4 PR #1.5) and all
+     outbound projections, including the gameplay events (PR #3), are
+     implemented. The one remaining piece before Implemented is the *inbound*
+     command channel (STOMP @MessageMapping delegating to application
+     services); host/participant commands enter over REST today.
      See README.md for the lifecycle. -->
 
 Authors
@@ -20,7 +22,7 @@ Created
 
 Updated
 
-2026-07-16
+2026-07-17
 
 ---
 
@@ -28,7 +30,7 @@ Updated
 
 Defines QuizChef's realtime messaging: a versioned, transport-independent **wire protocol** (a message envelope, a stable event/command vocabulary, a topic hierarchy, and a reconnection-snapshot contract) and the **STOMP-over-WebSocket adapter** that carries it. The Session engine (RFC-004) expresses realtime behaviour purely as domain events; this module subscribes to them and projects them onto the wire, and will delegate inbound commands to application services — it never contains business logic (ADR-004, ADR-005).
 
-Milestone 4 PR #1.5 implements the **foundation**: the protocol types, topics, the outbound port + STOMP adapter, and the projection of the session domain events that exist today. It does **not** implement command handlers, timers, gameplay, scoring, leaderboards, or replay *generation* — only their protocol contracts. Accepted; flips to Implemented when realtime is feature-complete.
+Milestone 4 PR #1.5 built the **foundation**: the protocol types, topics, the outbound port + STOMP adapter, and the projection of the lobby/lifecycle events. PR #3 (gameplay) fills in the reserved gameplay vocabulary with real payloads and producers — `question.started`, `question.closed`, `answer.revealed`, `leaderboard.updated`, and the private `participant.answer.accepted` — so the outbound path is now complete for the whole game. This RFC stays **Accepted** for one reason: the *inbound* command channel is still REST, not STOMP `@MessageMapping`. It flips to Implemented when that lands.
 
 ---
 
@@ -50,9 +52,8 @@ Live play is realtime, and realtime is where transport churn usually leaks into 
 
 # Non Goals
 
-- Command handlers / `@MessageMapping` — inbound handling delegates to application services (Session APIs, PR #2).
-- Timers, question progression, answer submission, scoring, leaderboards — gameplay (RFC-006).
-- Replay/snapshot **generation** (`SessionRecoveryService`) — only the contract is defined here.
+- Inbound command handlers / `@MessageMapping` — still not built; commands enter over REST. A STOMP inbound channel delegating to application services is the last piece before this RFC is Implemented.
+- The scoring formula and leaderboard *rules* — RFC-006. This RFC only projects their results onto the wire.
 - Presence and connection management beyond the durable-participant model (ADR-003).
 - An external message broker — the simple in-memory broker suffices at church scale (a relay is a deployment change, RFC-008).
 
@@ -87,19 +88,38 @@ payload           type-specific data, or absent
 
 `type` is a dotted, lowercase, language-agnostic string — `participant.reconnected`, `session.started` — **never** the domain class name. `ProtocolMessageType` centralizes the vocabulary; a domain `ParticipantReconnectedEvent` maps to the wire name `participant.reconnected`, so renaming or repackaging a domain class can never break a client, and clients across languages share one clean vocabulary.
 
-Vocabulary (this PR projects the first group; the rest are reserved, their producers/payloads arriving with gameplay):
+Vocabulary — all projected today (PR #1.5 the first two groups, PR #3 the gameplay group):
 
 ```text
-lobby.opened              participant.joined          question.started     (reserved)
-session.started           participant.disconnected    question.closed      (reserved)
-session.finished          participant.reconnected     answer.revealed      (reserved)
-                                                       leaderboard.updated  (reserved)
-session.snapshot          (reconnection replay)
+lobby.opened              participant.joined          question.started
+session.started           participant.disconnected    question.closed
+session.finished          participant.reconnected     answer.revealed
+                                                       leaderboard.updated
+participant.answer.accepted   (private ack, to the submitter only)
+session.snapshot              (reconnection replay)
 ```
 
 ## Transport events are projections, not domain events
 
 A protocol event is a **projection** of a domain event, not the same thing. The domain event is the internal fact (`SessionStartedEvent`); the protocol message is its public, versioned, stable representation on the wire. They differ deliberately: the domain event can carry things clients must never see and can change shape as the model evolves; the projection is the frozen contract. `SessionProtocolMapper` is that projection seam. `SessionCreatedEvent` is intentionally **not** projected — it happens before anyone has connected, so it has no audience.
+
+## Gameplay projections (implemented in PR #3)
+
+The reserved gameplay vocabulary now has real producers and payloads. `SessionRealtimeProjector` listens for the gameplay domain events RFC-004 defines and `SessionProtocolMapper` projects each onto the wire — pure translation, no business decisions, the same seam as the lobby events:
+
+```text
+QuestionStartedEvent   → question.started   { questionId, endsAt, durationSeconds }
+QuestionClosedEvent    → question.closed    { questionId }
+AnswerRevealedEvent    → answer.revealed    { questionId, correctOptionIds }
+LeaderboardUpdatedEvent→ leaderboard.updated{ entries: [ { participantId, displayName, score, rank } ] }
+AnswerSubmittedEvent   → participant.answer.accepted  { questionId }
+SessionFinishedEvent   → session.finished
+```
+
+Two ADR-006 rules shape these projections:
+
+- **`question.started` carries `endsAt`, not "remaining seconds".** Clients render the countdown against the server's close time; the server stays the authority on the actual close (a client clock is never trusted). `answer.revealed` is the **first moment correctness crosses the wire** — never during the open question.
+- **The answer acknowledgement is private and scoreless.** `AnswerSubmittedEvent` projects to `participant.answer.accepted` and is published through `RealtimePublisher.publishToParticipant(...)` — it reaches the submitter's `/topic/participant/{id}` only, never the session broadcast. It confirms receipt and carries no score (ADR-006): an opponent learns nothing from your submission, and no score leaks before the reveal. Every other gameplay message is a session-wide broadcast.
 
 ## Commands (definitions only)
 
@@ -128,7 +148,7 @@ RealtimePublisher.publishToHost(sessionId, message)    → /topic/host/{sessionI
 
 ## Reconnection replay (contract only)
 
-`session.snapshot` carries everything a reconnecting participant needs to resume (ADR-003, PRD "Welcome back"): session state, current question and phase, remaining time, the participant's score and submitted answer, and the leaderboard (`SessionSnapshot`). This PR defines the **shape**; generating it — reading the aggregates, computing remaining time and standings — is `SessionRecoveryService`, a later PR. State and phase cross as strings, not the session enums, so the protocol leaks no internal types.
+`session.snapshot` carries everything a reconnecting participant needs to resume (ADR-003, PRD "Welcome back"): session state, current question and phase, remaining time, the participant's score and submitted answer, and the leaderboard. PR #1.5 defined the **shape**; PR #3 implements the **generation** — `SessionSnapshotAssembler` (RFC-004) reads the live aggregates, derives remaining time from the shared `Clock`, and projects the standings — realized as the session module's own `SessionSnapshotView` so the session never depends on the transport (ADR-004). It is returned today on the REST reconnect response; pushing it over STOMP on socket re-subscribe is the remaining delivery option (Open Questions). State and phase cross as strings, not the session enums, so the protocol leaks no internal types.
 
 ## Synchronization primitives
 
@@ -159,7 +179,7 @@ Jackson, ISO-8601 timestamps, `type` via `@JsonValue`. Only protocol DTOs are se
 # Risks
 
 - The simple in-memory broker does not fan out across instances; horizontal scaling needs a broker relay (deployment, RFC-008). Fine for the target.
-- Reserved gameplay vocabulary is defined without payloads; the gameplay PR must define those payloads against real domain events, not guess now.
+- The gameplay vocabulary now has real payloads (PR #3), projected from real domain events — the earlier risk (payloads guessed ahead of the events) is retired.
 - `/ws/**` is currently open; message-level authorization is deferred to Session APIs and must land before real sessions carry sensitive data.
 
 ---
@@ -185,15 +205,14 @@ No schema or data changes — this PR is additive infrastructure and protocol ty
 - [x] Protocol messages defined: versioned envelope, stable vocabulary, event payloads, command definitions, reconnection-snapshot contract.
 - [x] Topic naming centralized; no destination string literals elsewhere.
 - [x] Session domain events project cleanly onto protocol messages (unit + integration).
-- [x] No gameplay, scoring, timers, or command handlers.
+- [x] Gameplay events (PR #3) project onto `question.started` / `question.closed` / `answer.revealed` / `leaderboard.updated` with real payloads, and `participant.answer.accepted` routes privately to the submitter only — verified in the full-game integration test (session-topic broadcasts vs. participant-topic acks).
 - [x] All tests pass (mapping, topics, serialization, projection, Spring wiring through the adapter).
 
 ---
 
 # Future Work
 
-- **Session APIs (PR #2)**: inbound command handlers delegating to application services; per-message authorization.
-- **Gameplay & scoring (RFC-006)**: the reserved `question.*`, `answer.revealed`, `leaderboard.updated` projections against real gameplay domain events.
-- **`SessionRecoveryService`**: generate the `session.snapshot` (score, answers, current question, remaining time, leaderboard) and deliver it on reconnect.
+- **Inbound STOMP command channel**: `@MessageMapping` handlers that validate at the transport edge and delegate to the existing application services, plus per-message subscribe/command authorization (a `ChannelInterceptor` consulting `AuthorizationService`). This is the one gap before the RFC is Implemented; host and participant commands run over REST until then.
+- **`session.snapshot` over STOMP**: the snapshot is generated and returned on the REST reconnect today; pushing it on socket re-subscribe is a delivery option to decide with the inbound channel.
 - **Idempotency / ordering**: use `messageId` and `occurredAt` for duplicate detection and client-side ordering.
 - **Broker relay (RFC-008)**: an external broker for multi-instance fan-out if deployment scale demands it.

@@ -134,11 +134,14 @@ public class Participant extends AuditableEntity {
     }
 
     /**
-     * Connects or reconnects. Allowed from JOINED (first connect) or
-     * DISCONNECTED (reconnect) — the reconnect keeps score and answers.
+     * Connects or reconnects, refreshing {@code lastSeenAt}. Idempotent while
+     * the participant is live: allowed from JOINED (first connect),
+     * DISCONNECTED (reconnect), or an already CONNECTED state (a refresh or
+     * second device the server never observed dropping). A reconnect keeps
+     * score and answers. Only a FINISHED participant is rejected.
      */
     public void connect(Instant at) {
-        if (state != ParticipantState.JOINED && state != ParticipantState.DISCONNECTED) {
+        if (state == ParticipantState.FINISHED) {
             throw new InvalidParticipantTransitionException(state, "connect");
         }
         this.state = ParticipantState.CONNECTED;

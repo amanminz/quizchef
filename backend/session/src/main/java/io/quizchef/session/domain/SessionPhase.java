@@ -1,16 +1,20 @@
 package io.quizchef.session.domain;
 
 /**
- * The gameplay loop within a running session (PRD: Running → Reveal →
- * Leaderboard → Running).
+ * The execution phase of a running session — the gameplay loop inside
+ * {@code IN_PROGRESS}.
  *
- * <p><strong>Modeled only.</strong> This PR gives the phases a typed home on
- * {@link Session#getCurrentPhase()} but drives no transitions — the
- * progression flow (a later gameplay PR) owns that. The value exists so
- * gameplay does not have to reshape the aggregate to introduce it.
+ * <pre>
+ * (IN_PROGRESS, no phase) → QUESTION_OPEN → QUESTION_CLOSED → ANSWER_REVEALED → LEADERBOARD → QUESTION_OPEN … → (FINISHED)
+ * </pre>
+ *
+ * <p>Answers are accepted only while {@code QUESTION_OPEN}. Every transition
+ * happens through a {@link Session} method and is server-authoritative
+ * (ADR-006); illegal transitions throw.
  */
 public enum SessionPhase {
-    QUESTION,
-    REVEAL,
+    QUESTION_OPEN,
+    QUESTION_CLOSED,
+    ANSWER_REVEALED,
     LEADERBOARD
 }
