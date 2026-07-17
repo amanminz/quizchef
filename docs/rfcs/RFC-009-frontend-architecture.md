@@ -12,9 +12,12 @@ Implemented
      changing any of the PR #1 contracts — it established the features/
      module convention this RFC now documents. Phase 2 PR #3 (Host
      Dashboard & Session Creation) is the second feature module and the
-     first realtime consumer; it too changed no PR #1 contract. Gameplay UI
-     is a later PR; it does not hold this RFC back. See README.md for the
-     lifecycle.
+     first realtime consumer; it too changed no PR #1 contract. Phase 2
+     PR #4 (Live Gameplay Experience) is the third feature module — the
+     one built around a client-side finite state machine and the one that
+     finally answers RFC-009's own Open Question on guest identity. Results
+     and session completion are a later PR; they do not hold this RFC back.
+     See README.md for the lifecycle.
      Note: the Phase 2 spec named this "RFC-007", but RFC-007 is Media
      Storage and RFC-008 is Deployment; the next free number is 009. -->
 
@@ -28,7 +31,7 @@ Created
 
 Updated
 
-2026-07-17
+2026-07-18
 
 ---
 
@@ -36,7 +39,7 @@ Updated
 
 Defines the architecture of the QuizChef web frontend: a React 19 + TypeScript + Vite application in `frontend/` that is a **client of the platform, never part of it**. The backend is server-authoritative for everything that matters (ADR-006); the frontend renders state, submits commands, and receives projections. This RFC fixes the five contracts every future frontend PR builds on — the layering, the route table, **state ownership**, the API layer (with OpenAPI-generated types), and the realtime layer (one `RealtimeClient` over RFC-005) — plus the testing strategy that keeps them honest.
 
-Phase 2 PR #1 implemented all of it as **infrastructure only**: no quiz authoring UI, no lobby, no gameplay. Phase 2 PR #2 (Quiz Authoring) is the first feature built on it, and in doing so establishes the **feature module** convention (`features/<name>/`) this RFC now documents alongside the original five contracts. Phase 2 PR #3 (Host Dashboard & Session Creation) is the second feature module and the first consumer of the realtime layer — its lobby realized the "live session projections" row of the state-ownership table; gameplay follows the same shape.
+Phase 2 PR #1 implemented all of it as **infrastructure only**: no quiz authoring UI, no lobby, no gameplay. Phase 2 PR #2 (Quiz Authoring) is the first feature built on it, and in doing so establishes the **feature module** convention (`features/<name>/`) this RFC now documents alongside the original five contracts. Phase 2 PR #3 (Host Dashboard & Session Creation) is the second feature module and the first consumer of the realtime layer — its lobby realized the "live session projections" row of the state-ownership table. Phase 2 PR #4 (Live Gameplay Experience) is the third: it centralizes the gameplay phases into one finite state machine, keeps host and participant orchestration deliberately separate even where the UI looks the same, and resolves this RFC's own Open Question on where a guest's join identity lives.
 
 ---
 
@@ -59,7 +62,7 @@ The backend stayed clean for eight PRs because its boundaries were written down 
 
 # Non Goals
 
-- Gameplay, leaderboard, results UI — Phase 2 PR #4, building on the feature-module convention PR #2 established and the realtime patterns PR #3's lobby established. (The lobby itself shipped in PR #3.)
+- Leaderboard, results, final rankings, session summary, replay — Phase 2 PR #5, building on the FSM and realtime patterns PR #4 established. (Gameplay itself — countdown, questions, timers, answers, waiting — shipped in PR #4.)
 - Question authoring (create/edit) — Phase 2 PR #2's question picker is read/search/compose only; question CRUD UI is a future PR (the API surface already exists, `questionApi.create`/`update`/`publish`/`archive`).
 - Token refresh and server-side logout — the backend has neither (RFC-002 Future Work); see Authentication for what happens instead.
 - Full accessibility audit, animations, media, church branding (deferred by the phase spec; the primitives are accessible-by-default where cheap: labeled fields, roles, focus rings, native `<dialog>`, keyboard-operable drag-and-drop).
@@ -89,11 +92,11 @@ frontend/src/
   layouts/    PublicLayout, DashboardLayout, Breadcrumbs (route-aware, not generic — see below)
   pages/      one component per route
   components/ common/ forms/ feedback/ navigation/ — generic only, nothing feature-specific
-  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/, sessions/)
+  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/, sessions/, gameplay/)
   theme/      tokens.css, uiPreferencesStore, useApplyTheme
   types/      api.gen.ts (generated), api.ts (aliases), protocol.ts (RFC-005, hand-written by design)
   utils/      cn, env, validation
-  test/       setup, MSW server + handlers, testUtils, quizFixtures, sessionFixtures, fakeStomp
+  test/       setup, MSW server + handlers, testUtils, quizFixtures, sessionFixtures, gameplayFixtures, fakeStomp
 ```
 
 **The `features/` convention (added Phase 2 PR #2).** `components/` stays generic by rule (RFC-009 already said "nothing quiz-specific"); a real feature needs its own hooks, presentational components, and query-key registry, and none of those belong in the cross-cutting `hooks/`/`components/` folders either. `features/<name>/` is where they live: `features/quizzes/hooks/` (query hooks + orchestration hooks), `features/quizzes/components/` (feature-specific presentational components), `features/quizzes/queryKeys.ts` (the one place a query's key and a mutation's invalidation target are defined, so they can't drift from each other by a typo). Lobby and gameplay will each get their own `features/<name>/` the same way.
@@ -116,9 +119,12 @@ React Router v7, data router in the app (`createBrowserRouter`), one exported ro
 /sessions/new              create a session            RequireAuth
 /sessions/:sessionId       session details             RequireAuth
 /sessions/:sessionId/lobby the host's lobby            RequireAuth
-/sessions/:sessionId/play  gameplay (placeholder)      RequireAuth
+/sessions/:sessionId/play  the host's gameplay screen  RequireAuth
+/play/:pin                 the participant's gameplay screen  public (guests are first-class, ADR-003)
 /not-found + catch-all                                public
 ```
+
+`/play` collects a PIN and joins; `/play/:pin` is where gameplay actually renders — a visitor arriving at `/play/:pin` directly (a shared link, or a refresh) who hasn't joined yet sees the same join form there instead of bouncing back to `/play`, since the PIN is already known from the URL.
 
 `RequireAuth` is a layout route: unauthenticated visitors are redirected to `/login` carrying the path they wanted, and login returns them there. The route table is exported so tests mount the identical tree in a memory router. `/quizzes/new` is registered before `/quizzes/:quizId`, but the order is cosmetic — React Router (like the backend's own routing) resolves a literal segment over a variable one at the same level regardless of declaration order.
 
@@ -132,13 +138,16 @@ The load-bearing table. Each kind of state has exactly one owner, and the same d
 | Current route | React Router |
 | Backend resources (current user, quizzes, sessions…) | TanStack Query |
 | Realtime connection status | Zustand (`connectionStore`) |
-| Live session projections (lobby today, gameplay next) | TanStack Query, updated from realtime events |
+| Live session and gameplay projections (session summary, current question) | TanStack Query, updated from realtime events |
 | Transient lobby presence (the event-built roster) | Realtime only (`useParticipants` component state) |
 | Hosted-session ids (which sessions this browser created) | Zustand (`hostedSessionsStore`, persisted) |
+| Joined-session ids (which PINs this browser has played, per participant) | Zustand (`playerSessionStore`, persisted) |
+| The gameplay phase itself (COUNTDOWN/QUESTION_OPEN/WAITING/…) | Derived, not stored — computed by `useGameplayState` from the session and question queries above |
+| A question's in-progress answer selection (before submit) | React state (`AnswerGrid` — ephemeral until submitted) |
 | UI preferences (theme) | Zustand (`uiPreferencesStore`, persisted) |
 | Component-local UI (open modal, form input) | React state |
 
-The proof of the rule: `useCurrentUser` is a TanStack Query over `/users/me`; the auth store holds **only the token**. Logging in stores a token and invalidates queries — it never copies the user into Zustand. The lobby (Phase 2 PR #3) realized the "projections" row: realtime events **invalidate or write into the query cache**, so server state keeps exactly one home even when it is pushed rather than fetched. The two PR #3 additions honor the same exclusivity: `hostedSessionsStore` holds only ids (a client-side fact — session data stays in Query), and the event-built roster is deliberately not server state at all (see Session hosting below).
+The proof of the rule: `useCurrentUser` is a TanStack Query over `/users/me`; the auth store holds **only the token**. Logging in stores a token and invalidates queries — it never copies the user into Zustand. The lobby (Phase 2 PR #3) realized the "projections" row: realtime events **invalidate or write into the query cache**, so server state keeps exactly one home even when it is pushed rather than fetched. Gameplay (Phase 2 PR #4) keeps growing that same row (the current-question query joins the session summary) rather than opening a new one. Two new stores stay narrow on purpose: `hostedSessionsStore` and `playerSessionStore` hold only **ids** (client-side facts — which sessions this browser hosts or has joined), never session or gameplay data itself; and the FSM `phase` is deliberately **not** a store at all — storing a derived value invites it to drift from the facts it's derived from, so `useGameplayState` recomputes it from the query cache on every render instead.
 
 ## Authentication
 
@@ -157,7 +166,7 @@ One axios instance (`api/axios.ts`) centralizes the base URL (same-origin by def
 
 `RealtimeClient` wraps `@stomp/stompjs` and is the only file that knows STOMP exists:
 
-- **connect / disconnect** are explicit. Nothing connects at app boot — realtime is only needed while a session is live, and the gameplay PRs own that lifecycle.
+- **connect / disconnect** are explicit. Nothing connects at app boot — realtime is only needed while a session is live. The lobby (PR #3) and now the gameplay screens (PR #4, `useGameplay`) each own the lifecycle for their own mount: connect when the screen appears, disconnect when it goes away.
 - **subscribe(destination, handler) → unsubscribe**: handlers registered while disconnected activate on connect; every destination **resubscribes automatically after a reconnect**; the last handler leaving a destination unsubscribes it from the broker.
 - **Automatic reconnect** (2s delay) and **heartbeats** (10s both ways) via STOMP config; connection state (`disconnected/connecting/connected/reconnecting`) mirrors into `connectionStore`.
 - **Parsing**: frames become RFC-005 `ProtocolMessage`s; the protocol version is checked (a newer version logs a warning — RFC-005 bumps it only on breaking changes); unparseable frames are dropped without killing the subscription.
@@ -203,6 +212,26 @@ The second feature module (`features/sessions/`) and the platform's first realti
 
 **The lobby owns the realtime connection lifecycle for now** — connect on mount, disconnect on unmount; a dropped connection shows a banner while `RealtimeClient` reconnects and resubscribes below the feature code. When gameplay lands, connection ownership moves up to span lobby → gameplay. Host and participant workflows will share presentational components but never orchestration hooks: `useLobby`/`useHostControls` are host-only by design — the participant's `/play` experience gets its own hooks in the gameplay PR.
 
+## Live gameplay (Phase 2 PR #4)
+
+The third feature module (`features/gameplay/`), and the one the PR's own guiding principle names outright: **gameplay is driven by the backend; the frontend never advances the game; realtime events are notifications.** Every screen — host and participant alike — renders off one thing.
+
+**One finite state machine, not scattered conditionals.** `useGameplayState` is the single place that looks at both the session summary (`state`, `currentQuestionId`) and the current-question read (`phase`) and derives one `GameplayPhase`: `LOBBY | COUNTDOWN | QUESTION_OPEN | WAITING | FINISHED`. Every gameplay component renders off this one value — no component re-infers "are we between questions?" from its own reading of session/question fields. `WAITING` deliberately collapses the backend's `QUESTION_CLOSED` / `ANSWER_REVEALED` / `LEADERBOARD` phases into one client phase, because this PR renders no reveal or leaderboard content (Non Goals) — the participant only needs "the question is no longer open," and the host's own phase-specific logic (below) lives in `useGameHost`, not in the FSM itself.
+
+**A new backend read makes participant devices possible at all.** Nothing before this PR let an anonymous participant learn a question's actual content — `GameplayQuizQuery` (scoring) carries correctness and is never exposed to a client; the session summary carries only the question's *id*. The session module gained `GET /api/v1/sessions/{id}/questions/current` for exactly this (RFC-004's new "Participant-facing question content" section): public, phase-gated (`correctOptionIds` appears only once revealed, mirroring `answer.revealed`), 409 `session.no-current-question` between questions treated as "nothing to show yet" rather than an error (`useCurrentQuestion` doesn't retry it, and `useGameplayState` swallows it rather than surfacing `questionError`). This is a plain REST addition, not a protocol change — RFC-005's wire vocabulary is untouched; the frontend still calls this endpoint on its own after a relevant event, never expects content riding the event itself.
+
+**`useGameplaySubscriptions` is gameplay's `SessionSubscriptions`-consumer, not a new destination-builder.** It composes the existing `sessionTopic`/`participantTopic` helpers (RFC-009's "only place destinations are built" rule is unchanged) into one hook that wires the session-wide broadcast and, for a participant, their private topic, to a single dispatcher. `useGameplay` — shared by both host and participant — subscribes through it, and on every session-lifecycle or question-progression event invalidates the session summary and/or current-question query (never both blindly; the two event sets are distinguished) so a push only ever tells the UI *that* something changed, exactly like the lobby's realtime pattern.
+
+**Host and participant orchestration never share a hook, even though `useGameplay` is shared underneath.** `useGameHost` wraps it with the one host action, `nextStep`, which sequences whichever of `startQuestion`/`revealAnswer`/`showLeaderboard`/`advanceQuestion` the *current, already-known* phase requires — including `showLeaderboard`, which is called but never rendered, because `Session.openQuestion` (RFC-004) accepts only "no phase yet" or `LEADERBOARD`, so the domain's own state machine requires that step even though this PR shows no leaderboard UI. `usePlayerGameplay` wraps the same `useGameplay` with a join step and answer submission the host never has. Sharing `QuestionCard`/`QuestionTimer`/`AnswerGrid` (the host renders `AnswerGrid` `readOnly`, purely to see what participants see) costs nothing; sharing the hook would blur two genuinely different permission surfaces.
+
+**Reconnect strategy — resolves this RFC's own Open Question.** A guest's join identity (`participantId` + `guestParticipantToken`) is kept in `playerSessionStore` (Zustand, persisted, keyed by session **PIN** — the identifier a participant actually knows), mirroring `hostedSessionsStore`'s "ids only" discipline exactly. Every mount that finds a stored record calls `POST /sessions/reconnect` (RFC-005's replay contract) before rendering live content — not just on a literal page refresh: the very first moment after joining is treated the same way, because `join` alone never marks a participant connected (`Participant.connect` only runs inside reconnect — `SubmitAnswerApplicationService` would otherwise 409 `session.participant.not-connected` on every first answer). The same call re-runs whenever the realtime connection recovers after dropping, so a flaky connection reconciles to the snapshot rather than trusting whatever events it might have missed. The snapshot's `submittedOptionIds` seeds `useAnswerSubmission`'s per-question submitted map, which is how a mid-question refresh shows `SubmissionStatus` immediately instead of a blank grid.
+
+**Duplicate submission is prevented locally and reconciled against the server.** `useAnswerSubmission` guards `submit` before it ever leaves the browser (`hasSubmitted`, keyed by `questionId` — a new question always starts unguarded, no explicit reset needed), and treats the server's own `session.answer.not-accepted` 409 (already answered, or the question closed) as confirmation rather than failure — functionally, both mean the same thing to the participant. Every other error is a real submission failure and surfaces as one.
+
+**The timer disables input; it never decides closure.** `useCountdown` ticks locally against the server's `endsAt` (never a client-invented duration), and `AnswerGrid` disables once it reports expired — a UX convenience that can run a beat ahead of the real `question.closed` event over the wire. The **actual** phase transition still comes only from that event (through `useGameplayState`), so an answer submitted in the gap is still evaluated by the server's own clock, never assumed accepted or rejected by the client.
+
+**No fabricated countdown duration.** Between `session.started` and the first `question.started`, there is no server-issued countdown setting to count down from (`SessionSettingsDto` has none) — `CountdownOverlay` is an honest indeterminate "get ready" animation, not a fake number ticking to zero, and it disappears the instant the real event arrives.
+
 ## Forms & validation
 
 react-hook-form + zod via a `zodForm(schema)` helper; shared field schemas (`emailSchema`, `passwordSchema` 8–128, `sessionPinSchema` 6 digits, `displayNameSchema`) mirror the backend's rules for faster feedback — **the server remains the authority** (ADR-006 spirit: client validation is UX, not truth).
@@ -215,7 +244,9 @@ Four layers, each with one job: the **axios interceptor** normalizes every API f
 
 Vitest + Testing Library + MSW (network mocked at the boundary — the app's real axios stack runs). `renderApp()` mounts the **real route table inside the real provider stack** in a memory router, so tests exercise routing, auth, queries, and interceptors together; MSW's `onUnhandledRequest: "error"` fails any test that talks to an unmocked endpoint. `RealtimeClient` is tested against a scriptable fake STOMP client injected through its factory seam (connect/reconnect/resubscribe/dispatch/unsubscribe). One deliberate wrinkle: tests mount the route tree through the declarative `MemoryRouter` because the data router's Request machinery clashes with MSW under jsdom — same tree, same guards, no lost coverage.
 
-**75 tests** (23 from PR #1 + 28 from PR #2's authoring workflow + 24 from PR #3's hosting workflow): routing/auth/API-client/realtime/error-boundary from PR #1, plus every authoring page (list lifecycle-sectioning and its own empty/error states, create validation and error surfacing, metadata load/save/version-conflict, question search/attach/detach, publish/archive behind confirmation with its precondition warning) and every new route's auth redirect. PR #3 covers the hosting workflow end to end: the dashboard's lifecycle sectioning, empty state, and 404 pruning; create-session (published-only listing, metadata panel, the server-confirmed create, the 409 surface); session details with open-lobby and its authorization failure; and the lobby against the fake STOMP transport — roster join/disconnect events with the event-then-reconcile refetch, the pre-subscription count row, the reconnect banner, the start flow's server confirmation, its 403 rejection, and the remote `session.started` navigation. The fake transport moved from `RealtimeClient.test.ts` into `test/fakeStomp.ts` once the lobby tests needed it, and `renderApp` gained an injection seam for a fake-backed `RealtimeClient`. **`useQuestionSelection`'s reorder is tested at the hook level** (`renderHook`, a scriptable MSW handler with an artificial delay to make the optimistic window observable) rather than by simulating a drag gesture in jsdom — dnd-kit's pointer events don't translate meaningfully to jsdom's synthetic event system, and the actual logic under test (optimistic update → rollback on failure) lives in the hook, not in dnd-kit's own gesture handling (which the library's own tests already cover).
+**89 tests** (23 from PR #1 + 28 from PR #2's authoring workflow + 24 from PR #3's hosting workflow + 14 from PR #4's gameplay experience): routing/auth/API-client/realtime/error-boundary from PR #1, plus every authoring page (list lifecycle-sectioning and its own empty/error states, create validation and error surfacing, metadata load/save/version-conflict, question search/attach/detach, publish/archive behind confirmation with its precondition warning) and every new route's auth redirect. PR #3 covers the hosting workflow end to end: the dashboard's lifecycle sectioning, empty state, and 404 pruning; create-session (published-only listing, metadata panel, the server-confirmed create, the 409 surface); session details with open-lobby and its authorization failure; and the lobby against the fake STOMP transport — roster join/disconnect events with the event-then-reconcile refetch, the pre-subscription count row, the reconnect banner, the start flow's server confirmation, its 403 rejection, and the remote `session.started` navigation. The fake transport moved from `RealtimeClient.test.ts` into `test/fakeStomp.ts` once the lobby tests needed it, and `renderApp` gained an injection seam for a fake-backed `RealtimeClient`. **`useQuestionSelection`'s reorder is tested at the hook level** (`renderHook`, a scriptable MSW handler with an artificial delay to make the optimistic window observable) rather than by simulating a drag gesture in jsdom — dnd-kit's pointer events don't translate meaningfully to jsdom's synthetic event system, and the actual logic under test (optimistic update → rollback on failure) lives in the hook, not in dnd-kit's own gesture handling (which the library's own tests already cover).
+
+PR #4 covers both gameplay screens against `gameplayFixtures` and the same fake STOMP transport: the participant screen's PIN join and landing on the question, submitting an answer and being unable to submit twice, recovering an already-submitted answer purely from the reconnect snapshot after a simulated refresh, a remote `question.closed` → `question.started` pair moving the FSM through `WAITING` and into the next question with no local action, the connection-lost banner and its recovery, and a stale stored participant record clearing itself and falling back to the join form on `session.participant.not-found`; the host screen's read-only monitoring view, starting the first question from `COUNTDOWN`, the `reveal → showLeaderboard → advance` chain firing in that exact order from one `nextStep` click, a 403 surfacing without leaving the page, a remote `question.closed` updating the host with no host action, and the finished-session message. **The timeout scenario needed no fake timers**: the fixture simply hands the question an `endsAt` already in the past, so `useCountdown`'s very first synchronous computation reports it expired — deterministic, and avoids the well-known fragility of combining `vi.useFakeTimers()` with Testing Library's `waitFor` polling.
 
 **jsdom gap found and fixed once, for every future test:** jsdom implements no `<dialog>` imperative API (`showModal`/`close`) — PR #1 built `Modal`/`ConfirmDialog` on native `<dialog>` but no PR #1 test ever opened one. PR #2's confirmation flows were the first to exercise that path, so the polyfill was added to the shared `test/setup.ts` (same pattern as the pre-existing `matchMedia` stand-in) rather than worked around per test.
 
@@ -243,15 +274,25 @@ Vitest + Testing Library + MSW (network mocked at the boundary — the app's rea
 
 **Feature-specific hooks/components inside the existing `hooks/`/`components/` folders** — rejected: RFC-009 already draws that line ("generic only, nothing feature-specific") for a reason — a folder that mixes generic and feature-specific code stops being a safe place to add something reusable without checking it isn't accidentally quiz-aware. `features/<name>/` gives feature code an unambiguous home.
 
+**A numeric client-side countdown for the pre-question `COUNTDOWN` phase** — rejected: no backend setting names a duration to count down from; inventing one would be the frontend deciding a game-timing detail the server never sanctioned. `CountdownOverlay` stays an honest indeterminate animation that ends the instant `question.started` actually arrives.
+
+**Rendering the reveal/leaderboard phases even though this PR's scope excludes leaderboard UI** — rejected: `useGameplayState` collapses `QUESTION_CLOSED`/`ANSWER_REVEALED`/`LEADERBOARD` into one `WAITING` phase instead. The backend's state machine still requires passing through `LEADERBOARD` before the next question can open (`Session.openQuestion`), so `useGameHost.nextStep` still calls `showLeaderboard` — it is simply never rendered, which is different from being skipped.
+
+**A single shared `useGameplayOrchestration` hook for host and participant** — rejected, mirroring PR #3's host/participant split: `useGameHost` and `usePlayerGameplay` share `useGameplay` underneath (the FSM, subscriptions, and reconnect-triggered refetch) but never share orchestration above that, because their commands and permissions genuinely differ — a host that could accidentally call `submitAnswer` or a participant that could accidentally call `advanceQuestion` would be a real authorization bug waiting to happen, not just a stylistic one.
+
+**Fake timers for the answer-timeout test** — rejected: `vi.useFakeTimers()` combined with Testing Library's `waitFor` (which itself polls on a real or faked timer) is a known source of flaky, hard-to-debug test deadlocks. Handing the fixture an already-past `endsAt` gets the same assertion deterministically, because `useCountdown` computes its first `remainingMillis` synchronously from `Date.now()` vs. the target with no need to advance anything.
+
 ---
 
 # Risks
 
 - **The generated-types pipeline needs the backend build** (`OpenApiSpecExportTest` → `generate:api`). Mitigated: `api.gen.ts` is committed, so the frontend builds without the backend; regeneration is a documented two-command step. CI wiring for drift detection is future work.
 - **localStorage JWT** is readable by successful XSS. Accepted and documented; session-bound tokens cap the damage, and no third-party scripts run.
-- **Single bundle (~918 kB min after PR #3, up from ~864 kB)** — still fine for church scale, but the code-splitting future work is now more urgent than "before feature pages fatten it" — they have.
+- **Single bundle (~951 kB min after PR #4, up from ~918 kB after PR #3)** — still fine for church scale, but the code-splitting future work is now more urgent than "before feature pages fatten it" — they have.
 - **The hosted-session registry is per-browser.** A host who switches devices (or clears storage) loses the dashboard's memory of their sessions — the sessions themselves live on, reachable by id/PIN. This is the honest cost of not inventing a list endpoint; it disappears the day the backend grows one.
-- **The lobby roster shows ids, not names.** RFC-005's roster events deliberately carry only the participant id; until a roster read model or richer join event exists, the lobby renders id-derived avatars and the count row. Acceptable for the host's "how many are in?" question; revisit with the gameplay PR, which needs display names anyway (leaderboard).
+- **The lobby roster shows ids, not names.** RFC-005's roster events deliberately carry only the participant id; until a roster read model or richer join event exists, the lobby renders id-derived avatars and the count row. Gameplay's own screens sidestep this (the host sees no roster, only a count; the participant sees no roster at all), but the leaderboard PR (#5) will need real display names somewhere — the join request already carries one, only nothing surfaces it back to other participants yet.
+- **The joined-session registry is per-browser, same shape as the hosted one.** A participant who switches devices mid-session cannot resume through `playerSessionStore` — they would need to rejoin (a fresh `Participant`, not a reconnect to the old one). Acceptable at church scale for now; a future "resume by name" or account-linked join would remove this.
+- **The host's `nextStep` calls `showLeaderboard` with nothing ever rendering it.** A future maintainer skimming `useGameHost` without this RFC's context could mistake that call for dead code and remove it — it is load-bearing (RFC-004: `Session.openQuestion` requires passing through `LEADERBOARD`). Documented here and in the hook's own comment specifically so it survives a refactor.
 - **jsdom test wrinkle**: tests use the declarative router (data-router Requests clash with MSW under jsdom). If a future PR adopts loaders/actions, the test harness must revisit this.
 - **The question picker fetches an unfiltered library page (`size: 200`) to resolve already-selected questions' summaries** for the composition list, alongside the filtered page the picker itself shows — fine at authoring scale (mirrors the backend's own "fine at authoring scale" call on unfiltered load-then-filter, RFC-003), revisit only if an author's library genuinely grows past a few hundred questions.
 
@@ -259,7 +300,7 @@ Vitest + Testing Library + MSW (network mocked at the boundary — the app's rea
 
 # Open Questions
 
-- **Guest identity on the client** — where the guest participant token from `join` is kept (memory vs storage) and how `/play` reconnects after a refresh: decided in the gameplay UI PR, on top of the auth-store pattern established here.
+- **Guest identity on the client** — *resolved* (Phase 2 PR #4): `playerSessionStore` (Zustand, persisted, keyed by session PIN) holds the guest's `participantId` + `guestParticipantToken`; every mount with a stored record calls `reconnect` before rendering live content, and a `session.participant.not-found` response clears the stale record rather than retrying forever.
 - **Realtime auth** — the `/ws/**` handshake is public today; when per-message authorization lands (RFC-005), `RealtimeClient.connect` likely gains connect headers carrying the JWT.
 - **i18n** — content is multilingual server-side (RFC-003); UI-string localization is unaddressed and will need a decision before non-English congregations onboard.
 
@@ -273,17 +314,19 @@ Vitest + Testing Library + MSW (network mocked at the boundary — the app's rea
 - [x] Realtime: `RealtimeClient` with explicit connect, auto-reconnect + resubscription, heartbeats, RFC-005 parsing + version check, topic helpers; no gameplay subscriptions.
 - [x] State ownership implemented as specified (token/connection/UI in Zustand; server state in Query; no duplication).
 - [x] Design tokens with dark mode; shared generic components; zod + react-hook-form with shared schemas.
-- [x] 75 tests green across providers, routing, auth, API client, realtime, error boundary, and the full quiz authoring and session hosting workflows; ESLint zero warnings; `tsc` clean.
+- [x] 89 tests green across providers, routing, auth, API client, realtime, error boundary, and the full quiz authoring, session hosting, and gameplay workflows; ESLint zero warnings; `tsc` clean.
 - [x] Quiz authoring workflow (Phase 2 PR #2): list, create, edit metadata, search/attach/detach/reorder questions, review, publish, archive — end to end against the real backend, no mocks standing in for missing endpoints, no hand-written DTOs, no remaining TODOs for authoring capabilities.
 - [x] `features/` module convention established and documented; optimistic updates scoped to composition only, never lifecycle transitions.
 - [x] Session hosting workflow (Phase 2 PR #3): create a session from a published quiz, review details, open the lobby, watch presence arrive over STOMP, start server-confirmed — realtime-driven lobby with reconnect handling, no polling, no optimistic lifecycle transitions, no invented API contracts, no gameplay UI.
+- [x] Live gameplay experience (Phase 2 PR #4): one FSM (`useGameplayState`) driving both gameplay screens; host monitors and progresses (`startQuestion`/`revealAnswer`/`showLeaderboard`/`advanceQuestion` sequenced by `useGameHost`, never optimistic); a participant joins by PIN, answers exactly once per question, is disabled on timeout and after submitting, and recovers a refresh or reconnect purely from the server's replay contract; no leaderboard, results, or final rankings render; the one new backend endpoint this PR required (`GET .../questions/current`) is public, phase-gated, and documented in RFC-004.
 
 ---
 
 # Future Work
 
-- **Live gameplay UI (Phase 2 PR #4)** — question presentation, countdowns against `endsAt`, reveal, leaderboard; takes over the realtime connection lifecycle from the lobby and gives the participant `/play` flow its own hooks.
+- **Results & Session Completion (Phase 2 PR #5)** — leaderboard, final rankings, and session summary, building on the FSM's `FINISHED` phase and the reveal/leaderboard events gameplay already receives but doesn't render.
 - **Backend session-list (and roster) endpoints** — retire `hostedSessionsStore` and the lobby's "joined before this view opened" row; both exist only because the contracts don't yet.
+- **Participant display names surfacing to other participants/host beyond the roster count** — needed once the leaderboard PR wants to show more than an id; the join request already carries a display name, only nothing re-broadcasts it today.
 - **Question authoring UI** (create/edit) — the picker only searches and composes; the API surface exists, the UI doesn't yet.
 - **Route-level code splitting** — was "before feature pages fatten the bundle"; they have, this is now due.
 - **OpenAPI drift check in CI** — regenerate `api.gen.ts` and fail on diff.

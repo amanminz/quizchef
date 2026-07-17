@@ -516,6 +516,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/questions/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the question in play
+         * @description The current question's participant-safe content: prompt and options in every authored language, position in the quiz, phase, and the server clock's remaining time. Open by session id — the players it serves are anonymous guests, and the unguessable id (like the summary endpoint) is the gate. Options never carry correctness; correctOptionIds appears only once the phase has revealed it, exactly like the answer.revealed event.
+         */
+        get: operations["currentQuestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/quizzes/mine": {
         parameters: {
             query?: never;
@@ -996,6 +1016,59 @@ export interface components {
              *     ]
              */
             permissions?: ("QUIZ_VIEW" | "QUIZ_CREATE" | "QUIZ_EDIT" | "QUIZ_DELETE" | "QUIZ_HOST" | "USER_PROFILE_READ" | "USER_PROFILE_UPDATE")[];
+        };
+        CurrentQuestionResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            questionId?: string;
+            /** @enum {string} */
+            phase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            /**
+             * Format: int32
+             * @description 1-based position of this question in the quiz
+             * @example 3
+             */
+            questionNumber?: number;
+            /** Format: int32 */
+            totalQuestions?: number;
+            /** @enum {string} */
+            questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+            /** @example en */
+            defaultLanguage?: string;
+            /** Format: int32 */
+            durationSeconds?: number;
+            /**
+             * Format: date-time
+             * @description The server's close time; null unless the question is open
+             */
+            endsAt?: string;
+            /**
+             * Format: int64
+             * @description Milliseconds still on the clock; 0 unless the question is open
+             */
+            remainingMillis?: number;
+            options?: components["schemas"]["PlayableOptionDto"][];
+            localizations?: components["schemas"]["PlayableLocalizationDto"][];
+            /** @description Null until the answer has been revealed */
+            correctOptionIds?: string[];
+        };
+        PlayableLocalizationDto: {
+            /** @example en */
+            languageCode?: string;
+            prompt?: string;
+            optionTexts?: components["schemas"]["PlayableOptionTextDto"][];
+        };
+        PlayableOptionDto: {
+            /** Format: uuid */
+            optionId?: string;
+            /** Format: int32 */
+            displayOrder?: number;
+        };
+        PlayableOptionTextDto: {
+            /** Format: uuid */
+            optionId?: string;
+            text?: string;
         };
         Pageable: {
             /** Format: int32 */
@@ -2605,6 +2678,46 @@ export interface operations {
             };
             /** @description Unknown session */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    currentQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The question in play */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CurrentQuestionResponse"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No question is in play (session.no-current-question) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

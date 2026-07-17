@@ -4,6 +4,7 @@ import io.quizchef.common.api.ApiError;
 import io.quizchef.identity.domain.CurrentUserProvider;
 import io.quizchef.session.application.AdvanceQuestionApplicationService;
 import io.quizchef.session.application.CloseQuestionApplicationService;
+import io.quizchef.session.application.CurrentQuestionQueryService;
 import io.quizchef.session.application.RevealAnswerApplicationService;
 import io.quizchef.session.application.ShowLeaderboardApplicationService;
 import io.quizchef.session.application.StartQuestionApplicationService;
@@ -17,6 +18,7 @@ import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.UUID;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -39,6 +41,7 @@ public class GameplayController {
     private final ShowLeaderboardApplicationService showLeaderboardApplicationService;
     private final AdvanceQuestionApplicationService advanceQuestionApplicationService;
     private final SubmitAnswerApplicationService submitAnswerApplicationService;
+    private final CurrentQuestionQueryService currentQuestionQueryService;
     private final CurrentUserProvider currentUserProvider;
 
     public GameplayController(StartQuestionApplicationService startQuestionApplicationService,
@@ -47,6 +50,7 @@ public class GameplayController {
                              ShowLeaderboardApplicationService showLeaderboardApplicationService,
                              AdvanceQuestionApplicationService advanceQuestionApplicationService,
                              SubmitAnswerApplicationService submitAnswerApplicationService,
+                             CurrentQuestionQueryService currentQuestionQueryService,
                              CurrentUserProvider currentUserProvider) {
         this.startQuestionApplicationService = startQuestionApplicationService;
         this.closeQuestionApplicationService = closeQuestionApplicationService;
@@ -54,7 +58,29 @@ public class GameplayController {
         this.showLeaderboardApplicationService = showLeaderboardApplicationService;
         this.advanceQuestionApplicationService = advanceQuestionApplicationService;
         this.submitAnswerApplicationService = submitAnswerApplicationService;
+        this.currentQuestionQueryService = currentQuestionQueryService;
         this.currentUserProvider = currentUserProvider;
+    }
+
+    @GetMapping("/{id}/questions/current")
+    @Operation(
+            summary = "Read the question in play",
+            description = "The current question's participant-safe content: prompt and options in "
+                    + "every authored language, position in the quiz, phase, and the server clock's "
+                    + "remaining time. Open by session id — the players it serves are anonymous "
+                    + "guests, and the unguessable id (like the summary endpoint) is the gate. "
+                    + "Options never carry correctness; correctOptionIds appears only once the "
+                    + "phase has revealed it, exactly like the answer.revealed event.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The question in play"),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "No question is in play "
+                    + "(session.no-current-question)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public CurrentQuestionResponse currentQuestion(@PathVariable UUID id) {
+        return CurrentQuestionResponse.from(currentQuestionQueryService.currentQuestion(id));
     }
 
     @PostMapping("/{id}/questions/start")

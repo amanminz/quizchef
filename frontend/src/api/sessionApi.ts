@@ -2,6 +2,7 @@ import { apiClient } from "@/api/axios";
 import type {
   AnswerAcceptedResponse,
   CreateSessionRequest,
+  CurrentQuestionResponse,
   JoinSessionRequest,
   LeaderboardResponse,
   ParticipantSessionResponse,
@@ -99,6 +100,18 @@ export const sessionApi = {
     const { data } = await apiClient.post<AnswerAcceptedResponse>(
       `/api/v1/sessions/${sessionId}/answers`,
       request
+    );
+    return data;
+  },
+
+  /**
+   * The question in play, participant-safe (no correctness until
+   * revealed). Public — anonymous guests read it too. Throws
+   * `session.no-current-question` (409) between questions.
+   */
+  async currentQuestion(sessionId: string): Promise<CurrentQuestionResponse> {
+    const { data } = await apiClient.get<CurrentQuestionResponse>(
+      `/api/v1/sessions/${sessionId}/questions/current`
     );
     return data;
   }

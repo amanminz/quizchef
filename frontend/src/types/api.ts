@@ -39,6 +39,9 @@ export type SessionSnapshotResponse = Schemas["SessionSnapshotResponse"];
 export type SubmitAnswerRequest = Schemas["SubmitAnswerRequest"];
 export type AnswerAcceptedResponse = Schemas["AnswerAcceptedResponse"];
 export type LeaderboardResponse = Schemas["LeaderboardResponse"];
+export type CurrentQuestionResponse = Schemas["CurrentQuestionResponse"];
+export type PlayableOptionDto = Schemas["PlayableOptionDto"];
+export type PlayableLocalizationDto = Schemas["PlayableLocalizationDto"];
 
 /**
  * The backend has no named enum schemas — every state/type/difficulty
@@ -50,6 +53,7 @@ export type QuizState = NonNullable<QuizSummaryResponse["state"]>;
 export type QuestionState = NonNullable<QuestionSummaryResponse["state"]>;
 export type Difficulty = NonNullable<QuestionSummaryResponse["difficulty"]>;
 export type QuestionType = NonNullable<QuestionSummaryResponse["questionType"]>;
+export type SessionPhase = NonNullable<SessionSummaryResponse["currentPhase"]>;
 
 /**
  * Flat pagination/sort params matching Spring's `Pageable` query

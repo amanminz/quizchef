@@ -29,7 +29,11 @@ public final class PublicEndpoints {
             "/api/v1/sessions/*/join",
             // Participants (guests included) submit answers without an account;
             // per-message identity binding arrives with the STOMP command layer.
-            "/api/v1/sessions/*/answers"
+            "/api/v1/sessions/*/answers",
+            // The question in play, participant-safe (no correctness until
+            // revealed) — players are anonymous; the unguessable session id
+            // gates it, same rationale as the summary read above.
+            "/api/v1/sessions/*/questions/current"
     };
 
     private PublicEndpoints() {
