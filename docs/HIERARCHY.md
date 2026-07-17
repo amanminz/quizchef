@@ -4,6 +4,10 @@ Vision
 ├── PRODUCT_REQUIREMENTS.md      (What are we building?)
 │
 ├── ARCHITECTURE.md              (How is the system organized?)
+│   └── V2-OVERVIEW.md           (Milestone snapshot at v2.0.0: the whole
+│                                 system in one sitting — subsystems,
+│                                 workflows, state ownership, realtime
+│                                 model, retrospective, deferred work)
 │
 ├── CODING_STANDARDS.md          (How do we write code?)
 │
