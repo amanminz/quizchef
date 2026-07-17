@@ -43,6 +43,8 @@ public record CurrentQuestionResponse(
     public record PlayableLocalizationDto(
             @Schema(example = "en") String languageCode,
             String prompt,
+            @Schema(description = "The author's explanation; null until the answer is revealed")
+            String explanation,
             List<PlayableOptionTextDto> optionTexts
     ) {
     }
@@ -69,6 +71,7 @@ public record CurrentQuestionResponse(
                         .map(localization -> new PlayableLocalizationDto(
                                 localization.languageCode(),
                                 localization.prompt(),
+                                localization.explanation(),
                                 localization.optionTexts().stream()
                                         .map(text -> new PlayableOptionTextDto(text.optionId(), text.text()))
                                         .toList()))

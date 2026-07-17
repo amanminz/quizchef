@@ -217,6 +217,14 @@ It composes two application-layer reads and gates what they return by the sessio
 
 Public like the session summary and join endpoints: a session is reached by its unguessable id, and the players it serves are anonymous guests by nature (`PublicEndpoints`). This is a plain REST read, not a protocol addition — RFC-005's wire vocabulary is unchanged; the frontend calls this endpoint once per relevant realtime event (question started/closed/revealed/leaderboard) rather than the event itself carrying content, keeping the private-ack-carries-no-score discipline in RFC-005 intact.
 
+**The author's explanation joined the content view in frontend Phase 2 PR #5** (the reveal screen renders it), with the same reveal-time gating as correctness — an explanation routinely gives the answer away, so `CurrentQuestionQueryService` strips it (`PlayableLocalizationView.withoutExplanation`) until the phase is `ANSWER_REVEALED`/`LEADERBOARD`. The quiz module's view carries it unconditionally (content is the quiz module's to hand over); *when* it may cross the wire is the session's decision, in the same one place that gates `correctOptionIds`.
+
+## The results read (frontend Phase 2 PR #5)
+
+`ShowLeaderboardApplicationService` is a **command**: it moves the game to its leaderboard step and broadcasts the standings. That leaves two holes a results *UI* falls into: a refreshed client has no way to recover standings the broadcast already carried (re-issuing the command would 409 on its phase guard — and only the host could anyway), and after `FINISHED` there is no leaderboard step left to trigger at all. `GET /api/v1/sessions/{id}/results` (`SessionResultsQueryService`) is the read-side counterpart: the ranked entries projected fresh via `LeaderboardService` (never stored — ADR-006), plus the framing counts (`totalQuestions` via `GameplayQuizQuery`, `participantCount`), with **no transition and no event**. Interim (between questions) and final (after `FINISHED`) standings share the one shape, so clients render both with the same components.
+
+Phase-gated for the same ADR-006 reason correctness is: standings during an open or merely closed question would reveal who answered correctly before the reveal does. Readable when the phase is `ANSWER_REVEALED` or `LEADERBOARD`, and always once `FINISHED`/`ARCHIVED`; otherwise 409 `session.results.not-available` — a state, not a fault. Public (`PublicEndpoints`), under its own `/results` path deliberately: the whitelist patterns are method-agnostic, so sharing the host command's `/leaderboard` path would have opened the command's route to anonymous callers and left only the application-layer authorization guarding it — a distinct path keeps the command fully authenticated at both layers.
+
 ---
 
 # Alternatives Considered
@@ -276,6 +284,7 @@ Public like the session summary and join endpoints: a session is reached by its 
 - [x] Reconnection restores active gameplay — current phase, question, remaining time, the participant's own answer and score, and the leaderboard (`SessionSnapshotAssembler`), verified by reconnecting mid-question in the full-game integration test.
 - [x] Scoring and leaderboard delivered per **[RFC-006](RFC-006-scoring-engine.md)**; every OpenAPI path for the gameplay endpoints is documented (verified in the integration test).
 - [x] Participant-facing question content (frontend Phase 2 PR #4): `GET /api/v1/sessions/{id}/questions/current` serves the question in play's prompt and options in every authored language, public and phase-gated — no correctness before `ANSWER_REVEALED`/`LEADERBOARD`, `409 session.no-current-question` between questions — verified end to end through every phase in the full-game integration test.
+- [x] The results read (frontend Phase 2 PR #5): `GET /api/v1/sessions/{id}/results` serves the fresh-projected standings and framing counts, public, transition-free, and phase-gated (`ANSWER_REVEALED`/`LEADERBOARD`/`FINISHED`, else 409 `session.results.not-available`); the author's explanation joined the content read with reveal-time gating — both verified through every phase in the integration tests.
 
 ---
 
