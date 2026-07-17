@@ -523,11 +523,15 @@ The React application, in `frontend/` — a client of the platform, never part o
 Component → Hook → Service (api/* | RealtimeClient) → Backend
 ```
 
-**Component hierarchy.** `app/` (App → Providers → Router) is the shell; `layouts/` (Public, Dashboard) frame `pages/`; `pages/` compose shared `components/` (common / forms / feedback / navigation). Providers stack outermost-first: ErrorBoundary → QueryClientProvider → AuthProvider → RealtimeProvider → theme.
+**Component hierarchy.** `app/` (App → Providers → Router) is the shell; `layouts/` (Public, Dashboard) frame `pages/`; `pages/` compose shared `components/` (common / forms / feedback / navigation — generic only) and, for a real feature, `features/<name>/components/` (feature-specific presentational components). Providers stack outermost-first: ErrorBoundary → QueryClientProvider → AuthProvider → RealtimeProvider → theme.
+
+**Feature modules** (`features/<name>/`, established by quiz authoring, Phase 2 PR #2): each owns its query hooks, its orchestration hooks (the coordination layer a page actually calls — e.g. `useQuizAuthoring`, `useQuestionSelection`, `useQuizPublishing`), its presentational components, and a `queryKeys.ts` registry so a mutation's cache invalidation can never drift from a query's key. `components/` and the cross-cutting `hooks/` stay feature-ignorant by rule; anything that knows about quizzes lives in `features/quizzes/`.
 
 **State ownership is exclusive** (RFC-009): the JWT, realtime connection status, and UI preferences live in Zustand; every server resource lives in TanStack Query; routing state lives in React Router; transient UI state lives in component state. The same datum never lives in two stores — `useCurrentUser` is a query; the auth store holds only the token.
 
-**API layer.** One axios instance (base URL, JWT injection, timeout, ApiError→`ApiClientError` mapping, 401→session-expiry); one module per backend context (identity/quiz/session) whose request/response types are **generated from the backend OpenAPI spec** (`npm run generate:api` reads the export produced by `OpenApiSpecExportTest`) — DTOs are never hand-maintained. Retries belong to TanStack Query alone.
+**Optimistic updates are scoped to what's reversible.** Quiz composition (attach/detach/reorder a question) updates the cache immediately and rolls back on failure; lifecycle transitions (create, publish, archive) stay server-confirmed with no optimistic UI — the same server-authoritative spirit as ADR-006, applied to when a client is allowed to render ahead of the server at all.
+
+**API layer.** One axios instance (base URL, JWT injection, timeout, ApiError→`ApiClientError` mapping, 401→session-expiry); one module per backend context (identity/quiz/question/session) whose request/response types are **generated from the backend OpenAPI spec** (`npm run generate:api` reads the export produced by `OpenApiSpecExportTest`) — DTOs are never hand-maintained. Retries belong to TanStack Query alone.
 
 **Realtime lifecycle.** `RealtimeClient` wraps STOMP: explicit connect (nothing connects at boot — gameplay features own the lifecycle), automatic reconnect with resubscription of every registered destination, heartbeats, and RFC-005 `ProtocolMessage` parsing with a protocol-version check. `SessionSubscriptions` mirrors the backend topic hierarchy — the only place destinations are built.
 
@@ -772,6 +776,8 @@ Axios
 STOMP.js
 
 React Hook Form + Zod
+
+dnd-kit (accessible drag-and-drop, keyboard-operable)
 
 Vitest + Testing Library + MSW
 
