@@ -16,6 +16,7 @@ Every RFC carries a `Status`. It answers the first question any reader has: **do
 - [RFC-006 Scoring Engine](RFC-006-scoring-engine.md) — **Implemented**
 - [RFC-007 Media](RFC-007-media-storage.md) — **Draft**
 - [RFC-008 Deployment](RFC-008-deployment.md) — **Draft**
+- [RFC-009 Frontend Architecture](RFC-009-frontend-architecture.md) — **Implemented** (React platform foundation; feature UIs build on it)
 
 ---
 
