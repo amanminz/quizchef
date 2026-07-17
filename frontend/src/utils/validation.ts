@@ -29,6 +29,14 @@ export const displayNameSchema = z
   .min(1, "Display name is required")
   .max(50, "Display name must be at most 50 characters");
 
+export const titleSchema = z.string().trim().min(1, "Title is required").max(200, "Title is too long");
+
+/** A BCP-47 language tag as the backend's LanguageCode accepts (language[-Script][-REGION]). */
+export const languageCodeSchema = z
+  .string()
+  .trim()
+  .regex(/^[a-zA-Z]{2,3}(-[a-zA-Z]{4})?(-[a-zA-Z]{2})?$/, "Enter a valid language tag, e.g. en or kn");
+
 /**
  * Standard react-hook-form options for a zod-validated form: schema-driven
  * resolver, validate on submit, re-validate on change.

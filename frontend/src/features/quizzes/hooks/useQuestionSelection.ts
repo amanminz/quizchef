@@ -78,6 +78,8 @@ export function useQuestionSelection(quizId: string) {
     isLoading: quizQuery.isPending,
     attach: attachMutation.mutate,
     isAttaching: attachMutation.isPending,
+    /** The question id currently being attached, for a per-row pending state. */
+    attachingQuestionId: attachMutation.isPending ? attachMutation.variables : undefined,
     attachError: attachMutation.error,
     detach: detachMutation.mutate,
     isDetaching: detachMutation.isPending,
