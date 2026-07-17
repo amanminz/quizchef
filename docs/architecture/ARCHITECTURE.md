@@ -511,6 +511,28 @@ Expected to generalize into a transport module (websocket, sse, mqtt) as deliver
 
 ---
 
+## Frontend (RFC-009)
+
+The React application, in `frontend/` — a client of the platform, never part of it: it renders state, submits commands, and receives projections (ADR-006). Business rules live on the server; any optimistic UI reconciles to server state.
+
+**The same layering as the backend.** Components render; hooks coordinate; services communicate. A component never calls axios or STOMP directly:
+
+```text
+Component → Hook → Service (api/* | RealtimeClient) → Backend
+```
+
+**Component hierarchy.** `app/` (App → Providers → Router) is the shell; `layouts/` (Public, Dashboard) frame `pages/`; `pages/` compose shared `components/` (common / forms / feedback / navigation). Providers stack outermost-first: ErrorBoundary → QueryClientProvider → AuthProvider → RealtimeProvider → theme.
+
+**State ownership is exclusive** (RFC-009): the JWT, realtime connection status, and UI preferences live in Zustand; every server resource lives in TanStack Query; routing state lives in React Router; transient UI state lives in component state. The same datum never lives in two stores — `useCurrentUser` is a query; the auth store holds only the token.
+
+**API layer.** One axios instance (base URL, JWT injection, timeout, ApiError→`ApiClientError` mapping, 401→session-expiry); one module per backend context (identity/quiz/session) whose request/response types are **generated from the backend OpenAPI spec** (`npm run generate:api` reads the export produced by `OpenApiSpecExportTest`) — DTOs are never hand-maintained. Retries belong to TanStack Query alone.
+
+**Realtime lifecycle.** `RealtimeClient` wraps STOMP: explicit connect (nothing connects at boot — gameplay features own the lifecycle), automatic reconnect with resubscription of every registered destination, heartbeats, and RFC-005 `ProtocolMessage` parsing with a protocol-version check. `SessionSubscriptions` mirrors the backend topic hierarchy — the only place destinations are built.
+
+**Design tokens** (`theme/tokens.css`): semantic HSL variables consumed through Tailwind; dark mode is a `data-theme` attribute swap driven by the persisted UI preference.
+
+---
+
 # 10. Architectural Constraints
 
 Modules communicate through public interfaces.
@@ -727,17 +749,31 @@ ArchUnit
 
 Frontend
 
-React
+React 19
 
 TypeScript
 
 Vite
 
+React Router
+
 Tailwind
 
-shadcn/ui
+shadcn/ui conventions (CSS-variable tokens, cva)
 
-TanStack Query
+TanStack Query (server state)
+
+Zustand (client state)
+
+Axios
+
+STOMP.js
+
+React Hook Form + Zod
+
+Vitest + Testing Library + MSW
+
+openapi-typescript (generated API types)
 
 Infrastructure
 
