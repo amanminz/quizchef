@@ -1,5 +1,11 @@
 import { http, HttpResponse } from "msw";
-import type { ApiErrorBody, CurrentUserResponse, LoginResponse } from "@/types/api";
+import type {
+  ApiErrorBody,
+  CurrentUserResponse,
+  LoginResponse,
+  QuestionPageResponse,
+  QuizPageResponse
+} from "@/types/api";
 
 export const testIdentity = {
   email: "host@example.com",
@@ -46,5 +52,20 @@ export const handlers = [
       });
     }
     return HttpResponse.json(currentUserResponse);
-  })
+  }),
+
+  // Empty-by-default so tests that don't care about quiz/question data
+  // never see an unhandled-request warning; override with server.use().
+  http.get("/api/v1/quizzes/mine", () =>
+    HttpResponse.json(emptyQuizPage())
+  ),
+  http.get("/api/v1/questions", () => HttpResponse.json(emptyQuestionPage()))
 ];
+
+export function emptyQuizPage(): QuizPageResponse {
+  return { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 };
+}
+
+export function emptyQuestionPage(): QuestionPageResponse {
+  return { items: [], page: 0, size: 20, totalElements: 0, totalPages: 0 };
+}
