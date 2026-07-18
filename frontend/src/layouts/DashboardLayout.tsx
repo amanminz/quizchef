@@ -25,7 +25,12 @@ export function DashboardLayout() {
 
   const navLinks: NavLinkItem[] = [
     { to: "/dashboard", label: "Dashboard" },
-    ...(hasPermission("QUIZ_CREATE") ? [{ to: "/quizzes", label: "Quizzes" }] : []),
+    ...(hasPermission("QUIZ_CREATE")
+      ? [
+          { to: "/quizzes", label: "Quizzes" },
+          { to: "/questions", label: "Question Library" }
+        ]
+      : []),
     ...(hasPermission("QUIZ_HOST") ? [{ to: "/sessions", label: "Sessions" }] : []),
     { to: "/profile", label: "Profile" }
   ];
