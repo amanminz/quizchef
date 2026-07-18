@@ -6,4 +6,5 @@ dependencies {
     implementation("org.springframework:spring-tx")
     implementation("org.slf4j:slf4j-api")
     api("org.springdoc:springdoc-openapi-starter-webmvc-ui:2.8.6")
+    testImplementation("org.springframework.boot:spring-boot-starter-test")
 }
