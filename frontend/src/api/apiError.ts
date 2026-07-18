@@ -11,18 +11,26 @@ export class ApiClientError extends Error {
   /** HTTP status, or null when the request never reached the server. */
   readonly status: number | null;
   readonly fieldErrors: ApiFieldError[];
+  /**
+   * The backend's request correlation id (Phase 3 PR #2), so a fatal-error
+   * dialog can show a reference a support report can match back to server
+   * logs. Null when the request never reached the server.
+   */
+  readonly correlationId: string | null;
 
   constructor(
     code: string,
     message: string,
     status: number | null,
-    fieldErrors: ApiFieldError[] = []
+    fieldErrors: ApiFieldError[] = [],
+    correlationId: string | null = null
   ) {
     super(message);
     this.name = "ApiClientError";
     this.code = code;
     this.status = status;
     this.fieldErrors = fieldErrors;
+    this.correlationId = correlationId;
   }
 }
 

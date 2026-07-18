@@ -1,10 +1,14 @@
 package io.quizchef.session.infrastructure;
 
+import io.quizchef.common.correlation.CorrelationKeys;
 import io.quizchef.session.domain.LeaderboardService;
 import io.quizchef.session.domain.ScoringPolicy;
 import io.quizchef.session.domain.ScoringService;
+import java.util.UUID;
+import org.slf4j.MDC;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.core.task.TaskDecorator;
 import org.springframework.scheduling.TaskScheduler;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
@@ -35,12 +39,30 @@ public class SessionGameplayConfiguration {
         return ScoringPolicy.classic();
     }
 
+    /**
+     * Expired-question closes fire on this pool's own threads, off any HTTP
+     * request — so there is no correlation id to inherit via MDC (RFC-010).
+     * A synthetic per-firing id keeps {@code closeIfExpired}'s logs
+     * searchable as a group without pretending they belong to a request.
+     */
     @Bean
     public TaskScheduler gameplayTaskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
         scheduler.setPoolSize(2);
         scheduler.setThreadNamePrefix("question-timer-");
+        scheduler.setTaskDecorator(timerCorrelationDecorator());
         scheduler.initialize();
         return scheduler;
+    }
+
+    private TaskDecorator timerCorrelationDecorator() {
+        return runnable -> () -> {
+            MDC.put(CorrelationKeys.CORRELATION_ID_MDC_KEY, "timer-" + UUID.randomUUID());
+            try {
+                runnable.run();
+            } finally {
+                MDC.clear();
+            }
+        };
     }
 }

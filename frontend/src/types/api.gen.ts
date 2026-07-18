@@ -656,6 +656,7 @@ export interface components {
             message?: string;
             /** Format: date-time */
             timestamp?: string;
+            correlationId?: string;
             fieldErrors?: components["schemas"]["ApiFieldError"][];
         };
         ApiFieldError: {

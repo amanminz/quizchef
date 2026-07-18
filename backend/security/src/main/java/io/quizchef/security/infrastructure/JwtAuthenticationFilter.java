@@ -2,6 +2,7 @@ package io.quizchef.security.infrastructure;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quizchef.common.api.ApiError;
+import io.quizchef.common.correlation.CorrelationKeys;
 import io.quizchef.common.exception.UnauthorizedException;
 import io.quizchef.identity.application.IdentitySessionQueryService;
 import io.quizchef.identity.domain.Role;
@@ -15,6 +16,7 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -87,6 +89,11 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
                 .toList();
         SecurityContextHolder.getContext().setAuthentication(
                 UsernamePasswordAuthenticationToken.authenticated(principal, null, authorities));
+        // Every log line for the rest of this request can now be attributed
+        // to an identity, without threading it through any method signature
+        // (RFC-010). CorrelationIdFilter clears MDC at the end of the
+        // request, so nothing here needs to remove it.
+        MDC.put(CorrelationKeys.IDENTITY_ID_MDC_KEY, token.identityId().toString());
     }
 
     private void reject(HttpServletResponse response, UnauthorizedException exception) throws IOException {
