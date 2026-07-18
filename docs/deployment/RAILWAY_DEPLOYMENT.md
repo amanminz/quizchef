@@ -16,8 +16,8 @@ This guide deploys QuizChef from the monorepo without changing application behav
 
 Run the backend and frontend as separate Railway services:
 
-- Backend service: builds with `docker/backend/Dockerfile`, listens on `PORT` when Railway provides it, and exposes `/actuator/health`.
-- Frontend service: builds static assets with `docker/frontend/Dockerfile`, serves nginx on port `8080`, and exposes `/`.
+- Backend service: builds with `docker/backend/Dockerfile`, listens on `PORT` when Railway provides it, and exposes `/actuator/health/readiness`.
+- Frontend service: builds static assets with `docker/frontend/Dockerfile`, serves nginx on `PORT` when Railway provides it, and exposes `/`.
 - PostgreSQL: managed Railway PostgreSQL or another managed PostgreSQL service.
 - Object storage: external S3-compatible storage such as Railway Object Storage, MinIO, or S3.
 
@@ -41,12 +41,12 @@ Create one Railway project with two services connected to the GitHub repository:
    - Config file path: `/railway.toml`.
    - Root directory: repository root.
    - Dockerfile path comes from `railway.toml`.
-   - Health check path: `/actuator/health`.
+   - Health check path: `/actuator/health/readiness`.
 2. Frontend service:
    - Source: same GitHub repository.
    - Config file path: `/docker/frontend/railway.toml`.
    - Root directory: repository root.
-   - Set service variable `PORT=8080` because nginx listens on `8080`.
+   - The image defaults to `PORT=8080` and honors Railway's injected `PORT`.
    - Health check path: `/`.
 
 Railway config-as-code applies build and deploy settings for each deployment; dashboard settings still hold service variables and domains.
@@ -76,7 +76,7 @@ Frontend service variables:
 
 | Variable | Required | Notes |
 | --- | --- | --- |
-| `PORT` | Yes | Set to `8080` for nginx. |
+| `PORT` | No | Railway injects this automatically; the image defaults to `8080` for local/container Compose use. |
 | `VITE_API_BASE_URL` | Depends | Use the backend public origin when backend and frontend are separate domains. Leave empty only for same-origin deployments. |
 | `VITE_WS_URL` | Depends | Use `wss://<backend-domain>/ws/websocket` when frontend and backend are separate domains. Leave empty only for same-origin deployments. |
 
@@ -88,18 +88,19 @@ Frontend service variables:
 4. Set config file path to `/railway.toml`.
 5. Add all backend variables.
 6. Deploy.
-7. Confirm `/actuator/health` returns HTTP 200.
+7. Confirm `/actuator/health/readiness` returns HTTP 200.
 
 Flyway migrations run automatically at backend startup. A failed migration should fail the deployment health check instead of serving a partially started app.
+
+Before a time-sensitive event, deploy only migrations that have already started successfully in local or staging. This PR does not add or modify any Flyway migration files.
 
 ## Deploying Frontend
 
 1. Create the frontend service from the same repository.
 2. Set config file path to `/docker/frontend/railway.toml`.
-3. Set `PORT=8080`.
-4. Set `VITE_API_BASE_URL` and `VITE_WS_URL` for the backend public domain.
-5. Deploy.
-6. Open the frontend domain and verify static assets load.
+3. Set `VITE_API_BASE_URL` and `VITE_WS_URL` for the backend public domain.
+4. Deploy.
+5. Open the frontend domain and verify static assets load.
 
 Vite environment variables are build-time variables. Changing `VITE_API_BASE_URL` or `VITE_WS_URL` requires a frontend redeploy.
 
@@ -150,10 +151,10 @@ If a backend deploy ran a database migration, confirm rollback compatibility bef
 Backend production health endpoint:
 
 ```bash
-curl -i https://api.quizchef.example.com/actuator/health
+curl -i https://api.quizchef.example.com/actuator/health/readiness
 ```
 
-Expected response: HTTP 200 with aggregate status `UP`. Production hides health details.
+Expected response: HTTP 200 with readiness status `UP`. Production hides health details.
 
 Frontend health endpoint:
 
@@ -163,7 +164,7 @@ curl -i https://quizchef.example.com/
 
 Expected response: HTTP 200.
 
-The backend health endpoint is public by design so Railway and other orchestrators can check readiness without a JWT.
+The backend readiness endpoint is public by design so Railway and other orchestrators can check readiness without a JWT.
 
 ## Troubleshooting
 

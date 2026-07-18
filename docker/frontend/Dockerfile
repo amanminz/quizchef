@@ -19,10 +19,12 @@ COPY frontend/ ./
 RUN npm run build
 
 # ---------- Runtime stage ----------
-# nginx-unprivileged runs as a non-root user and listens on port 8080.
+# nginx-unprivileged runs as a non-root user. Its entrypoint renders the
+# template with PORT, defaulting to 8080 locally and honoring Railway's PORT.
 FROM nginxinc/nginx-unprivileged:1.27-alpine
-COPY docker/frontend/nginx.conf /etc/nginx/conf.d/default.conf
+ENV PORT=8080
+COPY docker/frontend/nginx.conf /etc/nginx/templates/default.conf.template
 COPY --from=build /workspace/dist/ /usr/share/nginx/html/
 
 EXPOSE 8080
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -q --spider "http://127.0.0.1:8080/" || exit 1
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 CMD wget -q --spider "http://127.0.0.1:${PORT}/" || exit 1

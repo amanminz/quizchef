@@ -10,6 +10,6 @@ watchPatterns = [
 ]
 
 [deploy]
-healthcheckPath = "/actuator/health"
+healthcheckPath = "/actuator/health/readiness"
 healthcheckTimeout = 300
 restartPolicyType = "ALWAYS"
