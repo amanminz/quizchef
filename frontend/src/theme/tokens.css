@@ -70,3 +70,27 @@
   --shadow-2: 0 2px 8px -1px hsl(0 0% 0% / 0.5);
   --shadow-3: 0 8px 24px -4px hsl(0 0% 0% / 0.6);
 }
+
+/* Live-event podium reveal — referenced via motion-safe Tailwind arbitrary
+   animations only, so reduced-motion users never see them. */
+@keyframes podium-rise {
+  from {
+    opacity: 0;
+    transform: translateY(1.5rem) scale(0.92);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes confetti-fall {
+  0% {
+    opacity: 1;
+    transform: translateY(-10%) rotate(0deg);
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(70vh) rotate(540deg);
+  }
+}
