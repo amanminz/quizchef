@@ -12,14 +12,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.quizchef.identity.domain.Identity;
 import io.quizchef.identity.domain.IdentityReference;
-import io.quizchef.identity.domain.IdentitySession;
 import io.quizchef.identity.domain.IdentityType;
-import io.quizchef.identity.domain.Role;
-import io.quizchef.identity.infrastructure.jwt.JwtTokenGenerator;
-import io.quizchef.identity.infrastructure.persistence.IdentityRepository;
-import io.quizchef.identity.infrastructure.persistence.IdentitySessionRepository;
 import io.quizchef.quiz.domain.Difficulty;
 import io.quizchef.quiz.domain.LanguageCode;
 import io.quizchef.quiz.domain.Option;
@@ -35,7 +29,6 @@ import io.quizchef.websocket.api.ProtocolMessage;
 import io.quizchef.websocket.api.ProtocolMessageType;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -79,15 +72,6 @@ class GameplayIntegrationTest {
     private ObjectMapper objectMapper;
 
     @Autowired
-    private IdentityRepository identityRepository;
-
-    @Autowired
-    private IdentitySessionRepository identitySessionRepository;
-
-    @Autowired
-    private JwtTokenGenerator tokenGenerator;
-
-    @Autowired
     private QuizRepository quizRepository;
 
     @Autowired
@@ -98,9 +82,9 @@ class GameplayIntegrationTest {
 
     @Test
     void fullGame() throws Exception {
-        Identity hostIdentity = identityRepository.save(Identity.registered());
-        String hostToken = hostToken(hostIdentity);
-        PlayableQuiz quiz = publishedQuizWithTwoQuestions(hostIdentity.reference());
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
 
         String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
 
@@ -167,9 +151,9 @@ class GameplayIntegrationTest {
 
     @Test
     void currentQuestionContentIsPublicAndPhaseAware() throws Exception {
-        Identity hostIdentity = identityRepository.save(Identity.registered());
-        String hostToken = hostToken(hostIdentity);
-        PlayableQuiz quiz = publishedQuizWithTwoQuestions(hostIdentity.reference());
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
         String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
 
         // Before the first question opens there is nothing to serve.
@@ -221,9 +205,9 @@ class GameplayIntegrationTest {
 
     @Test
     void resultsReadIsPublicAndPhaseGated() throws Exception {
-        Identity hostIdentity = identityRepository.save(Identity.registered());
-        String hostToken = hostToken(hostIdentity);
-        PlayableQuiz quiz = publishedQuizWithTwoQuestions(hostIdentity.reference());
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
         String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
 
         // While the question is open, standings would leak who answered
@@ -380,11 +364,36 @@ class GameplayIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
 
-    private String hostToken(Identity identity) {
-        IdentitySession session = identitySessionRepository.save(
-                IdentitySession.start(identity.getId(), "JUnit", "127.0.0.1", null));
-        return tokenGenerator.generate(identity.getId(), session.getId(), IdentityType.REGISTERED,
-                Set.of(Role.USER, Role.QUIZ_MASTER)).token();
+    /**
+     * The real host onboarding journey, end to end over the API — no minted
+     * tokens, no repository shortcuts (Phase 3 PR #1): register, log in,
+     * request host access. The same token gains QUIZ_MASTER without a new
+     * login because authorization reads persisted roles.
+     */
+    private HostAccount onboardHost() throws Exception {
+        String email = "host-" + UUID.randomUUID() + "@example.com";
+        JsonNode registered = readJson(mockMvc.perform(post("/api/v1/auth/register")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"displayName": "Host", "email": "%s", "password": "StrongPassword@123"}
+                                """.formatted(email)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        String token = readJson(mockMvc.perform(post("/api/v1/auth/login")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"email": "%s", "password": "StrongPassword@123"}
+                                """.formatted(email)))
+                .andExpect(status().isOk()).andReturn().getResponse().getContentAsString())
+                .get("token").asText();
+        mockMvc.perform(post("/api/v1/users/me/host-access")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + token))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("GRANTED"));
+        UUID identityId = UUID.fromString(registered.get("identityId").asText());
+        return new HostAccount(token, new IdentityReference(identityId, IdentityType.REGISTERED));
+    }
+
+    private record HostAccount(String token, IdentityReference reference) {
     }
 
     private PlayableQuiz publishedQuizWithTwoQuestions(IdentityReference owner) {

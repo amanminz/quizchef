@@ -7,12 +7,15 @@ import { DashboardPage } from "@/pages/DashboardPage";
 import { EditQuizMetadataPage } from "@/pages/EditQuizMetadataPage";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/LoginPage";
+import { HostAccessPage } from "@/pages/HostAccessPage";
 import { NotFoundPage } from "@/pages/NotFoundPage";
 import { PlayPage } from "@/pages/PlayPage";
+import { ProfilePage } from "@/pages/ProfilePage";
 import { PlaySessionPage } from "@/pages/PlaySessionPage";
 import { QuizQuestionsPage } from "@/pages/QuizQuestionsPage";
 import { QuizReviewPage } from "@/pages/QuizReviewPage";
 import { QuizzesPage } from "@/pages/QuizzesPage";
+import { RegisterPage } from "@/pages/RegisterPage";
 import { CreateSessionPage } from "@/pages/CreateSessionPage";
 import { SessionDetailsPage } from "@/pages/SessionDetailsPage";
 import { SessionLivePage } from "@/pages/SessionLivePage";
@@ -30,6 +33,7 @@ export const routes: RouteObject[] = [
     children: [
       { path: "/", element: <HomePage /> },
       { path: "/login", element: <LoginPage /> },
+      { path: "/register", element: <RegisterPage /> },
       { path: "/play", element: <PlayPage /> },
       { path: "/play/:pin", element: <PlaySessionPage /> },
       { path: "/not-found", element: <NotFoundPage /> },
@@ -43,6 +47,8 @@ export const routes: RouteObject[] = [
         element: <DashboardLayout />,
         children: [
           { path: "/dashboard", element: <DashboardPage /> },
+          { path: "/profile", element: <ProfilePage /> },
+          { path: "/profile/host-access", element: <HostAccessPage /> },
           { path: "/quizzes", element: <QuizzesPage /> },
           { path: "/quizzes/new", element: <CreateQuizPage /> },
           { path: "/quizzes/:quizId", element: <EditQuizMetadataPage /> },

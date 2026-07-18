@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quizchef.common.api.ApiError;
 import io.quizchef.common.exception.UnauthorizedException;
 import io.quizchef.identity.application.IdentitySessionQueryService;
+import io.quizchef.identity.domain.Role;
 import io.quizchef.identity.infrastructure.jwt.IdentityToken;
 import io.quizchef.identity.infrastructure.jwt.InvalidTokenException;
 import io.quizchef.identity.infrastructure.jwt.JwtTokenValidator;
@@ -13,6 +14,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
+import java.util.Set;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
@@ -29,6 +31,12 @@ import org.springframework.web.filter.OncePerRequestFilter;
  * IdentitySession. A revoked session invalidates every token issued for it —
  * no blacklist, no token store. Requests without a bearer token pass through
  * anonymously; authorization decides what anonymous may reach.
+ *
+ * <p>The principal's roles come from that same session check — the
+ * identity's <em>persisted</em> roles, not the token's issuance-time claim
+ * — so a role granted mid-session (host onboarding) authorizes the very
+ * next request without a new login. The claim remains accurate at issuance
+ * and useful diagnostically; it is simply not the authority.
  */
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
@@ -58,10 +66,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
         try {
             IdentityToken token = tokenValidator.validate(header.substring(BEARER_PREFIX.length()));
-            if (!sessionQueryService.isSessionActive(token.sessionId(), token.identityId())) {
-                throw InvalidTokenException.sessionRevoked();
-            }
-            authenticate(token);
+            Set<Role> roles = sessionQueryService
+                    .activeSessionRoles(token.sessionId(), token.identityId())
+                    .orElseThrow(InvalidTokenException::sessionRevoked);
+            authenticate(token, roles);
         } catch (UnauthorizedException exception) {
             SecurityContextHolder.clearContext();
             reject(response, exception);
@@ -71,10 +79,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
         filterChain.doFilter(request, response);
     }
 
-    private void authenticate(IdentityToken token) {
+    private void authenticate(IdentityToken token, Set<Role> roles) {
         IdentityPrincipal principal =
-                new IdentityPrincipal(token.identityId(), token.identityType(), token.roles());
-        List<SimpleGrantedAuthority> authorities = token.roles().stream()
+                new IdentityPrincipal(token.identityId(), token.identityType(), roles);
+        List<SimpleGrantedAuthority> authorities = roles.stream()
                 .map(role -> new SimpleGrantedAuthority("ROLE_" + role.name()))
                 .toList();
         SecurityContextHolder.getContext().setAuthentication(

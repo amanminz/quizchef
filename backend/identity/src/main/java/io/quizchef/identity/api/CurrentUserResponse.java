@@ -23,11 +23,20 @@ public record CurrentUserResponse(
         Set<Role> roles,
 
         @Schema(example = "[\"QUIZ_VIEW\", \"USER_PROFILE_READ\", \"USER_PROFILE_UPDATE\"]")
-        Set<Permission> permissions
+        Set<Permission> permissions,
+
+        @Schema(description = "The caller's own display name; null for identities without a profile",
+                example = "Aman")
+        String displayName,
+
+        @Schema(description = "The caller's own email; null for identities without a profile",
+                example = "aman@example.com")
+        String email
 ) {
 
     static CurrentUserResponse from(CurrentUserView view) {
         return new CurrentUserResponse(
-                view.identityId(), view.identityType(), view.roles(), view.permissions());
+                view.identityId(), view.identityType(), view.roles(), view.permissions(),
+                view.displayName(), view.email());
     }
 }

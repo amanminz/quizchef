@@ -1,18 +1,29 @@
 import { NavLink } from "react-router-dom";
 import { cn } from "@/utils/cn";
 
-const links = [
+export interface NavLinkItem {
+  to: string;
+  label: string;
+}
+
+const DEFAULT_LINKS: NavLinkItem[] = [
   { to: "/dashboard", label: "Dashboard" },
-  { to: "/quizzes", label: "Quizzes" },
-  { to: "/sessions", label: "Sessions" }
+  { to: "/profile", label: "Profile" }
 ];
 
 export interface AppNavProps {
   orientation?: "horizontal" | "vertical";
+  /**
+   * The links to render. Generic by rule: this component knows nothing
+   * about roles or features — a layout (which may be feature-aware,
+   * RFC-009) computes the list. Navigation reflects permissions; the
+   * routes themselves stay reachable and the backend still decides.
+   */
+  links?: NavLinkItem[];
 }
 
 /** The authenticated area's primary navigation — a sidebar on desktop, usable inline anywhere. */
-export function AppNav({ orientation = "horizontal" }: AppNavProps) {
+export function AppNav({ orientation = "horizontal", links = DEFAULT_LINKS }: AppNavProps) {
   return (
     <nav
       aria-label="Primary"

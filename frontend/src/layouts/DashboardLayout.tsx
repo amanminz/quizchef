@@ -5,15 +5,30 @@ import { useAuth } from "@/auth/useAuth";
 import { useCurrentUser } from "@/auth/useCurrentUser";
 import { Button } from "@/components/common/Button";
 import { OfflineIndicator } from "@/components/feedback/OfflineIndicator";
-import { AppNav } from "@/components/navigation/AppNav";
+import { AppNav, type NavLinkItem } from "@/components/navigation/AppNav";
+import { usePermissions } from "@/features/identity/hooks/usePermissions";
 import { Breadcrumbs } from "@/layouts/Breadcrumbs";
 import { cn } from "@/utils/cn";
 
-/** Shell for the authenticated area: sidebar nav, top bar (user + logout), breadcrumbs. */
+/**
+ * Shell for the authenticated area: sidebar nav, top bar (user + logout),
+ * breadcrumbs. The nav reflects permissions (layouts may be feature-aware,
+ * RFC-009; the generic AppNav is not): authoring and hosting links appear
+ * with the corresponding permissions. Cosmetic only — the routes stay
+ * reachable and the backend still 403s where it must.
+ */
 export function DashboardLayout() {
   const { logout } = useAuth();
   const { data: currentUser } = useCurrentUser();
+  const { hasPermission } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+
+  const navLinks: NavLinkItem[] = [
+    { to: "/dashboard", label: "Dashboard" },
+    ...(hasPermission("QUIZ_CREATE") ? [{ to: "/quizzes", label: "Quizzes" }] : []),
+    ...(hasPermission("QUIZ_HOST") ? [{ to: "/sessions", label: "Sessions" }] : []),
+    { to: "/profile", label: "Profile" }
+  ];
 
   return (
     <div className="flex min-h-screen flex-col">
@@ -32,7 +47,7 @@ export function DashboardLayout() {
           >
             QuizChef
           </Link>
-          <AppNav orientation="vertical" />
+          <AppNav orientation="vertical" links={navLinks} />
         </aside>
 
         {sidebarOpen && (

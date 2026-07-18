@@ -26,8 +26,33 @@ const currentUserResponse: CurrentUserResponse = {
   identityId: testIdentity.identityId,
   identityType: "REGISTERED",
   roles: ["USER", "QUIZ_MASTER"],
-  permissions: ["QUIZ_VIEW", "QUIZ_CREATE", "QUIZ_EDIT", "QUIZ_HOST"]
+  permissions: [
+    "QUIZ_VIEW",
+    "QUIZ_CREATE",
+    "QUIZ_EDIT",
+    "QUIZ_HOST",
+    "USER_PROFILE_READ",
+    "USER_PROFILE_UPDATE"
+  ],
+  displayName: "Test Host",
+  email: testIdentity.email
 };
+
+/**
+ * A plain member (USER only) — what a fresh registration looks like since
+ * roles became durable. Tests exercising onboarding or role-aware UI
+ * override the default host response with this via server.use().
+ */
+export function memberCurrentUser(): CurrentUserResponse {
+  return {
+    identityId: testIdentity.identityId,
+    identityType: "REGISTERED",
+    roles: ["USER"],
+    permissions: ["QUIZ_VIEW", "USER_PROFILE_READ", "USER_PROFILE_UPDATE"],
+    displayName: "Test Member",
+    email: testIdentity.email
+  };
+}
 
 export function apiError(code: string, message: string): ApiErrorBody {
   return { code, message, timestamp: new Date().toISOString(), fieldErrors: [] };

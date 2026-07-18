@@ -389,7 +389,7 @@ Base entity (AuditableEntity: UUID id, timestamps, and optimistic locking — ev
 
 The identity bounded context (previously named Auth; renamed because authentication is just one thing an identity does).
 
-Identity lifecycle (registered and guest).
+Identity lifecycle (registered and guest), and the identity's durable roles (Phase 3): every registered identity holds USER from birth; QUIZ_MASTER is granted through self-service host onboarding, additively and idempotently; guests never hold roles.
 
 Credentials (password hashes behind the PasswordHasher port).
 
@@ -397,7 +397,7 @@ User profiles (email is the login identifier).
 
 Identity sessions (durable login sessions).
 
-Roles, permissions, and the policy-based AuthorizationService (permissions are derived from roles in code, never persisted).
+Roles, permissions, and the policy-based AuthorizationService. Roles are persisted on the Identity aggregate; the role-to-permission mapping stays code-defined, never persisted. Request-time authorization reads the persisted roles through the same per-request session-bound check — the JWT's roles claim is accurate at issuance but is not the authority, so a promotion takes effect on the very next request with the same token, an inflated claim authorizes nothing, and a disabled identity is refused even with a live session.
 
 JWT infrastructure.
 
@@ -542,6 +542,8 @@ Component → Hook → Service (api/* | RealtimeClient) → Backend
 **Realtime responsibilities in gameplay.** Same division of truth as the lobby, extended: the session summary and the new current-question query are the state; every question/answer/leaderboard-progression event invalidates both, every session-lifecycle event invalidates the summary alone. The one genuinely new responsibility is **participant recovery**: `usePlayerGameplay` calls the session module's `reconnect` endpoint (RFC-004's replay contract) on every mount that already knows a participant (fresh join or a returning browser) and again whenever the realtime connection recovers from a drop, seeding "what did I already submit" from the snapshot rather than the event stream — a participant who refreshes mid-question sees their submitted state immediately, not a blank grid waiting for an event that already happened before the refresh.
 
 **State ownership additions.** `playerSessionStore` (Zustand, persisted, keyed by session PIN) holds a participant's join identity — mirroring `hostedSessionsStore`'s "ids only" discipline — and the FSM's `phase` is deliberately **not** stored anywhere: it is recomputed from the query cache on every render so it can never drift from the facts it summarizes. A question's in-progress answer selection lives in component state (`AnswerGrid`) until submitted, per the same table's existing "component-local UI" row.
+
+**Identity on the client** (Phase 3 PR #1, `features/identity/`). Roles and permissions live in the one shared `currentUser` query; `useProfile`/`useRoles`/`usePermissions` are projections over it and `useHostAccess` is the one mutation, whose invalidation of that single key updates every role-aware surface at once. **Frontend authorization is cosmetic**: permission helpers decide what to show (role-adaptive dashboard and navigation, onboarding guidance) — never what is allowed. No route is hidden, 403s render as real outcomes with a path forward, and the backend remains the authority (its request-time authorization reads persisted roles, so the same token gains capabilities the moment the server grants them).
 
 **The completed gameplay lifecycle** (Phase 2 PR #5 — Phase 2 feature-complete). The FSM's final form, extended from PR #4 and never redesigned:
 

@@ -14,7 +14,7 @@ Created
 
 Updated
 
-2026-07-16
+2026-07-18
 
 ---
 
@@ -82,7 +82,7 @@ Other modules never hold the identity aggregates. They hold an **IdentityReferen
 
 ## Roles
 
-`Role` enum: ADMIN, QUIZ_MASTER, USER. Guests hold no roles. Roles are not persisted yet — assignment logic is a later concern, and an empty join table would be speculative.
+`Role` enum: ADMIN, QUIZ_MASTER, USER. Guests hold no roles. *(Originally: roles were not persisted — assignment logic was a later concern. That later concern arrived: Phase 3 PR #1 made roles durable on the Identity aggregate; see "Role persistence & host onboarding" below.)*
 
 ## Request context
 
@@ -214,9 +214,9 @@ Unknown email, wrong password, and disabled identity all produce the identical 4
 
 Requests without a bearer token pass through anonymously (public endpoints keep working); protected endpoints then answer 401 (`auth.unauthorized`) via the shared-format entry point. A presented but invalid token → 401 `identity.token.invalid`; expired → `identity.token.expired`; token of a revoked session → `identity.session.revoked` (distinct so clients can show "signed in elsewhere"). The filter is the only component that reads tokens; it publishes `IdentityPrincipal` into the security context, and business code keeps seeing only `CurrentUser`.
 
-## Interim authority rule
+## Interim authority rule *(superseded — Phase 3 PR #1)*
 
-Until role assignment exists, every registered identity authenticates with the implicit `USER` authority — in the token, the result, and the security context. Guests and real role persistence come later.
+Until role assignment existed, every registered identity authenticated with the implicit `USER` authority — in the token, the result, and the security context. Superseded by durable roles: login now issues whatever the identity durably holds, and the implicit-authority constant is gone. Kept for the record; see "Role persistence & host onboarding" below.
 
 # Authorization (implemented — Milestone 2 PR #4)
 
@@ -248,10 +248,41 @@ With this PR the identity bounded context is feature complete for v1 (registrati
 
 ## Later
 
-- `PublicEndpoints` currently lists exactly `/api/v1/auth/register` and `/api/v1/auth/login`.
 - Proxy-aware client addresses (X-Forwarded-For) once a reverse proxy fronts the API.
-- Role assignment/administration; guest authorization rules (RFC-004).
+- Role *administration* (an admin revoking or granting roles for others) — self-service host onboarding shipped in Phase 3 PR #1; admin tooling has no product driver yet. Guest authorization rules (RFC-004).
 - Pre-v1 refinements agreed in review: `Email` as a first-class value object; `DomainEvent` gains `eventId` and `eventVersion` alongside `occurredAt` (replay, audit, event evolution); `DomainEventPublisher` accepts a list of events so aggregates can emit several per operation; registration response gains the identity `status` field.
 - Guest identity issuance for the session join flow (RFC-004).
 - Refresh tokens bound to `IdentitySession.refreshTokenHash`; refreshes move `lastAuthenticatedAt`.
 - `IdentityStatus` expansion (LOCKED, PENDING_VERIFICATION) and the reserved SYSTEM identity type.
+
+# Role persistence & host onboarding (implemented — Phase 3 PR #1)
+
+The last development-only shortcut in the product — hand-crafted `QUIZ_MASTER` tokens — is gone: a legitimate user becomes a quiz host through the application itself.
+
+## Durable roles
+
+Roles live on the **Identity aggregate** (`identity_roles` element collection, `V9__identity_roles.sql`): every REGISTERED identity holds `USER` from birth (the migration backfills existing identities — the implicit authority became a durable fact), grants are additive and idempotent (`Identity.grantRole` returns whether anything changed, so no-ops skip persistence and events), and guests can never hold a role — the aggregate throws, and the permission path below refuses them anyway.
+
+## Role lifecycle
+
+```text
+register            → USER            (seeded by the aggregate)
+request host access → USER + QUIZ_MASTER   (durable, idempotent, self-service)
+     [admin grant / revoke — future work; ADMIN exists in the matrix, unassignable today]
+```
+
+`POST /api/v1/users/me/host-access` (`RequestHostAccessApplicationService`) is the one onboarding endpoint. **The product rule is automatic self-service promotion**: a self-hosted, church-scale platform trusts its own registered users to author and host — a Kahoot-style "anyone may create". An approval gate can be inserted later without changing the API: the response's `status` already reserves `PENDING`/`DENIED` beside today's always-`GRANTED`. The action is gated by `USER_PROFILE_UPDATE` (modifying one's own account) — every registered USER holds it, no guest does, so guests are refused by the ordinary permission path rather than a special case. A real grant publishes `HostAccessGrantedEvent` (IdentityReference only, no PII); a repeat request publishes nothing.
+
+## JWT claims and request-time authorization
+
+The claims semantics sharpened when roles became durable:
+
+- **At issuance, the token's roles claim reflects the persisted roles** — login reads `identity.roles()`; the implicit-authority constant is deleted. A fresh login after promotion carries `QUIZ_MASTER` in the claim.
+- **At request time, the claim is not the authority.** The filter already consulted the identity module once per request (the session-bound check); that boundary — `IdentitySessionQueryService.activeSessionRoles(sessionId, identityId)` — now answers with the identity's *persisted* roles, and the security context is built from those. Consequences, all deliberate: a promotion takes effect on the caller's **very next request with the same token** (no re-login, no token swap — the frontend needs no "refresh permissions" machinery, an invalidated `/users/me` query suffices); an inflated or hand-crafted claim authorizes nothing (integration-tested); and a **disabled identity is refused even with a live session** — closing a gap where deactivation previously didn't bite until the session was revoked.
+- `AuthorizationService` and every `authorize(currentUser, permission)` call site are untouched: `CurrentUser` still carries roles; only where they come from changed.
+
+## Host onboarding, end to end
+
+`HostOnboardingIntegrationTest` pins the whole journey over the public API: register → login (claim: USER) → `POST /quizzes` **403** → request host access → the *same token* creates a quiz **201** → `/users/me` reflects the promotion immediately → repeat request is a silent no-op → a fresh login's claim carries `QUIZ_MASTER`. The gameplay integration test now onboards its host the same way — no minted tokens, no repository shortcuts — and the remaining test-side token minting persists the roles it claims (the claim alone stopped working, which is the point).
+
+`GET /api/v1/users/me` also gained the caller's own profile basics (`displayName`, `email` — theirs to read, behind `USER_PROFILE_READ`), so a client profile page is one read.

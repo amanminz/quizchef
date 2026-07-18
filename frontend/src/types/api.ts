@@ -15,6 +15,7 @@ export type LoginResponse = Schemas["LoginResponse"];
 export type RegisterIdentityRequest = Schemas["RegisterIdentityRequest"];
 export type RegisterIdentityResponse = Schemas["RegisterIdentityResponse"];
 export type CurrentUserResponse = Schemas["CurrentUserResponse"];
+export type HostAccessResponse = Schemas["HostAccessResponse"];
 
 export type CreateQuizRequest = Schemas["CreateQuizRequest"];
 export type UpdateQuizRequest = Schemas["UpdateQuizRequest"];
@@ -56,6 +57,8 @@ export type QuestionState = NonNullable<QuestionSummaryResponse["state"]>;
 export type Difficulty = NonNullable<QuestionSummaryResponse["difficulty"]>;
 export type QuestionType = NonNullable<QuestionSummaryResponse["questionType"]>;
 export type SessionPhase = NonNullable<SessionSummaryResponse["currentPhase"]>;
+export type PlatformRole = NonNullable<CurrentUserResponse["roles"]>[number];
+export type PlatformPermission = NonNullable<CurrentUserResponse["permissions"]>[number];
 
 /**
  * Flat pagination/sort params matching Spring's `Pageable` query

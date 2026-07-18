@@ -19,7 +19,11 @@ Implemented
      PR #5 (Results, Leaderboards & Session Completion) extends that FSM —
      deliberately without redesigning it — to the full lifecycle, closing
      Phase 2: the complete author → publish → host → play → results
-     workflow ships. See README.md for the lifecycle.
+     workflow ships. Phase 3 PR #1 (Identity, Role Persistence & Host
+     Onboarding) adds the fourth feature module (identity/) plus the
+     registration page, making the whole journey — register → become a
+     host → author → host → play — possible with no development-only
+     shortcuts. See README.md for the lifecycle.
      Note: the Phase 2 spec named this "RFC-007", but RFC-007 is Media
      Storage and RFC-008 is Deployment; the next free number is 009. -->
 
@@ -94,7 +98,7 @@ frontend/src/
   layouts/    PublicLayout, DashboardLayout, Breadcrumbs (route-aware, not generic — see below)
   pages/      one component per route
   components/ common/ forms/ feedback/ navigation/ — generic only, nothing feature-specific
-  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/, sessions/, gameplay/)
+  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/, sessions/, gameplay/, identity/)
   theme/      tokens.css, uiPreferencesStore, useApplyTheme
   types/      api.gen.ts (generated), api.ts (aliases), protocol.ts (RFC-005, hand-written by design)
   utils/      cn, env, validation
@@ -110,8 +114,11 @@ React Router v7, data router in the app (`createBrowserRouter`), one exported ro
 ```text
 /                          home                       public
 /login                     sign in                    public
+/register                  create an account          public
 /play                      join a game                public (guests are first-class, ADR-003)
-/dashboard                 host home                  RequireAuth
+/dashboard                 role-adaptive home         RequireAuth
+/profile                   own account & roles        RequireAuth
+/profile/host-access       host onboarding            RequireAuth
 /quizzes                   "My Quizzes"                RequireAuth
 /quizzes/new               create a draft             RequireAuth
 /quizzes/:quizId           edit metadata               RequireAuth
@@ -246,6 +253,18 @@ The last stretch of the lifecycle, built by **extending** PR #4's machinery, nev
 
 **Completion workflow.** `FINISHED` renders from the summary + results reads alone — which is precisely what makes refresh-during-results recovery trivial for both roles: a fresh mount needs no event history. Host: winner, podium, final standings, statistics, session summary, then **Host Another Session** / **Return to Dashboard**. Participant: podium, own rank and score (their row in the server's standings — a lookup, not a computation), final standings with their row highlighted, **Play Another Quiz** (back to the PIN entry). Presentation components are shared across the two roles per the spec; only the orchestration hooks stay separate, as they have since PR #4. Session duration and completion timestamps are **not** shown: the session summary carries no started/finished times (contract adaptation — noted, not approximated client-side).
 
+## Identity & host onboarding (Phase 3 PR #1)
+
+The fourth feature module (`features/identity/`), and the one that retires the last development-only shortcut: a fresh user registers (`/register` — the page this RFC's Future Work had reserved for "the first onboarding-focused PR"), lands as a member, and becomes a host with one server-confirmed click.
+
+**One query, many projections — roles never get a second home.** `useProfile`, `useRoles`, and `usePermissions` are all projections over the *same* shared `currentUser` query (`currentUserQueryKey`, now exported from `auth/useCurrentUser`); `useHostAccess` is the one mutation, and its `onSuccess` invalidates that one key — at which point every role-aware surface (navigation, dashboard, the onboarding page itself) re-renders from the server's new truth. No token swap is needed: the backend authorizes from persisted roles, so the same JWT hosts immediately (RFC-002).
+
+**Frontend authorization is cosmetic — stated as a rule, enforced by shape.** `usePermissions` decides what to *show*: the dashboard's member view versus host view, which nav links render, the `PermissionBanner`/`UnauthorizedState` guidance. It never decides what is *allowed*: no route is hidden (a member navigating to `/quizzes` gets whatever the backend says, and 403s render as real outcomes with a path forward), and while the query loads everything reads as not-granted, so screens briefly show their least-privileged form rather than flashing capabilities that may vanish.
+
+**Navigation rules.** `AppNav` stays feature-ignorant (it gained a `links` prop, nothing else); `DashboardLayout` — a layout, allowed to know features — computes the links from permissions: Dashboard and Profile always; Quizzes with `QUIZ_CREATE`; Sessions with `QUIZ_HOST`. Navigation reflects permissions; routes stay reachable; the backend still decides.
+
+**Onboarding is server-confirmed like every lifecycle transition.** The success state (`PromotionSuccess`) renders only from the server's verdict — either the mutation's `GRANTED` response or, for a returning host, the roles already in the query. `HostAccessPage` therefore needs no local "did I just promote?" state at all: `isHost` from the shared query *is* the onboarding status.
+
 ## Forms & validation
 
 react-hook-form + zod via a `zodForm(schema)` helper; shared field schemas (`emailSchema`, `passwordSchema` 8–128, `sessionPinSchema` 6 digits, `displayNameSchema`) mirror the backend's rules for faster feedback — **the server remains the authority** (ADR-006 spirit: client validation is UX, not truth).
@@ -258,11 +277,13 @@ Four layers, each with one job: the **axios interceptor** normalizes every API f
 
 Vitest + Testing Library + MSW (network mocked at the boundary — the app's real axios stack runs). `renderApp()` mounts the **real route table inside the real provider stack** in a memory router, so tests exercise routing, auth, queries, and interceptors together; MSW's `onUnhandledRequest: "error"` fails any test that talks to an unmocked endpoint. `RealtimeClient` is tested against a scriptable fake STOMP client injected through its factory seam (connect/reconnect/resubscribe/dispatch/unsubscribe). One deliberate wrinkle: tests mount the route tree through the declarative `MemoryRouter` because the data router's Request machinery clashes with MSW under jsdom — same tree, same guards, no lost coverage.
 
-**95 tests** (23 from PR #1 + 28 from PR #2's authoring workflow + 24 from PR #3's hosting workflow + 14 from PR #4's gameplay experience + 6 net new from PR #5's results, with several PR #4 tests rewritten for the un-collapsed phases): routing/auth/API-client/realtime/error-boundary from PR #1, plus every authoring page (list lifecycle-sectioning and its own empty/error states, create validation and error surfacing, metadata load/save/version-conflict, question search/attach/detach, publish/archive behind confirmation with its precondition warning) and every new route's auth redirect. PR #3 covers the hosting workflow end to end: the dashboard's lifecycle sectioning, empty state, and 404 pruning; create-session (published-only listing, metadata panel, the server-confirmed create, the 409 surface); session details with open-lobby and its authorization failure; and the lobby against the fake STOMP transport — roster join/disconnect events with the event-then-reconcile refetch, the pre-subscription count row, the reconnect banner, the start flow's server confirmation, its 403 rejection, and the remote `session.started` navigation. The fake transport moved from `RealtimeClient.test.ts` into `test/fakeStomp.ts` once the lobby tests needed it, and `renderApp` gained an injection seam for a fake-backed `RealtimeClient`. **`useQuestionSelection`'s reorder is tested at the hook level** (`renderHook`, a scriptable MSW handler with an artificial delay to make the optimistic window observable) rather than by simulating a drag gesture in jsdom — dnd-kit's pointer events don't translate meaningfully to jsdom's synthetic event system, and the actual logic under test (optimistic update → rollback on failure) lives in the hook, not in dnd-kit's own gesture handling (which the library's own tests already cover).
+**104 tests** (95 through Phase 2 + 9 from Phase 3 PR #1's identity work — the numbers below record each PR's contribution: 23 from PR #1 + 28 from PR #2's authoring workflow + 24 from PR #3's hosting workflow + 14 from PR #4's gameplay experience + 6 net new from PR #5's results, with several PR #4 tests rewritten for the un-collapsed phases): routing/auth/API-client/realtime/error-boundary from PR #1, plus every authoring page (list lifecycle-sectioning and its own empty/error states, create validation and error surfacing, metadata load/save/version-conflict, question search/attach/detach, publish/archive behind confirmation with its precondition warning) and every new route's auth redirect. PR #3 covers the hosting workflow end to end: the dashboard's lifecycle sectioning, empty state, and 404 pruning; create-session (published-only listing, metadata panel, the server-confirmed create, the 409 surface); session details with open-lobby and its authorization failure; and the lobby against the fake STOMP transport — roster join/disconnect events with the event-then-reconcile refetch, the pre-subscription count row, the reconnect banner, the start flow's server confirmation, its 403 rejection, and the remote `session.started` navigation. The fake transport moved from `RealtimeClient.test.ts` into `test/fakeStomp.ts` once the lobby tests needed it, and `renderApp` gained an injection seam for a fake-backed `RealtimeClient`. **`useQuestionSelection`'s reorder is tested at the hook level** (`renderHook`, a scriptable MSW handler with an artificial delay to make the optimistic window observable) rather than by simulating a drag gesture in jsdom — dnd-kit's pointer events don't translate meaningfully to jsdom's synthetic event system, and the actual logic under test (optimistic update → rollback on failure) lives in the hook, not in dnd-kit's own gesture handling (which the library's own tests already cover).
 
 PR #4 covers both gameplay screens against `gameplayFixtures` and the same fake STOMP transport: the participant screen's PIN join and landing on the question, submitting an answer and being unable to submit twice, recovering an already-submitted answer purely from the reconnect snapshot after a simulated refresh, a remote `question.closed` → `question.started` pair moving the FSM through `WAITING` and into the next question with no local action, the connection-lost banner and its recovery, and a stale stored participant record clearing itself and falling back to the join form on `session.participant.not-found`; the host screen's read-only monitoring view, starting the first question from `COUNTDOWN`, a 403 surfacing without leaving the page, and a remote `question.closed` updating the host with no host action. **The timeout scenario needed no fake timers**: the fixture simply hands the question an `endsAt` already in the past, so `useCountdown`'s very first synchronous computation reports it expired — deterministic, and avoids the well-known fragility of combining `vi.useFakeTimers()` with Testing Library's `waitFor` polling.
 
 PR #5 covers the results stretch: the host stepping through **Reveal Answer → Show Leaderboard → Next Question** with exactly one server command per click (call order asserted), the reveal rendering the server's correct option and explanation, the **Finish Quiz** label on the last question, and the full final-results screen recovered on a fresh mount with no event history (the host refresh-recovery case the new results read exists for); the participant's correct and incorrect verdicts (seeded purely from the reconnect snapshot's `submittedOptionIds` against the revealed `correctOptionIds`), the leaderboard with their own row highlighted and position line, a `leaderboard.updated` broadcast refetching new standings, and the completion screen — podium, own rank, Play Another Quiz — likewise recovered from a fresh mount.
+
+Phase 3 PR #1 covers identity: registration (register → auto-login → the member dashboard; the duplicate-email 409 surfaced verbatim), the member-versus-host dashboard and navigation (a plain member sees Become a Host and no authoring/hosting links; the default test identity remains a host so every earlier suite runs unchanged), the profile page's roles and hosting path, the promotion flow (a stateful `/users/me` handler flips on the grant, and the test asserts the *navigation* gains Quizzes/Sessions — proving the one-query invalidation reaches every role-aware surface), the already-a-host visit showing success instead of the button, and a denied promotion surfacing without navigation.
 
 **jsdom gap found and fixed once, for every future test:** jsdom implements no `<dialog>` imperative API (`showModal`/`close`) — PR #1 built `Modal`/`ConfirmDialog` on native `<dialog>` but no PR #1 test ever opened one. PR #2's confirmation flows were the first to exercise that path, so the polyfill was added to the shared `test/setup.ts` (same pattern as the pre-existing `matchMedia` stand-in) rather than worked around per test.
 
@@ -337,6 +358,7 @@ PR #5 covers the results stretch: the host stepping through **Reveal Answer → 
 - [x] Session hosting workflow (Phase 2 PR #3): create a session from a published quiz, review details, open the lobby, watch presence arrive over STOMP, start server-confirmed — realtime-driven lobby with reconnect handling, no polling, no optimistic lifecycle transitions, no invented API contracts, no gameplay UI.
 - [x] Live gameplay experience (Phase 2 PR #4): one FSM (`useGameplayState`) driving both gameplay screens; host monitors and progresses (`startQuestion`/`revealAnswer`/`showLeaderboard`/`advanceQuestion` sequenced by `useGameHost`, never optimistic); a participant joins by PIN, answers exactly once per question, is disabled on timeout and after submitting, and recovers a refresh or reconnect purely from the server's replay contract; no leaderboard, results, or final rankings render; the one new backend endpoint this PR required (`GET .../questions/current`) is public, phase-gated, and documented in RFC-004.
 - [x] Results, leaderboards & session completion (Phase 2 PR #5): the FSM extended (never redesigned) with `ANSWER_REVEALED`/`LEADERBOARD`/`FINISHED`; the reveal renders server correctness, the viewer's own submission, their verdict, and the author's explanation; every leaderboard and the winner render the server's rankings verbatim through the new results read; both roles' completion screens (podium, final standings, summary, what-next actions) recover from a fresh mount with no event history; **Phase 2 is feature-complete** — the entire author → publish → host → play → results lifecycle works end to end.
+- [x] Identity & host onboarding (Phase 3 PR #1): registration page; role-adaptive dashboard and navigation; profile and host-access routes; one shared `currentUser` query behind every role projection, invalidated by the one onboarding mutation; frontend authorization cosmetic throughout, 403s handled as real outcomes — the full register → become-a-host → author → host journey works with no development-only shortcuts.
 
 ---
 
@@ -350,6 +372,5 @@ Phase 2 is feature-complete; what follows is **Phase 3: Product Hardening** — 
 - **Question authoring UI** (create/edit) — the picker only searches and composes; the API surface exists, the UI doesn't yet.
 - **Route-level code splitting** — was "before feature pages fatten the bundle"; they have, this is now due.
 - **OpenAPI drift check in CI** — regenerate `api.gen.ts` and fail on diff.
-- **Registration page** — the endpoint and validation schemas exist; the page arrives with the first onboarding-focused PR.
 - **Connect-time JWT on the realtime channel** when RFC-005 per-message authorization lands.
 - **UI-string i18n**, PWA/offline, and accessibility audit — before public launch (PRD non-functionals).
