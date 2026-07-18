@@ -268,6 +268,16 @@ The fourth feature module (`features/identity/`), and the one that retires the l
 
 **Onboarding is server-confirmed like every lifecycle transition.** The success state (`PromotionSuccess`) renders only from the server's verdict — either the mutation's `GRANTED` response or, for a returning host, the roles already in the query. `HostAccessPage` therefore needs no local "did I just promote?" state at all: `isHost` from the shared query *is* the onboarding status.
 
+## Live Event UX (Phase 3, pre-event polish)
+
+The projected-event pass over the session screens, built entirely on the existing layers:
+
+- **Presentation mode.** `presentationStore` (Zustand, sessionStorage-persisted — pure client state per the ownership table) holds the chrome-free layout flag; `usePresentationMode` layers browser fullscreen (user-gesture-only, `fullscreenchange`-tracked so Escape restores the normal layout) and a screen wake lock (progressive enhancement) on top. The two are deliberately separate: fullscreen can be denied while the projection layout stays useful. `DashboardLayout` hides its chrome with the `hidden` attribute on a **stable tree** — an early branch-swap implementation remounted the page and bounced the realtime connection, exactly what a live event cannot afford. A refresh restores the layout but never auto-enters fullscreen (a fresh gesture is required — an `Enter fullscreen` action is offered instead).
+- **Role-scoped results.** The host's full-standings query (`useResults`, host-only server-side since the privacy split) and the participant's own-row query (`useParticipantResult`, its own key and endpoint) are separate contracts by design — a participant device never mounts, fetches, or is authorized for the leaderboard, and realtime result events invalidate only the caller's role-specific query. `leaderboard.updated` broadcasts carry no rows (RFC-005).
+- **The lobby wall.** `useRoster` (host-only roster read, RFC-004) feeds `ParticipantWall`: count-based density tiers (`participantDensity`: large ≤10, medium ≤25, compact ≤50, dense beyond), stable join order (realtime updates never reshuffle a projected display), safe truncation with the full name on `title`, and a brief motion-safe highlight for newcomers. Join events still carry only ids — the wall re-reads the roster on each roster event, the same notify-then-read shape as everything else.
+- **Podium reveal.** `PodiumReveal` is local, disposable display state: 3rd → 2nd → 1st (crown last) in under ~7 s, `Skip`/`Replay` never touch session state, one/two-finisher fields render honestly, `prefers-reduced-motion` collapses to the finished podium, and a played-once sessionStorage flag keeps a refresh from re-running the ceremony (the refresh renders authoritative results, per ADR-006).
+- **Start guards.** The lobby's readiness panel projects state the page already holds; `Start session` confirms first (showing the real `allowLateJoin` setting) and the button disables while the mutation is pending.
+
 ## Forms & validation
 
 react-hook-form + zod via a `zodForm(schema)` helper; shared field schemas (`emailSchema`, `passwordSchema` 8–128, `sessionPinSchema` 6 digits, `displayNameSchema`) mirror the backend's rules for faster feedback — **the server remains the authority** (ADR-006 spirit: client validation is UX, not truth).
