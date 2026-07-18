@@ -78,7 +78,7 @@ Frontend service variables:
 | --- | --- | --- |
 | `PORT` | No | Railway injects this automatically; the image defaults to `8080` for local/container Compose use. |
 | `VITE_API_BASE_URL` | Depends | Use the backend public origin when backend and frontend are separate domains. Leave empty only for same-origin deployments. |
-| `VITE_WS_URL` | No | Optional override. When unset, the frontend derives `wss://<api-host>/ws/websocket` from `VITE_API_BASE_URL`; leave both empty only for same-origin deployments. |
+| `VITE_WS_URL` | No | Optional override; prefer leaving it unset — the frontend derives `wss://<api-host>/ws/websocket` from `VITE_API_BASE_URL`. When set, any of `https://<backend>/ws`, `wss://<backend>/ws`, or `wss://<backend>/ws/websocket` is accepted: the client normalizes the scheme to `wss` and targets the SockJS raw-WebSocket transport (`/ws/websocket`). |
 
 ## Deploying Backend
 
@@ -102,7 +102,7 @@ Before a time-sensitive event, deploy only migrations that have already started 
 4. Deploy.
 5. Open the frontend domain and verify static assets load.
 
-Vite environment variables are build-time variables. Changing `VITE_API_BASE_URL` or `VITE_WS_URL` requires a frontend redeploy.
+Vite environment variables are build-time variables. Changing `VITE_API_BASE_URL` or `VITE_WS_URL` requires a full frontend rebuild and redeploy — a restart is not enough, and a deploy that reuses a cached image keeps the old values. If the browser dials a URL that does not match the configured variables, the running bundle predates the variable change: force a clean rebuild.
 
 ## Custom Domain
 
