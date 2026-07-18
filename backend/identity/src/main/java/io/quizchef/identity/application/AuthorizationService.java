@@ -6,12 +6,11 @@ import io.quizchef.common.exception.UnauthorizedException;
 import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
 import io.quizchef.identity.domain.RolePermissions;
+import io.quizchef.identity.domain.event.IdentityAuthorizationDeniedEvent;
 import io.quizchef.identity.domain.event.IdentityAuthorizedEvent;
 import java.time.Clock;
 import java.util.EnumSet;
 import java.util.Set;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 /**
@@ -21,15 +20,16 @@ import org.springframework.stereotype.Service;
  * roles inline, and controllers never contain authorization logic. The
  * policy itself (role → permission) is the domain rule in
  * {@link RolePermissions}; this service evaluates it and publishes
- * {@link IdentityAuthorizedEvent} on success — denials publish nothing.
+ * {@link IdentityAuthorizedEvent} on success and {@link
+ * IdentityAuthorizationDeniedEvent} on denial — {@code platform}'s
+ * event-logging listeners (RFC-010/RFC-011) are the only place either
+ * becomes a log line, so this service itself never logs directly.
  *
  * <p>Framework-independent by design: no Spring Security, no web types —
  * only {@link CurrentUser} in, decision out.
  */
 @Service
 public class AuthorizationService {
-
-    private static final Logger log = LoggerFactory.getLogger(AuthorizationService.class);
 
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
@@ -48,7 +48,8 @@ public class AuthorizationService {
             throw new UnauthorizedException();
         }
         if (!isGranted(currentUser, permission)) {
-            log.info("Authorization denied: identity {} lacks {}", currentUser.identityId(), permission);
+            eventPublisher.publish(new IdentityAuthorizationDeniedEvent(
+                    currentUser.reference(), permission, clock.instant()));
             throw new ForbiddenException(
                     "auth.permission.denied",
                     "Permission %s is not granted".formatted(permission));

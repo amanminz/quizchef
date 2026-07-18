@@ -4,8 +4,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import io.quizchef.identity.domain.IdentityReference;
 import io.quizchef.identity.domain.IdentityType;
+import io.quizchef.identity.domain.Permission;
 import io.quizchef.identity.domain.event.HostAccessGrantedEvent;
 import io.quizchef.identity.domain.event.IdentityAuthenticatedEvent;
+import io.quizchef.identity.domain.event.IdentityAuthorizationDeniedEvent;
 import io.quizchef.identity.domain.event.IdentityRegisteredEvent;
 import java.time.Instant;
 import java.util.UUID;
@@ -44,6 +46,18 @@ class IdentityEventLoggerTest {
             logger.on(new HostAccessGrantedEvent(identity, Instant.now()));
 
             assertThat(capture.messages()).anyMatch(message -> message.contains("identity.host_promoted"));
+        }
+    }
+
+    @Test
+    void logsAuthorizationDenied() {
+        try (LogCapture capture = new LogCapture(IdentityEventLogger.class)) {
+            logger.on(new IdentityAuthorizationDeniedEvent(identity, Permission.QUIZ_CREATE, Instant.now()));
+
+            assertThat(capture.messages()).anySatisfy(message -> {
+                assertThat(message).contains("security.authorization_denied");
+                assertThat(message).contains("QUIZ_CREATE");
+            });
         }
     }
 }

@@ -9,8 +9,9 @@ import java.util.Objects;
 /**
  * An identity was granted a permission.
  *
- * <p>Published only for successful authorization — denials publish
- * nothing. Carries only the reference and the permission; no PII.
+ * <p>Published only for successful authorization; the denial path publishes
+ * {@link IdentityAuthorizationDeniedEvent} instead (Phase 3 PR #3). Carries
+ * only the reference and the permission; no PII.
  */
 public record IdentityAuthorizedEvent(
         IdentityReference identity,
