@@ -46,7 +46,13 @@ function toApiClientError(error: AxiosError<ApiErrorBody>): ApiClientError {
   }
 
   if (body?.code && body.message) {
-    return new ApiClientError(body.code, body.message, status, body.fieldErrors ?? []);
+    return new ApiClientError(
+      body.code,
+      body.message,
+      status,
+      body.fieldErrors ?? [],
+      body.correlationId ?? null
+    );
   }
   if (status !== null) {
     return new ApiClientError(`http.${status}`, `Request failed with status ${status}`, status);
