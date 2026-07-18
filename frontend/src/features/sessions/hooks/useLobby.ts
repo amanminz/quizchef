@@ -53,8 +53,10 @@ export function useLobby(sessionId: string | undefined) {
         case "participant.disconnected":
         case "participant.reconnected":
           // Event-driven refetch: the push tells us the summary changed,
-          // the server tells us what it now is (ADR-006).
+          // the server tells us what it now is (ADR-006). Roster events
+          // also refresh the name wall's read — events carry only ids.
           void queryClient.invalidateQueries({ queryKey: sessionKeys.detail(message.sessionId) });
+          void queryClient.invalidateQueries({ queryKey: sessionKeys.roster(message.sessionId) });
           break;
         default:
           break;
