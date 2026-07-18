@@ -3,6 +3,8 @@ spring:
     name: quizchef
   profiles:
     default: local
+  lifecycle:
+    timeout-per-shutdown-phase: 30s
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}

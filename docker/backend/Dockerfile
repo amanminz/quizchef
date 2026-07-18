@@ -34,6 +34,7 @@ FROM eclipse-temurin:21-jre-alpine
 RUN addgroup -S quizchef && adduser -S quizchef -G quizchef
 
 WORKDIR /app
+ENV JAVA_TOOL_OPTIONS="-XX:+UseContainerSupport -XX:InitialRAMPercentage=25.0 -XX:MaxRAMPercentage=75.0 -XX:+ExitOnOutOfMemoryError -Djava.security.egd=file:/dev/./urandom"
 COPY --from=build /workspace/extracted/dependencies/ ./
 COPY --from=build /workspace/extracted/spring-boot-loader/ ./
 COPY --from=build /workspace/extracted/snapshot-dependencies/ ./
@@ -41,4 +42,5 @@ COPY --from=build /workspace/extracted/application/ ./
 
 USER quizchef
 EXPOSE 8080
-ENTRYPOINT ["java", "org.springframework.boot.loader.launch.JarLauncher"]
+HEALTHCHECK --interval=30s --timeout=5s --start-period=40s --retries=5 CMD wget -qO- "http://127.0.0.1:${PORT:-${SERVER_PORT:-8080}}/actuator/health/readiness" || exit 1
+ENTRYPOINT ["sh", "-c", "exec java -Dserver.port=${PORT:-${SERVER_PORT:-8080}} org.springframework.boot.loader.launch.JarLauncher"]

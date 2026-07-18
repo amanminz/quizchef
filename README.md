@@ -108,6 +108,16 @@ cd frontend && npm ci && npm run build
 
 On Windows, use `gradlew.bat` for the backend command.
 
+## Production Deployment
+
+Production deployment infrastructure lives alongside the existing local Docker setup:
+
+- `docker-compose.prod.yml` builds only the backend and frontend images and expects managed PostgreSQL plus external S3-compatible object storage.
+- `.env.production.example` documents the required production variables without committing secrets.
+- `railway.toml` and `docker/frontend/railway.toml` provide Railway Dockerfile, health check, and restart settings for the backend and frontend services.
+
+See [docs/deployment/RAILWAY_DEPLOYMENT.md](docs/deployment/RAILWAY_DEPLOYMENT.md) for the Railway setup, required variables, DNS, health checks, rollback, and troubleshooting guide.
+
 ## Documentation
 
 Read the project documentation before contributing:

@@ -1,0 +1,13 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "docker/frontend/Dockerfile"
+watchPatterns = [
+  "frontend/**",
+  "docker/frontend/**",
+  "docker/frontend/railway.toml"
+]
+
+[deploy]
+healthcheckPath = "/"
+healthcheckTimeout = 120
+restartPolicyType = "ALWAYS"

@@ -1,0 +1,15 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "docker/backend/Dockerfile"
+watchPatterns = [
+  "backend/**",
+  "docker/backend/**",
+  "gradle/**",
+  "gradlew",
+  "railway.toml"
+]
+
+[deploy]
+healthcheckPath = "/actuator/health/readiness"
+healthcheckTimeout = 300
+restartPolicyType = "ALWAYS"
