@@ -45,6 +45,9 @@ export type PlayableOptionDto = Schemas["PlayableOptionDto"];
 export type PlayableLocalizationDto = Schemas["PlayableLocalizationDto"];
 export type SessionResultsResponse = Schemas["SessionResultsResponse"];
 export type LeaderboardEntryDto = Schemas["LeaderboardEntryDto"];
+export type ParticipantResultResponse = Schemas["ParticipantResultResponse"];
+export type SessionParticipantsResponse = Schemas["SessionParticipantsResponse"];
+export type SessionParticipantDto = Schemas["SessionParticipantDto"];
 
 /**
  * The backend has no named enum schemas — every state/type/difficulty

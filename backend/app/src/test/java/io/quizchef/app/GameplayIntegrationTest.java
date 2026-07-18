@@ -204,25 +204,29 @@ class GameplayIntegrationTest {
     }
 
     @Test
-    void resultsReadIsPublicAndPhaseGated() throws Exception {
+    void resultsAreRoleScopedAndPhaseGated() throws Exception {
         HostAccount host = onboardHost();
         String hostToken = host.token();
         PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
         String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
 
         // While the question is open, standings would leak who answered
-        // correctly before the reveal — withheld.
+        // correctly before the reveal — withheld from everyone.
         String q1 = openQuestion(hostToken, sessionId);
         answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results"))
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.results.not-available"));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("session.results.not-available"));
 
-        // Revealed: an anonymous refresh recovers the same standings the
-        // leaderboard.updated broadcast carries, names included.
+        // Revealed: the HOST recovers the full standings, names included.
         close(hostToken, sessionId);
         reveal(hostToken, sessionId);
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results"))
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("IN_PROGRESS"))
                 .andExpect(jsonPath("$.currentPhase").value("ANSWER_REVEALED"))
@@ -234,7 +238,33 @@ class GameplayIntegrationTest {
                 .andExpect(jsonPath("$.entries[0].score")
                         .value(org.hamcrest.Matchers.greaterThan(0)));
 
-        // Finish the game: the final results stay readable forever after.
+        // A participant device holds no host token: the full standings are
+        // refused, and the personal read returns exactly one row — the
+        // caller's own — with the framing counts but no other name.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results"))
+                .andExpect(status().isUnauthorized());
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participantId").value(guestA))
+                .andExpect(jsonPath("$.displayName").value("Ann"))
+                .andExpect(jsonPath("$.rank").value(1))
+                .andExpect(jsonPath("$.score").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.totalQuestions").value(2))
+                .andExpect(jsonPath("$.participantCount").value(2))
+                .andExpect(jsonPath("$.entries").doesNotExist());
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participantId").value(guestB))
+                .andExpect(jsonPath("$.rank").value(2))
+                .andExpect(jsonPath("$.score").value(0));
+
+        // A guessed participant id resolves to nothing.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/"
+                        + UUID.randomUUID() + "/result"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("session.participant.not-found"));
+
+        // Finish the game: both reads stay readable forever after.
         leaderboard(hostToken, sessionId);
         advanceToNext(hostToken, sessionId);
         close(hostToken, sessionId);
@@ -243,11 +273,37 @@ class GameplayIntegrationTest {
         mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FINISHED"));
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results"))
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("FINISHED"))
                 .andExpect(jsonPath("$.currentPhase").doesNotExist())
                 .andExpect(jsonPath("$.entries[0].displayName").value("Ann"));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("FINISHED"))
+                .andExpect(jsonPath("$.rank").value(1));
+    }
+
+    @Test
+    void rosterReadIsHostOnlyAndInJoinOrder() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        // The projected lobby wall needs names; the anonymous room does not.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.participantCount").value(2))
+                .andExpect(jsonPath("$.participants[0].participantId").value(guestA))
+                .andExpect(jsonPath("$.participants[0].displayName").value("Ann"))
+                .andExpect(jsonPath("$.participants[0].connected").value(true))
+                .andExpect(jsonPath("$.participants[1].displayName").value("Ben"));
     }
 
     @Test

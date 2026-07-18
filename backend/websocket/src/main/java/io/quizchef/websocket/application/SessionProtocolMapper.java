@@ -79,13 +79,17 @@ final class SessionProtocolMapper {
                 new AnswerRevealedPayload(event.questionId(), event.correctOptionIds()));
     }
 
+    /**
+     * A pure notification: the payload's rows are deliberately empty. The
+     * session topic reaches every participant device, and the standings —
+     * names, scores, ranks — are role-scoped reads since the live-event
+     * privacy split (host: GET /results; participant: own result only).
+     * Clients never treated the rows as a data source (events are
+     * notifications; reads are authoritative), so nothing is lost.
+     */
     static ProtocolMessage toMessage(LeaderboardUpdatedEvent event) {
-        List<LeaderboardPayload.Row> rows = event.leaderboard().stream()
-                .map(entry -> new LeaderboardPayload.Row(
-                        entry.participantId(), entry.displayName(), entry.score(), entry.rank()))
-                .toList();
         return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.LEADERBOARD_UPDATED,
-                event.occurredAt(), new LeaderboardPayload(rows));
+                event.occurredAt(), new LeaderboardPayload(List.of()));
     }
 
     static ProtocolMessage toMessage(AnswerSubmittedEvent event) {

@@ -7,6 +7,7 @@ import io.quizchef.session.application.JoinSessionApplicationService;
 import io.quizchef.session.application.OpenLobbyApplicationService;
 import io.quizchef.session.application.ReconnectParticipantApplicationService;
 import io.quizchef.session.application.SessionQueryService;
+import io.quizchef.session.application.SessionRosterQueryService;
 import io.quizchef.session.application.SessionSummaryView;
 import io.quizchef.session.application.StartSessionApplicationService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -43,6 +44,7 @@ public class SessionController {
     private final ReconnectParticipantApplicationService reconnectParticipantApplicationService;
     private final StartSessionApplicationService startSessionApplicationService;
     private final SessionQueryService sessionQueryService;
+    private final SessionRosterQueryService sessionRosterQueryService;
     private final CurrentUserProvider currentUserProvider;
 
     public SessionController(CreateSessionApplicationService createSessionApplicationService,
@@ -51,6 +53,7 @@ public class SessionController {
                              ReconnectParticipantApplicationService reconnectParticipantApplicationService,
                              StartSessionApplicationService startSessionApplicationService,
                              SessionQueryService sessionQueryService,
+                             SessionRosterQueryService sessionRosterQueryService,
                              CurrentUserProvider currentUserProvider) {
         this.createSessionApplicationService = createSessionApplicationService;
         this.openLobbyApplicationService = openLobbyApplicationService;
@@ -58,6 +61,7 @@ public class SessionController {
         this.reconnectParticipantApplicationService = reconnectParticipantApplicationService;
         this.startSessionApplicationService = startSessionApplicationService;
         this.sessionQueryService = sessionQueryService;
+        this.sessionRosterQueryService = sessionRosterQueryService;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -191,5 +195,28 @@ public class SessionController {
     })
     public SessionSummaryResponse get(@PathVariable UUID id) {
         return SessionSummaryResponse.from(sessionQueryService.summary(id));
+    }
+
+    @GetMapping("/{id}/participants")
+    @Operation(
+            summary = "Read the roster (host only)",
+            description = "Every joined participant's display name and connection state, in stable "
+                    + "join order — what the projected lobby wall renders. Host only: names across "
+                    + "the whole roster are the host's projection; realtime join events deliberately "
+                    + "carry only ids, so the wall re-reads this on each roster event. Closes "
+                    + "RFC-004's flagged \"no roster read endpoint yet\" gap.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The roster, in join order"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionParticipantsResponse participants(@PathVariable UUID id) {
+        return SessionParticipantsResponse.from(
+                id, sessionRosterQueryService.roster(currentUserProvider.currentUser(), id));
     }
 }

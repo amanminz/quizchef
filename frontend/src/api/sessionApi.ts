@@ -5,8 +5,10 @@ import type {
   CurrentQuestionResponse,
   JoinSessionRequest,
   LeaderboardResponse,
+  ParticipantResultResponse,
   ParticipantSessionResponse,
   ReconnectRequest,
+  SessionParticipantsResponse,
   SessionResultsResponse,
   SessionSnapshotResponse,
   SessionSummaryResponse,
@@ -118,15 +120,45 @@ export const sessionApi = {
   },
 
   /**
-   * The standings read — interim (once revealed / on the leaderboard) and
-   * final (after FINISHED) share this one shape. Public; throws
-   * `session.results.not-available` (409) while a question is still being
-   * played. Distinct from `showLeaderboard`, the host's phase-transitioning
-   * command — this never changes anything.
+   * The full standings — HOST ONLY since the live-event privacy split:
+   * every name, score, and rank is the host's projection. Interim (once
+   * revealed / on the leaderboard) and final (after FINISHED) share this
+   * one shape; throws `session.results.not-available` (409) while a
+   * question is still being played. Distinct from `showLeaderboard`, the
+   * host's phase-transitioning command — this never changes anything.
    */
   async results(sessionId: string): Promise<SessionResultsResponse> {
     const { data } = await apiClient.get<SessionResultsResponse>(
       `/api/v1/sessions/${sessionId}/results`
+    );
+    return data;
+  },
+
+  /**
+   * One participant's own row — rank, score, framing counts, and nothing
+   * about anyone else. Anonymous-friendly: the unguessable session and
+   * participant ids gate it, the same trust `submitAnswer` places in the
+   * participant id. Phase-gated exactly like `results`.
+   */
+  async participantResult(
+    sessionId: string,
+    participantId: string
+  ): Promise<ParticipantResultResponse> {
+    const { data } = await apiClient.get<ParticipantResultResponse>(
+      `/api/v1/sessions/${sessionId}/participants/${participantId}/result`
+    );
+    return data;
+  },
+
+  /**
+   * The roster, host only: every joined participant's display name and
+   * connection state in stable join order — what the projected lobby wall
+   * renders. Join events carry only ids, so the wall re-reads this on each
+   * roster event.
+   */
+  async participants(sessionId: string): Promise<SessionParticipantsResponse> {
+    const { data } = await apiClient.get<SessionParticipantsResponse>(
+      `/api/v1/sessions/${sessionId}/participants`
     );
     return data;
   }
