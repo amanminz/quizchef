@@ -6,7 +6,7 @@ import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.kotlin.dsl.withType
 
 plugins {
-    id("org.springframework.boot") version "3.4.5" apply false
+    id("org.springframework.boot") version "4.1.0" apply false
     id("io.spring.dependency-management") version "1.1.7" apply false
 }
 
@@ -31,7 +31,7 @@ subprojects {
 
     extensions.configure<DependencyManagementExtension> {
         imports {
-            mavenBom("org.springframework.boot:spring-boot-dependencies:3.4.5")
+            mavenBom("org.springframework.boot:spring-boot-dependencies:4.1.0")
         }
     }
 
