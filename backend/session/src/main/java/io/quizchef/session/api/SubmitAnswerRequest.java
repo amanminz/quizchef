@@ -4,6 +4,7 @@ import io.quizchef.session.application.SubmitAnswerCommand;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import java.util.Set;
 import java.util.UUID;
 
@@ -15,7 +16,7 @@ public record SubmitAnswerRequest(
         @Schema(description = "The participant id returned when joining") @NotNull UUID participantId,
         @NotNull UUID questionId,
         @Schema(description = "Chosen option ids; must be options of this question")
-        @NotEmpty Set<UUID> selectedOptionIds
+        @NotEmpty @Size(max = 20) Set<UUID> selectedOptionIds
 ) {
 
     SubmitAnswerCommand toCommand() {

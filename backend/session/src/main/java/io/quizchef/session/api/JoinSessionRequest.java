@@ -14,7 +14,7 @@ public record JoinSessionRequest(
         @Schema(example = "Aman", description = "The per-session nickname; need not be unique")
         @NotBlank @Size(max = 100) String displayName,
         @Schema(example = "en", description = "BCP-47 tag the participant wants to play in")
-        @NotBlank String preferredLanguage
+        @NotBlank @Size(max = 35) String preferredLanguage
 ) {
 
     JoinSessionCommand toCommand(String sessionPin) {

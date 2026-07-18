@@ -10,7 +10,7 @@ import jakarta.validation.constraints.Size;
  * One language's quiz content, in requests and responses alike.
  */
 public record QuizLocalizationDto(
-        @Schema(example = "en") @NotBlank String languageCode,
+        @Schema(example = "en") @NotBlank @Size(max = 35) String languageCode,
         @Schema(example = "Bible Quiz") @NotBlank @Size(max = 200) String title,
         @Schema(example = "Sunday Youth Fellowship") @Size(max = 2000) String description
 ) {

@@ -6,6 +6,7 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
 /**
  * Creates a draft quiz. The caller becomes the owner — ownership is never
@@ -13,7 +14,7 @@ import jakarta.validation.constraints.NotNull;
  */
 public record CreateQuizRequest(
         @Schema(example = "en", description = "BCP-47 tag; the localization must be in this language")
-        @NotBlank String defaultLanguage,
+        @NotBlank @Size(max = 35) String defaultLanguage,
         @Schema(description = "PRIVATE when omitted") QuizVisibility visibility,
         @NotNull @Valid QuizLocalizationDto localization,
         @Schema(description = "Defaults applied when omitted") @Valid QuizSettingsDto settings

@@ -14,11 +14,11 @@ import java.util.List;
  * a translation is whole or absent.
  */
 public record QuestionLocalizationDto(
-        @Schema(example = "en") @NotBlank String languageCode,
+        @Schema(example = "en") @NotBlank @Size(max = 35) String languageCode,
         @Schema(example = "Exodus leader") @NotBlank @Size(max = 200) String title,
         @Schema(example = "Who led Israel out of Egypt?") @NotBlank @Size(max = 4000) String prompt,
         @Schema(example = "See Exodus 3.") @Size(max = 4000) String explanation,
-        @NotNull @Valid List<OptionTextDto> optionTexts
+        @NotNull @Size(max = 20) @Valid List<OptionTextDto> optionTexts
 ) {
 
     QuestionContentCommand toCommand() {
