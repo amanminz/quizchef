@@ -19,10 +19,11 @@ describe("authentication", () => {
 
     await signIn(testIdentity.email, testIdentity.password);
 
-    expect(await screen.findByText(/signed in/i)).toBeInTheDocument();
+    expect(await screen.findByText("Test Host")).toBeInTheDocument();
     expect(currentPath()).toBe("/dashboard");
     expect(useAuthStore.getState().token).toBe(testIdentity.token);
-    expect(screen.getAllByText(/QUIZ_MASTER/).length).toBeGreaterThan(0);
+    // The default test identity is a host — the hosting workflow renders.
+    expect(screen.getByText(/host a session/i)).toBeInTheDocument();
   });
 
   it("shows the backend's error message for a rejected login and stores nothing", async () => {

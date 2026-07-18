@@ -31,6 +31,8 @@ describe("routing", () => {
   });
 
   it.each([
+    "/profile",
+    "/profile/host-access",
     "/quizzes",
     "/quizzes/new",
     "/quizzes/some-id",
