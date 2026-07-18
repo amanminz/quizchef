@@ -52,6 +52,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/users/me/host-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request host access
+         * @description Grants the caller the QUIZ_MASTER role, durably and idempotently — the product rule is automatic self-service promotion (RFC-002); PENDING/DENIED are reserved for a future approval gate. Because request-time authorization reads persisted roles, the grant takes effect on the very next request with the same token — no new login needed. Guests cannot request host access.
+         */
+        post: operations["requestHostAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions": {
         parameters: {
             query?: never;
@@ -791,6 +811,31 @@ export interface components {
             /** @example exodus */
             name?: string;
         };
+        HostAccessResponse: {
+            /**
+             * @example GRANTED
+             * @enum {string}
+             */
+            status?: "GRANTED" | "PENDING" | "DENIED";
+            /**
+             * @example [
+             *       "USER",
+             *       "QUIZ_MASTER"
+             *     ]
+             */
+            roles?: ("ADMIN" | "QUIZ_MASTER" | "USER")[];
+            /**
+             * @example [
+             *       "QUIZ_VIEW",
+             *       "QUIZ_CREATE",
+             *       "QUIZ_EDIT",
+             *       "QUIZ_HOST",
+             *       "USER_PROFILE_READ",
+             *       "USER_PROFILE_UPDATE"
+             *     ]
+             */
+            permissions?: ("QUIZ_VIEW" | "QUIZ_CREATE" | "QUIZ_EDIT" | "QUIZ_DELETE" | "QUIZ_HOST" | "USER_PROFILE_READ" | "USER_PROFILE_UPDATE")[];
+        };
         CreateSessionRequest: {
             /**
              * Format: uuid
@@ -1036,6 +1081,16 @@ export interface components {
              *     ]
              */
             permissions?: ("QUIZ_VIEW" | "QUIZ_CREATE" | "QUIZ_EDIT" | "QUIZ_DELETE" | "QUIZ_HOST" | "USER_PROFILE_READ" | "USER_PROFILE_UPDATE")[];
+            /**
+             * @description The caller's own display name; null for identities without a profile
+             * @example Aman
+             */
+            displayName?: string;
+            /**
+             * @description The caller's own email; null for identities without a profile
+             * @example aman@example.com
+             */
+            email?: string;
         };
         SessionResultsResponse: {
             /** Format: uuid */
@@ -1417,6 +1472,44 @@ export interface operations {
             };
             /** @description Stale version (question.concurrent-modification), published question (question.content.locked), or archived question (question.archived) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    requestHostAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Host access granted (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HostAccessResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The caller may not modify their account (guests) */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
