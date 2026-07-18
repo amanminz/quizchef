@@ -2,6 +2,16 @@ plugins {
     id("org.springframework.boot")
 }
 
+springBoot {
+    buildInfo {
+        properties {
+            // The Gradle plugin default (project name = "app", the module,
+            // not the product) would make a confusing `/actuator/info`.
+            name = "QuizChef"
+        }
+    }
+}
+
 dependencies {
     implementation(project(":common"))
     implementation(project(":identity"))
@@ -11,6 +21,7 @@ dependencies {
     implementation(project(":media"))
     implementation(project(":security"))
     implementation(project(":websocket"))
+    implementation(project(":platform"))
     implementation("org.springframework.boot:spring-boot-starter-web")
     implementation("org.springframework.boot:spring-boot-starter-validation")
     implementation("org.springframework.boot:spring-boot-starter-security")

@@ -24,11 +24,19 @@ server:
   port: ${SERVER_PORT:8080}
   shutdown: graceful
 
+logging:
+  structured:
+    format:
+      # Elastic Common Schema: a neutral, widely-parseable JSON schema with
+      # no assumed backend (RFC-010). Automatically includes MDC entries
+      # (correlationId, requestId, identityId, sessionId, ...) as fields.
+      console: ecs
+
 management:
   endpoints:
     web:
       exposure:
-        include: health,info
+        include: health,info,metrics
   endpoint:
     health:
       probes:

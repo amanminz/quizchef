@@ -13,5 +13,6 @@ include(
     "session",
     "media",
     "security",
-    "websocket"
+    "websocket",
+    "platform"
 )
