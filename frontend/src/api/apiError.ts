@@ -17,13 +17,19 @@ export class ApiClientError extends Error {
    * logs. Null when the request never reached the server.
    */
   readonly correlationId: string | null;
+  /**
+   * Seconds until the exhausted rate-limit bucket refills (Phase 3 PR #3),
+   * from the backend's `Retry-After` header. Null unless `status === 429`.
+   */
+  readonly retryAfterSeconds: number | null;
 
   constructor(
     code: string,
     message: string,
     status: number | null,
     fieldErrors: ApiFieldError[] = [],
-    correlationId: string | null = null
+    correlationId: string | null = null,
+    retryAfterSeconds: number | null = null
   ) {
     super(message);
     this.name = "ApiClientError";
@@ -31,6 +37,7 @@ export class ApiClientError extends Error {
     this.status = status;
     this.fieldErrors = fieldErrors;
     this.correlationId = correlationId;
+    this.retryAfterSeconds = retryAfterSeconds;
   }
 }
 

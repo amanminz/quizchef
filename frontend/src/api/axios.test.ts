@@ -82,6 +82,40 @@ describe("api client", () => {
     expect(useAuthStore.getState().sessionExpired).toBe(false);
   });
 
+  it("maps a 429 response's Retry-After header onto retryAfterSeconds", async () => {
+    server.use(
+      http.post("/api/v1/probe", () =>
+        HttpResponse.json(apiError("rate-limit.exceeded", "Too many requests. Please try again later."), {
+          status: 429,
+          headers: { "Retry-After": "42" }
+        })
+      )
+    );
+
+    const failure = await apiClient.post("/api/v1/probe").catch((error: unknown) => error);
+
+    expect(isApiClientError(failure)).toBe(true);
+    if (isApiClientError(failure)) {
+      expect(failure.status).toBe(429);
+      expect(failure.retryAfterSeconds).toBe(42);
+    }
+  });
+
+  it("leaves retryAfterSeconds null when there is no Retry-After header", async () => {
+    server.use(
+      http.post("/api/v1/probe", () =>
+        HttpResponse.json(apiError("quiz.not-found", "Quiz not found"), { status: 404 })
+      )
+    );
+
+    const failure = await apiClient.post("/api/v1/probe").catch((error: unknown) => error);
+
+    expect(isApiClientError(failure)).toBe(true);
+    if (isApiClientError(failure)) {
+      expect(failure.retryAfterSeconds).toBeNull();
+    }
+  });
+
   it("maps a connection failure to a network error code", async () => {
     server.use(http.get("/api/v1/probe", () => HttpResponse.error()));
 
