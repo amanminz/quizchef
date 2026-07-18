@@ -1,14 +1,18 @@
 import { Menu } from "lucide-react";
 import { useState } from "react";
-import { Link, Outlet } from "react-router-dom";
+import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "@/auth/useAuth";
 import { useCurrentUser } from "@/auth/useCurrentUser";
 import { Button } from "@/components/common/Button";
 import { OfflineIndicator } from "@/components/feedback/OfflineIndicator";
 import { AppNav, type NavLinkItem } from "@/components/navigation/AppNav";
 import { usePermissions } from "@/features/identity/hooks/usePermissions";
+import { usePresentationStore } from "@/features/sessions/presentationStore";
 import { Breadcrumbs } from "@/layouts/Breadcrumbs";
 import { cn } from "@/utils/cn";
+
+/** The host-facing live-session screens presentation mode may take over. */
+const PRESENTATION_ROUTES = /^\/sessions\/[^/]+\/(lobby|play)$/;
 
 /**
  * Shell for the authenticated area: sidebar nav, top bar (user + logout),
@@ -22,6 +26,13 @@ export function DashboardLayout() {
   const { data: currentUser } = useCurrentUser();
   const { hasPermission } = usePermissions();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const location = useLocation();
+  const presentationActive = usePresentationStore((state) => state.active);
+  // Presentation strips the chrome only on live-session screens — leaving
+  // the session route always restores normal navigation, whatever the
+  // stored flag says (cleanup on route change without losing the flag for
+  // a same-session return).
+  const presenting = presentationActive && PRESENTATION_ROUTES.test(location.pathname);
 
   const navLinks: NavLinkItem[] = [
     { to: "/dashboard", label: "Dashboard" },
@@ -39,7 +50,11 @@ export function DashboardLayout() {
     <div className="flex min-h-screen flex-col">
       <OfflineIndicator />
       <div className="flex flex-1">
+        {/* Presentation hides the chrome with CSS on a stable tree — a
+            branch swap would remount the page and bounce its realtime
+            connection mid-event. */}
         <aside
+          hidden={presenting}
           className={cn(
             "fixed inset-y-0 left-0 z-20 w-56 border-r bg-background p-4 transition-transform sm:static sm:translate-x-0",
             sidebarOpen ? "translate-x-0" : "-translate-x-full"
@@ -65,7 +80,7 @@ export function DashboardLayout() {
         )}
 
         <div className="flex min-w-0 flex-1 flex-col">
-          <header className="border-b">
+          <header hidden={presenting} className="border-b">
             <div className="flex h-14 items-center justify-between gap-4 px-4 sm:px-6">
               <Button
                 variant="ghost"
@@ -90,7 +105,7 @@ export function DashboardLayout() {
             </div>
           </header>
           <main className="flex-1">
-            <div className="mx-auto w-full max-w-5xl px-4 pt-4 sm:px-6">
+            <div hidden={presenting} className="mx-auto w-full max-w-5xl px-4 pt-4 sm:px-6">
               <Breadcrumbs />
             </div>
             <Outlet />
