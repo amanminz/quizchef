@@ -10,6 +10,8 @@ interface Crumb {
 
 const STATIC_LABELS: Record<string, string> = {
   dashboard: "Dashboard",
+  profile: "Profile",
+  "host-access": "Host Access",
   quizzes: "Quizzes",
   sessions: "Sessions",
   questions: "Questions",
