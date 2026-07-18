@@ -94,10 +94,20 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
         void queryClient.invalidateQueries({ queryKey: gameplayKeys.currentQuestion(sessionId) });
       }
       if (RESULTS_EVENTS.has(message.type)) {
-        void queryClient.invalidateQueries({ queryKey: gameplayKeys.results(sessionId) });
+        // Role-specific invalidation (live-event privacy): a participant
+        // device refreshes only its own personal result; the host (no
+        // participantId) refreshes the full-standings read. Neither role
+        // ever mounts the other's query.
+        if (participantId) {
+          void queryClient.invalidateQueries({
+            queryKey: gameplayKeys.personalResult(sessionId, participantId)
+          });
+        } else {
+          void queryClient.invalidateQueries({ queryKey: gameplayKeys.results(sessionId) });
+        }
       }
     },
-    [queryClient, sessionId]
+    [queryClient, sessionId, participantId]
   );
 
   useGameplaySubscriptions(sessionId, participantId, onEvent);

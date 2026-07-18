@@ -5,7 +5,7 @@ import { sessionApi } from "@/api/sessionApi";
 import { useAnswerSubmission } from "@/features/gameplay/hooks/useAnswerSubmission";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
 import { useJoinSession } from "@/features/gameplay/hooks/useJoinSession";
-import { useResults } from "@/features/gameplay/hooks/useResults";
+import { useParticipantResult } from "@/features/gameplay/hooks/useParticipantResult";
 import { usePlayerSessionStore } from "@/features/gameplay/playerSessionStore";
 import type { JoinSessionRequest } from "@/types/api";
 
@@ -58,7 +58,11 @@ export function usePlayerGameplay(pin: string) {
 
   const previousStatus = useRef(gameplay.connectionStatus);
   useEffect(() => {
-    if (stored && previousStatus.current !== "connected" && gameplay.connectionStatus === "connected") {
+    if (
+      stored &&
+      previousStatus.current !== "connected" &&
+      gameplay.connectionStatus === "connected"
+    ) {
       reconnectMutation.mutate();
     }
     previousStatus.current = gameplay.connectionStatus;
@@ -72,12 +76,42 @@ export function usePlayerGameplay(pin: string) {
     reconnectMutation.data
   );
 
-  const resultsQuery = useResults(stored?.sessionId, gameplay.phase);
-  // The participant's own row in the server's standings — a lookup, never
-  // a computation: rank and score are the server's verdicts (ADR-006).
-  const ownEntry = resultsQuery.data?.entries?.find(
-    (entry) => entry.participantId === stored?.participantId
+  // The participant's own result only — never the full standings; the
+  // rank and score are the server's verdicts (ADR-006), and other
+  // players' rows never reach this device (live-event privacy).
+  const resultQuery = useParticipantResult(
+    stored?.sessionId,
+    stored?.participantId,
+    gameplay.phase
   );
+  // Movement is a display diff of two consecutive server snapshots (the
+  // PR #5 delta pattern, personal edition) — absent after a refresh. The
+  // pair advances on data identity, not per render, so the delta survives
+  // re-renders until the next snapshot arrives.
+  const historyRef = useRef<{
+    current?: typeof resultQuery.data;
+    previous?: typeof resultQuery.data;
+  }>({});
+  if (resultQuery.data !== undefined && historyRef.current.current !== resultQuery.data) {
+    historyRef.current = { previous: historyRef.current.current, current: resultQuery.data };
+  }
+  const previousResult = historyRef.current.previous;
+  const scoreDelta =
+    resultQuery.data !== undefined &&
+    previousResult !== undefined &&
+    previousResult.score !== undefined &&
+    resultQuery.data.score !== undefined &&
+    previousResult.sessionId === resultQuery.data.sessionId
+      ? resultQuery.data.score - previousResult.score
+      : undefined;
+  const rankDelta =
+    resultQuery.data !== undefined &&
+    previousResult !== undefined &&
+    previousResult.rank !== undefined &&
+    resultQuery.data.rank !== undefined &&
+    previousResult.sessionId === resultQuery.data.sessionId
+      ? previousResult.rank - resultQuery.data.rank
+      : undefined;
 
   const join = (request: JoinSessionRequest) => joinMutation.mutateAsync({ pin, request });
 
@@ -92,10 +126,13 @@ export function usePlayerGameplay(pin: string) {
     isReconnecting: reconnectMutation.isPending && reconnectMutation.data === undefined,
     reconnectError: reconnectMutation.error,
     retryReconnect: () => reconnectMutation.mutate(),
-    results: resultsQuery.data,
-    resultsError: resultsQuery.error,
-    refetchResults: resultsQuery.refetch,
-    ownEntry,
+    personalResult: resultQuery.data,
+    personalResultError: resultQuery.error,
+    refetchPersonalResult: resultQuery.refetch,
+    /** Points gained since the previous personal snapshot, when known. */
+    scoreDelta,
+    /** Positive = moved up since the previous personal snapshot. */
+    rankDelta,
     ...gameplay,
     ...answerSubmission
   };
