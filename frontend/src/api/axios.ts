@@ -37,6 +37,7 @@ apiClient.interceptors.response.use(
 function toApiClientError(error: AxiosError<ApiErrorBody>): ApiClientError {
   const status = error.response?.status ?? null;
   const body = error.response?.data;
+  const retryAfterSeconds = parseRetryAfter(error.response?.headers["retry-after"]);
 
   // A rejected token means the server-side identity session is gone
   // (revoked or expired — RFC-002). Clear local auth so RequireAuth routes
@@ -51,11 +52,19 @@ function toApiClientError(error: AxiosError<ApiErrorBody>): ApiClientError {
       body.message,
       status,
       body.fieldErrors ?? [],
-      body.correlationId ?? null
+      body.correlationId ?? null,
+      retryAfterSeconds
     );
   }
   if (status !== null) {
-    return new ApiClientError(`http.${status}`, `Request failed with status ${status}`, status);
+    return new ApiClientError(
+      `http.${status}`,
+      `Request failed with status ${status}`,
+      status,
+      [],
+      null,
+      retryAfterSeconds
+    );
   }
   if (error.code === "ECONNABORTED") {
     return new ApiClientError("network.timeout", "The server took too long to respond.", null);
@@ -65,4 +74,13 @@ function toApiClientError(error: AxiosError<ApiErrorBody>): ApiClientError {
 
 function isAuthenticationAttempt(error: AxiosError): boolean {
   return error.config?.url?.includes("/auth/") ?? false;
+}
+
+/** The backend (Phase 3 PR #3) always sends a whole-seconds Retry-After. */
+function parseRetryAfter(header: unknown): number | null {
+  if (typeof header !== "string") {
+    return null;
+  }
+  const seconds = Number.parseInt(header, 10);
+  return Number.isNaN(seconds) ? null : seconds;
 }

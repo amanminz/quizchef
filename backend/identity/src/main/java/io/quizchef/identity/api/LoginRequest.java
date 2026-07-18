@@ -3,10 +3,13 @@ package io.quizchef.identity.api;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 
 /**
  * Login request. Deliberately no password-policy constraints here: login
- * must not reveal the current policy, only registration enforces it.
+ * must not reveal the current policy, only registration enforces it. The
+ * upper bound below is a ceiling against oversized payloads (Argon2 hashing
+ * cost scales with input size), not a policy floor.
  */
 public record LoginRequest(
 
@@ -17,6 +20,7 @@ public record LoginRequest(
 
         @Schema(example = "StrongPassword@123")
         @NotBlank
+        @Size(max = 128)
         String password
 ) {
 

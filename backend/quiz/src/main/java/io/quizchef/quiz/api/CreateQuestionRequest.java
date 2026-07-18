@@ -5,6 +5,7 @@ import io.quizchef.quiz.domain.Difficulty;
 import io.quizchef.quiz.domain.QuestionType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -18,15 +19,15 @@ import java.util.List;
  */
 public record CreateQuestionRequest(
         @Schema(example = "en", description = "BCP-47 tag; the content is authored in this language")
-        @NotBlank String defaultLanguage,
+        @NotBlank @Size(max = 35) String defaultLanguage,
         @NotNull QuestionType questionType,
         @NotNull Difficulty difficulty,
         @NotNull @Valid QuestionContentDto localization,
-        @NotNull @Size(min = 1) @Valid List<CreateOptionDto> options,
-        @Valid List<BibleReferenceDto> bibleReferences,
-        @Valid List<MediaReferenceDto> mediaReferences,
+        @NotNull @Size(min = 1, max = 20) @Valid List<CreateOptionDto> options,
+        @Size(max = 20) @Valid List<BibleReferenceDto> bibleReferences,
+        @Size(max = 20) @Valid List<MediaReferenceDto> mediaReferences,
         @Schema(example = "[\"exodus\", \"moses\"]", description = "Resolved or created by name; normalized to lowercase")
-        List<String> tags
+        @Size(max = 20) List<@NotBlank @Size(max = 30) String> tags
 ) {
 
     /**
@@ -43,7 +44,7 @@ public record CreateQuestionRequest(
     public record CreateOptionDto(
             @Schema(example = "Moses") @NotBlank @Size(max = 500) String text,
             @NotNull Boolean correct,
-            @Schema(example = "1") @NotNull @Min(1) Integer displayOrder
+            @Schema(example = "1") @NotNull @Min(1) @Max(1000) Integer displayOrder
     ) {
     }
 

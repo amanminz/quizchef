@@ -25,4 +25,27 @@ describe("ErrorPanel", () => {
 
     expect(screen.queryByText(/Reference:/)).not.toBeInTheDocument();
   });
+
+  it("shows the retry-after countdown for a 429", () => {
+    const error = new ApiClientError(
+      "rate-limit.exceeded",
+      "Too many requests. Please try again later.",
+      429,
+      [],
+      null,
+      42
+    );
+
+    render(<ErrorPanel error={error} />);
+
+    expect(screen.getByText(/Too many requests — try again in 42s/)).toBeInTheDocument();
+  });
+
+  it("omits the retry-after line for a non-429 error", () => {
+    const error = new ApiClientError("quiz.not-found", "Quiz not found", 404);
+
+    render(<ErrorPanel error={error} />);
+
+    expect(screen.queryByText(/try again in/)).not.toBeInTheDocument();
+  });
 });

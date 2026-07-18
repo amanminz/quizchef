@@ -4,6 +4,14 @@ springdoc:
   swagger-ui:
     enabled: false
 
+server:
+  # Trusts X-Forwarded-For from the reverse proxy in front of this
+  # environment (Railway) so ClientIpResolver's rate limiting (RFC-011)
+  # keys on the real caller, not the proxy. Only safe where such a proxy
+  # actually sits in front and sets the header correctly — never enable
+  # this in a profile without one, or IP-based limits become spoofable.
+  forward-headers-strategy: framework
+
 management:
   endpoint:
     health:

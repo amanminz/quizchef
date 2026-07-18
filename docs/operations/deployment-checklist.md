@@ -9,6 +9,8 @@ The steps of a deploy itself, as the system exists today: CI (`.github/workflows
 - [ ] CI is green on the commit being deployed (`./gradlew -p backend build test`, `npm run build`, `npm test` in `frontend/` — the same steps CI runs).
 - [ ] Work through the [Production Checklist](production-checklist.md).
 - [ ] Any new Flyway migration has been reviewed for backward compatibility with the currently-running version, if this is a rolling deploy (this project runs one instance today, so this is a lighter concern than at scale — still worth a look for destructive migrations).
+- [ ] `CORS_ALLOWED_ORIGINS` and `JWT_SECRET` are set for the target environment — neither has a production default (RFC-011), so a missing value fails startup rather than deploying insecurely.
+- [ ] `server.forward-headers-strategy: framework` (`application-prod.yml`) is deliberately `prod`-only — it makes `ClientIpResolver` (RFC-011) trust `X-Forwarded-For`, which is only safe behind a reverse proxy that sets it correctly (Railway). Never enable this outside an environment with such a proxy in front, or IP-based rate limits become spoofable.
 
 ## 2. Build the images
 

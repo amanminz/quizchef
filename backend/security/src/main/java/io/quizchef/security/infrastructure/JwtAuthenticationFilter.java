@@ -16,6 +16,8 @@ import jakarta.servlet.http.HttpServletResponse;
 import java.io.IOException;
 import java.util.List;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.slf4j.MDC;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -43,6 +45,7 @@ import org.springframework.web.filter.OncePerRequestFilter;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
+    private static final Logger log = LoggerFactory.getLogger(JwtAuthenticationFilter.class);
     private static final String BEARER_PREFIX = "Bearer ";
 
     private final JwtTokenValidator tokenValidator;
@@ -97,6 +100,10 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
     }
 
     private void reject(HttpServletResponse response, UnauthorizedException exception) throws IOException {
+        // A structured operational event (Phase 3 PR #3 / RFC-011), logged
+        // here rather than through `platform` — this module has no reason
+        // to depend on it, and the catch block already exists.
+        log.warn("security.invalid_jwt reason={}", exception.errorCode());
         response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(

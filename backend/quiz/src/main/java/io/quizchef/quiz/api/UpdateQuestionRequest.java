@@ -4,7 +4,9 @@ import io.quizchef.quiz.application.UpdateQuestionCommand;
 import io.quizchef.quiz.domain.Difficulty;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import java.util.List;
@@ -21,17 +23,17 @@ public record UpdateQuestionRequest(
         @Schema(example = "0", description = "The version returned by the last read of this question")
         @NotNull Long version,
         @NotNull Difficulty difficulty,
-        @NotNull @Size(min = 1) @Valid List<UpdateOptionDto> options,
-        @NotNull @Size(min = 1) @Valid List<QuestionLocalizationDto> localizations,
-        @NotNull @Valid List<BibleReferenceDto> bibleReferences,
-        @NotNull @Valid List<MediaReferenceDto> mediaReferences,
-        @NotNull List<String> tags
+        @NotNull @Size(min = 1, max = 20) @Valid List<UpdateOptionDto> options,
+        @NotNull @Size(min = 1, max = 50) @Valid List<QuestionLocalizationDto> localizations,
+        @NotNull @Size(max = 20) @Valid List<BibleReferenceDto> bibleReferences,
+        @NotNull @Size(max = 20) @Valid List<MediaReferenceDto> mediaReferences,
+        @NotNull @Size(max = 20) List<@NotBlank @Size(max = 30) String> tags
 ) {
 
     public record UpdateOptionDto(
             @NotNull UUID id,
             @NotNull Boolean correct,
-            @Schema(example = "1") @NotNull @Min(1) Integer displayOrder
+            @Schema(example = "1") @NotNull @Min(1) @Max(1000) Integer displayOrder
     ) {
     }
 

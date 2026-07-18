@@ -69,6 +69,7 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-quizchef}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-quizchef-local}
       MINIO_BUCKET: ${MINIO_BUCKET:-quizchef-media}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:${FRONTEND_PORT:-3000}}
     depends_on:
       postgres:
         condition: service_healthy

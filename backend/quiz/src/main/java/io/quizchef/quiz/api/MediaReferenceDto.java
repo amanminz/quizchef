@@ -3,6 +3,7 @@ package io.quizchef.quiz.api;
 import io.quizchef.quiz.domain.MediaReference;
 import io.quizchef.quiz.domain.MediaType;
 import io.swagger.v3.oas.annotations.media.Schema;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -12,13 +13,20 @@ import java.util.UUID;
 /**
  * A pointer to media in object storage, shared across all translations.
  * Uploads are the media module's concern (RFC-007).
+ *
+ * <p>{@code storageKey}'s format (e.g. path-traversal shaped values) is
+ * deliberately not further constrained here beyond length — the media
+ * module is still an empty scaffold (RFC-007 unbuilt), so nothing consumes
+ * this key against object storage yet; validating its format now would be
+ * guessing at a contract RFC-007 hasn't designed. Recorded as an accepted
+ * risk in RFC-011.
  */
 public record MediaReferenceDto(
         @Schema(description = "Server-assigned when omitted") UUID id,
         @NotNull MediaType mediaType,
         @Schema(example = "media/burning-bush.png") @NotBlank @Size(max = 512) String storageKey,
         @Schema(example = "Burning bush") @Size(max = 500) String altText,
-        @Schema(example = "1") @NotNull @Min(1) Integer displayOrder
+        @Schema(example = "1") @NotNull @Min(1) @Max(1000) Integer displayOrder
 ) {
 
     MediaReference toReference() {

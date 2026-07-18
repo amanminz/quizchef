@@ -2,6 +2,7 @@ package io.quizchef.websocket.infrastructure;
 
 import io.quizchef.websocket.api.Topics;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.messaging.simp.config.ChannelRegistration;
 import org.springframework.messaging.simp.config.MessageBrokerRegistry;
 import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBroker;
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
@@ -31,6 +32,12 @@ public class WebSocketStompConfiguration implements WebSocketMessageBrokerConfig
     static final String STOMP_ENDPOINT = "/ws";
     static final String APPLICATION_PREFIX = "/app";
 
+    private final StompDestinationValidationInterceptor destinationValidationInterceptor;
+
+    public WebSocketStompConfiguration(StompDestinationValidationInterceptor destinationValidationInterceptor) {
+        this.destinationValidationInterceptor = destinationValidationInterceptor;
+    }
+
     @Override
     public void registerStompEndpoints(StompEndpointRegistry registry) {
         registry.addEndpoint(STOMP_ENDPOINT).withSockJS();
@@ -40,5 +47,10 @@ public class WebSocketStompConfiguration implements WebSocketMessageBrokerConfig
     public void configureMessageBroker(MessageBrokerRegistry registry) {
         registry.enableSimpleBroker(Topics.BROKER_PREFIX);
         registry.setApplicationDestinationPrefixes(APPLICATION_PREFIX);
+    }
+
+    @Override
+    public void configureClientInboundChannel(ChannelRegistration registration) {
+        registration.interceptors(destinationValidationInterceptor);
     }
 }

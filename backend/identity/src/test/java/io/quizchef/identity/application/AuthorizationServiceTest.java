@@ -13,6 +13,7 @@ import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.identity.domain.Permission;
 import io.quizchef.identity.domain.Role;
+import io.quizchef.identity.domain.event.IdentityAuthorizationDeniedEvent;
 import io.quizchef.identity.domain.event.IdentityAuthorizedEvent;
 import java.time.Clock;
 import java.time.Instant;
@@ -60,7 +61,7 @@ class AuthorizationServiceTest {
     }
 
     @Test
-    void shouldDenyMissingPermissionWithoutPublishingEvent() {
+    void shouldDenyMissingPermissionAndPublishADenialEvent() {
         CurrentUser user = userWith(Role.USER);
 
         assertThatExceptionOfType(ForbiddenException.class)
@@ -68,7 +69,12 @@ class AuthorizationServiceTest {
                 .satisfies(exception ->
                         assertThat(exception.errorCode()).isEqualTo("auth.permission.denied"));
 
-        verify(eventPublisher, never()).publish(any());
+        ArgumentCaptor<IdentityAuthorizationDeniedEvent> eventCaptor =
+                ArgumentCaptor.forClass(IdentityAuthorizationDeniedEvent.class);
+        verify(eventPublisher).publish(eventCaptor.capture());
+        assertThat(eventCaptor.getValue().identity().identityId()).isEqualTo(user.identityId());
+        assertThat(eventCaptor.getValue().permission()).isEqualTo(Permission.QUIZ_CREATE);
+        assertThat(eventCaptor.getValue().occurredAt()).isEqualTo(NOW);
     }
 
     @Test

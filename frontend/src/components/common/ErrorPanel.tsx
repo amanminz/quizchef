@@ -12,10 +12,14 @@ export interface ErrorPanelProps {
  * The standard way to show a failure, with an optional retry. Every
  * `ApiError` now carries a correlation id (Phase 3 PR #2) — shown here in
  * small print so this doubles as the "fatal error dialog" correlation
- * display, since `ErrorBoundary` renders through this same component.
+ * display, since `ErrorBoundary` renders through this same component. A
+ * 429 (Phase 3 PR #3) gets its own retry-timing line instead of the
+ * generic message alone.
  */
 export function ErrorPanel({ title = "Something went wrong", error, onRetry }: ErrorPanelProps) {
   const correlationId = isApiClientError(error) ? error.correlationId : null;
+  const retryAfterSeconds =
+    isApiClientError(error) && error.status === 429 ? error.retryAfterSeconds : null;
 
   return (
     <div
@@ -25,6 +29,11 @@ export function ErrorPanel({ title = "Something went wrong", error, onRetry }: E
       <AlertTriangle aria-hidden className="mb-3 h-8 w-8 text-destructive" />
       <h2 className="text-lg font-semibold">{title}</h2>
       <p className="mt-1 max-w-md text-sm text-muted-foreground">{errorMessage(error)}</p>
+      {retryAfterSeconds !== null && (
+        <p className="mt-1 text-sm text-muted-foreground">
+          Too many requests — try again in {retryAfterSeconds}s.
+        </p>
+      )}
       {correlationId && (
         <p className="mt-2 text-xs text-muted-foreground/70">Reference: {correlationId}</p>
       )}

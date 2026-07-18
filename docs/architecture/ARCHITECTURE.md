@@ -893,11 +893,19 @@ JWT authentication.
 
 Role-based authorization.
 
-Input validation.
+Input validation, including request body and JSON string size caps.
 
 Output sanitization.
 
-Rate limiting (future).
+Rate limiting (RFC-011) — identity-aware where possible, IP-based for anonymous traffic, backed by an in-memory token bucket per route.
+
+Explicit HTTP security headers (CSP, frame options, referrer policy, permissions policy, HSTS) — never left to framework defaults.
+
+CORS — an explicit allowlist, required in every profile beyond local development (no insecure fallback, the same discipline as the JWT signing secret).
+
+STOMP destination well-formedness validation — real per-session authorization remains future work, tied to the inbound STOMP command channel (RFC-005).
+
+Security-specific operational events (RFC-011), extending the observability platform's event logging (RFC-010).
 
 ---
 

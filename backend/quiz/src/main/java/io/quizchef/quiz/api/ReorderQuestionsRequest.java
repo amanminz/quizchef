@@ -2,6 +2,7 @@ package io.quizchef.quiz.api;
 
 import io.quizchef.quiz.application.ReorderQuizQuestionsCommand;
 import jakarta.validation.constraints.NotEmpty;
+import jakarta.validation.constraints.Size;
 import java.util.List;
 import java.util.UUID;
 
@@ -10,7 +11,7 @@ import java.util.UUID;
  * current questions, each once — the aggregate rejects anything else.
  */
 public record ReorderQuestionsRequest(
-        @NotEmpty List<UUID> questionIds
+        @NotEmpty @Size(max = 200) List<UUID> questionIds
 ) {
 
     ReorderQuizQuestionsCommand toCommand(UUID quizId) {

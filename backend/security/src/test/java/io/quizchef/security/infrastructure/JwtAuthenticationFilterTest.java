@@ -121,12 +121,18 @@ class JwtAuthenticationFilterTest {
         request.addHeader("Authorization", "Bearer broken-token");
         when(tokenValidator.validate("broken-token")).thenThrow(InvalidTokenException.malformed());
 
-        filter.doFilter(request, response, chain);
+        try (LogCapture capture = new LogCapture(JwtAuthenticationFilter.class)) {
+            filter.doFilter(request, response, chain);
 
-        assertThat(chain.getRequest()).as("chain must stop").isNull();
-        assertThat(response.getStatus()).isEqualTo(401);
-        assertThat(response.getContentAsString()).contains("identity.token.invalid");
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+            assertThat(chain.getRequest()).as("chain must stop").isNull();
+            assertThat(response.getStatus()).isEqualTo(401);
+            assertThat(response.getContentAsString()).contains("identity.token.invalid");
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+            assertThat(capture.messages()).anySatisfy(message -> {
+                assertThat(message).contains("security.invalid_jwt");
+                assertThat(message).contains("identity.token.invalid");
+            });
+        }
     }
 
     @Test
@@ -140,11 +146,14 @@ class JwtAuthenticationFilterTest {
         when(sessionQueryService.activeSessionRoles(sessionId, identityId))
                 .thenReturn(Optional.empty());
 
-        filter.doFilter(request, response, chain);
+        try (LogCapture capture = new LogCapture(JwtAuthenticationFilter.class)) {
+            filter.doFilter(request, response, chain);
 
-        assertThat(chain.getRequest()).isNull();
-        assertThat(response.getStatus()).isEqualTo(401);
-        assertThat(response.getContentAsString()).contains("identity.session.revoked");
-        assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+            assertThat(chain.getRequest()).isNull();
+            assertThat(response.getStatus()).isEqualTo(401);
+            assertThat(response.getContentAsString()).contains("identity.session.revoked");
+            assertThat(SecurityContextHolder.getContext().getAuthentication()).isNull();
+            assertThat(capture.messages()).anyMatch(message -> message.contains("security.invalid_jwt"));
+        }
     }
 }
