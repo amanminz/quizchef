@@ -9,10 +9,8 @@ import { AnswerRevealCard } from "@/features/gameplay/components/AnswerRevealCar
 import { CompletionBanner } from "@/features/gameplay/components/CompletionBanner";
 import { CountdownOverlay } from "@/features/gameplay/components/CountdownOverlay";
 import { GameConnectionBanner } from "@/features/gameplay/components/GameConnectionBanner";
-import { LeaderboardTable } from "@/features/gameplay/components/LeaderboardTable";
-import { PerformanceMetric } from "@/features/gameplay/components/PerformanceMetric";
+import { PersonalRankCard } from "@/features/gameplay/components/PersonalRankCard";
 import { PlayAgainCard } from "@/features/gameplay/components/PlayAgainCard";
-import { Podium } from "@/features/gameplay/components/Podium";
 import { QuestionResult } from "@/features/gameplay/components/QuestionResult";
 import {
   JoinSessionForm,
@@ -39,7 +37,10 @@ export function PlaySessionPage() {
   const player = usePlayerGameplay(pin);
 
   const onJoin = async (values: JoinSessionFormValues) => {
-    await player.join({ displayName: values.displayName, preferredLanguage: values.preferredLanguage });
+    await player.join({
+      displayName: values.displayName,
+      preferredLanguage: values.preferredLanguage
+    });
   };
 
   if (!player.hasJoined) {
@@ -89,7 +90,9 @@ export function PlaySessionPage() {
 }
 
 function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGameplay> }) {
-  const { isExpired } = useCountdown(player.question?.phase === "QUESTION_OPEN" ? player.question.endsAt : null);
+  const { isExpired } = useCountdown(
+    player.question?.phase === "QUESTION_OPEN" ? player.question.endsAt : null
+  );
 
   switch (player.phase) {
     case "LOBBY":
@@ -142,16 +145,19 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
         </div>
       );
     case "LEADERBOARD":
-      if (player.resultsError != null) {
+      // Participant privacy: only the player's own rank and score render
+      // here — the shared leaderboard belongs to the host's projected
+      // screen, and this device never even fetches it.
+      if (player.personalResultError != null) {
         return (
           <ErrorPanel
-            title="Leaderboard unavailable"
-            error={player.resultsError}
-            onRetry={() => void player.refetchResults()}
+            title="Your result is unavailable"
+            error={player.personalResultError}
+            onRetry={() => void player.refetchPersonalResult()}
           />
         );
       }
-      if (!player.results) {
+      if (!player.personalResult) {
         return (
           <div className="flex justify-center py-16">
             <Spinner size="lg" className="text-primary" />
@@ -159,33 +165,23 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
         );
       }
       return (
-        <div className="flex flex-col gap-4">
-          {player.ownEntry && (
-            <p className="text-center text-sm text-muted-foreground">
-              You're in <span className="font-semibold text-foreground">#{player.ownEntry.rank}</span>{" "}
-              with{" "}
-              <span className="font-mono font-semibold text-foreground">{player.ownEntry.score}</span>{" "}
-              points.
-            </p>
-          )}
-          <LeaderboardTable
-            entries={player.results.entries ?? []}
-            ownParticipantId={player.participantId}
-            caption="Current standings"
-          />
-        </div>
+        <PersonalRankCard
+          result={player.personalResult}
+          scoreDelta={player.scoreDelta}
+          rankDelta={player.rankDelta}
+        />
       );
     case "FINISHED":
-      if (player.resultsError != null) {
+      if (player.personalResultError != null) {
         return (
           <ErrorPanel
-            title="Results unavailable"
-            error={player.resultsError}
-            onRetry={() => void player.refetchResults()}
+            title="Your result is unavailable"
+            error={player.personalResultError}
+            onRetry={() => void player.refetchPersonalResult()}
           />
         );
       }
-      if (!player.results) {
+      if (!player.personalResult) {
         return (
           <div className="flex justify-center py-16">
             <Spinner size="lg" className="text-primary" />
@@ -195,18 +191,7 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       return (
         <div className="flex flex-col gap-6">
           <CompletionBanner />
-          <Podium entries={player.results.entries ?? []} />
-          {player.ownEntry && (
-            <div className="grid grid-cols-2 gap-3">
-              <PerformanceMetric label="Your rank" value={`#${player.ownEntry.rank}`} />
-              <PerformanceMetric label="Your score" value={player.ownEntry.score ?? 0} />
-            </div>
-          )}
-          <LeaderboardTable
-            entries={player.results.entries ?? []}
-            ownParticipantId={player.participantId}
-            caption="Final standings"
-          />
+          <PersonalRankCard result={player.personalResult} variant="final" />
           <PlayAgainCard role="participant" />
         </div>
       );

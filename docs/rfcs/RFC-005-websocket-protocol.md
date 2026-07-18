@@ -111,7 +111,7 @@ The reserved gameplay vocabulary now has real producers and payloads. `SessionRe
 QuestionStartedEvent   → question.started   { questionId, endsAt, durationSeconds }
 QuestionClosedEvent    → question.closed    { questionId }
 AnswerRevealedEvent    → answer.revealed    { questionId, correctOptionIds }
-LeaderboardUpdatedEvent→ leaderboard.updated{ entries: [ { participantId, displayName, score, rank } ] }
+LeaderboardUpdatedEvent→ leaderboard.updated{ entries: [] }  (pure notification since the Live Event UX privacy split — standings are role-scoped READS: host GET /results, participant GET .../participants/{id}/result; the payload shape is unchanged, its rows are always empty)
 AnswerSubmittedEvent   → participant.answer.accepted  { questionId }
 SessionFinishedEvent   → session.finished
 ```

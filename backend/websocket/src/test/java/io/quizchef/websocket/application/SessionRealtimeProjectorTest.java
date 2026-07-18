@@ -100,6 +100,22 @@ class SessionRealtimeProjectorTest {
     }
 
     @Test
+    void leaderboardBroadcastCarriesNoStandings() {
+        // The session topic reaches every participant device, and standings
+        // are role-scoped reads (live-event privacy): even when the domain
+        // event carries ranked entries, the broadcast is a pure notification.
+        projector.on(new io.quizchef.session.domain.event.LeaderboardUpdatedEvent(
+                sessionId,
+                java.util.List.of(new io.quizchef.session.domain.LeaderboardEntry(
+                        UUID.randomUUID(), "Ann", 750, 1)),
+                NOW));
+
+        assertThat(publisher.broadcasts).hasSize(1);
+        assertThat(((io.quizchef.websocket.api.event.LeaderboardPayload)
+                publisher.broadcasts.getFirst().payload()).entries()).isEmpty();
+    }
+
+    @Test
     void sendsTheAnswerAcknowledgementToTheSubmittingParticipantOnly() {
         UUID questionId = UUID.randomUUID();
         projector.on(new io.quizchef.session.domain.event.AnswerSubmittedEvent(

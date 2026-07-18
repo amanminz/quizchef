@@ -14,14 +14,15 @@ import { FinalStatistics } from "@/features/gameplay/components/FinalStatistics"
 import { GameConnectionBanner } from "@/features/gameplay/components/GameConnectionBanner";
 import { LeaderboardTable } from "@/features/gameplay/components/LeaderboardTable";
 import { PlayAgainCard } from "@/features/gameplay/components/PlayAgainCard";
-import { Podium } from "@/features/gameplay/components/Podium";
+import { PodiumReveal } from "@/features/gameplay/components/PodiumReveal";
 import { QuestionCard } from "@/features/gameplay/components/QuestionCard";
 import { QuestionSkeleton } from "@/features/gameplay/components/QuestionSkeleton";
 import { QuestionTransition } from "@/features/gameplay/components/QuestionTransition";
 import { SessionSummaryCard } from "@/features/gameplay/components/SessionSummaryCard";
-import { WinnerCard } from "@/features/gameplay/components/WinnerCard";
 import { useGameHost } from "@/features/gameplay/hooks/useGameHost";
+import { PresentationToggle } from "@/features/sessions/components/PresentationToggle";
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
+import { usePresentationMode } from "@/features/sessions/hooks/usePresentationMode";
 import { useQuizTitle } from "@/features/sessions/hooks/useQuizTitle";
 
 /**
@@ -36,22 +37,38 @@ export function SessionLivePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const host = useGameHost(sessionId);
   const quizTitle = useQuizTitle(host.session?.publishedQuizVersionId);
+  const presentation = usePresentationMode();
+
+  const advanceAction = host.canAdvance ? (
+    <Button onClick={() => void host.nextStep()} isLoading={host.isAdvancing}>
+      {host.nextStepLabel}
+    </Button>
+  ) : undefined;
 
   return (
-    <PageContainer>
-      <WorkflowHeader
-        title={quizTitle ?? "Live session"}
-        backHref="/sessions"
-        backLabel="Back to sessions"
-        status={<SessionStatusBadge state={host.session?.state} />}
-        actions={
-          host.canAdvance ? (
-            <Button onClick={() => void host.nextStep()} isLoading={host.isAdvancing}>
-              {host.nextStepLabel}
-            </Button>
-          ) : undefined
-        }
-      />
+    <PageContainer className={presentation.active ? "max-w-none px-8" : undefined}>
+      {presentation.active ? (
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <h1 className="text-2xl font-bold tracking-tight">{quizTitle ?? "Live session"}</h1>
+          <div className="flex items-center gap-2">
+            {advanceAction}
+            <PresentationToggle presentation={presentation} />
+          </div>
+        </div>
+      ) : (
+        <WorkflowHeader
+          title={quizTitle ?? "Live session"}
+          backHref="/sessions"
+          backLabel="Back to sessions"
+          status={<SessionStatusBadge state={host.session?.state} />}
+          actions={
+            <div className="flex items-center gap-2">
+              {advanceAction}
+              <PresentationToggle presentation={presentation} />
+            </div>
+          }
+        />
+      )}
 
       <GameConnectionBanner status={host.connectionStatus} />
       <div aria-live="polite" role="status" className="sr-only">
@@ -183,14 +200,19 @@ function HostGameplayBody({
       return (
         <div className="flex flex-col gap-6">
           <CompletionBanner />
-          <WinnerCard winner={host.results.entries?.[0]} />
-          <Podium entries={host.results.entries ?? []} />
-          <FinalStatistics results={host.results} />
-          <LeaderboardTable entries={host.results.entries ?? []} caption="Final standings" />
-          <SessionSummaryCard
-            quizTitle={quizTitle}
-            results={host.results}
-            actions={<PlayAgainCard role="host" />}
+          <PodiumReveal
+            sessionId={host.session?.sessionId ?? ""}
+            entries={host.results.entries ?? []}
+            footer={
+              <div className="flex flex-col gap-6">
+                <FinalStatistics results={host.results} />
+                <SessionSummaryCard
+                  quizTitle={quizTitle}
+                  results={host.results}
+                  actions={<PlayAgainCard role="host" />}
+                />
+              </div>
+            }
           />
         </div>
       );

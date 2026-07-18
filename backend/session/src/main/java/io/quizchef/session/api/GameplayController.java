@@ -68,16 +68,21 @@ public class GameplayController {
 
     @GetMapping("/{id}/results")
     @Operation(
-            summary = "Read the session's standings",
-            description = "The ranked standings (the same rows leaderboard.updated broadcasts) with "
-                    + "the counts a results screen frames them with — interim between questions and "
-                    + "final after FINISHED share this one read. Open by session id, like the summary "
-                    + "and current-question reads. Phase-gated for the same ADR-006 reason correctness "
-                    + "is: readable only once the current question's answer is revealed (or the "
-                    + "leaderboard is showing, or the session has finished) — standings mid-question "
-                    + "would leak who answered correctly before the reveal.")
+            summary = "Read the session's full standings (host only)",
+            description = "The ranked standings with the counts a results screen frames them with — "
+                    + "interim between questions and final after FINISHED share this one read. Host "
+                    + "only since the live-event privacy split: every name, score, and rank is the "
+                    + "host's projection; a participant device reads its own row through the "
+                    + "personal-result endpoint instead. Phase-gated for the same ADR-006 reason "
+                    + "correctness is: readable only once the current question's answer is revealed "
+                    + "(or the leaderboard is showing, or the session has finished).",
+            security = @SecurityRequirement(name = "bearerAuth"))
     @ApiResponses({
             @ApiResponse(responseCode = "200", description = "The current standings"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
             @ApiResponse(responseCode = "404", description = "Unknown session",
                     content = @Content(schema = @Schema(implementation = ApiError.class))),
             @ApiResponse(responseCode = "409", description = "Results not readable yet "
@@ -85,7 +90,31 @@ public class GameplayController {
                     content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
     public SessionResultsResponse results(@PathVariable UUID id) {
-        return SessionResultsResponse.from(sessionResultsQueryService.results(id));
+        return SessionResultsResponse.from(
+                sessionResultsQueryService.results(currentUserProvider.currentUser(), id));
+    }
+
+    @GetMapping("/{id}/participants/{participantId}/result")
+    @Operation(
+            summary = "Read one participant's own result",
+            description = "The participant's rank, score, and the counts that frame them — and "
+                    + "nothing about anyone else. Open like the summary and current-question reads: "
+                    + "the audience is anonymous guests, and the unguessable session and participant "
+                    + "ids gate it — the same trust answer submission places in the participant id. "
+                    + "Phase-gated exactly like the host standings read.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The participant's own result"),
+            @ApiResponse(responseCode = "404", description = "Unknown session, or no such participant "
+                    + "in it (session.participant.not-found)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Results not readable yet "
+                    + "(session.results.not-available)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public ParticipantResultResponse participantResult(@PathVariable UUID id,
+                                                       @PathVariable UUID participantId) {
+        return ParticipantResultResponse.from(
+                sessionResultsQueryService.personalResult(id, participantId));
     }
 
     @GetMapping("/{id}/questions/current")

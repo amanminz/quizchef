@@ -1,4 +1,5 @@
 import type {
+  ParticipantResultResponse,
   CurrentQuestionResponse,
   LeaderboardEntryDto,
   ParticipantSessionResponse,
@@ -94,6 +95,23 @@ export function sessionResultsResponse(
       leaderboardEntry({ displayName: "Ann", score: 750, rank: 1 }),
       leaderboardEntry({ displayName: "Ben", score: 320, rank: 2 })
     ],
+    ...overrides
+  };
+}
+
+export function participantResultResponse(
+  overrides: Partial<ParticipantResultResponse> = {}
+): ParticipantResultResponse {
+  return {
+    sessionId: nextId("session"),
+    state: "IN_PROGRESS",
+    currentPhase: "LEADERBOARD",
+    totalQuestions: 2,
+    participantCount: 2,
+    participantId: "participant-me",
+    displayName: "Aman",
+    rank: 2,
+    score: 320,
     ...overrides
   };
 }

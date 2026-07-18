@@ -34,11 +34,14 @@ public final class PublicEndpoints {
             // revealed) — players are anonymous; the unguessable session id
             // gates it, same rationale as the summary read above.
             "/api/v1/sessions/*/questions/current",
-            // The standings read (phase-gated server-side; interim and final
-            // results) — same audience and rationale. Deliberately NOT the
-            // host's POST /leaderboard path: that is a phase-transitioning
-            // command and stays authenticated.
-            "/api/v1/sessions/*/results"
+            // One participant's own result (phase-gated server-side; interim
+            // and final share it) — same anonymous audience; the unguessable
+            // session AND participant ids gate it, the same trust the answer
+            // endpoint places in the participant id. The full-standings
+            // GET /results is deliberately absent: every name, score, and
+            // rank is the host's projection and requires the hosting
+            // identity (live-event privacy).
+            "/api/v1/sessions/*/participants/*/result"
     };
 
     private PublicEndpoints() {

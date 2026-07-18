@@ -88,3 +88,15 @@ done
 **Database migrations**: Flyway runs automatically on backend startup (`fail-on-missing-locations: true`), against the `quizchef` schema. A failed migration fails startup — the backend never comes up in a half-migrated state. Check `flyway_schema_history` in Postgres for the applied version.
 
 **Restarting after a bad deploy**: `docker compose up -d backend --force-recreate` after fixing the image; the healthcheck's `start_period: 40s` gives migrations and JVM warmup room before the container is judged unhealthy.
+
+## Live-event checklist (host)
+
+Before a projected event (RFC-004 role-scoped results, Live Event UX):
+
+1. Open the lobby on the host laptop; check the readiness panel: `Realtime connected`, `Quiz ready`, question count, players joined.
+2. `Enter Presentation Mode` (button, host lobby/live screens) — chrome hides and the browser requests fullscreen; if the browser refuses, the layout still applies and a hint suggests the browser's own fullscreen shortcut. A screen wake lock keeps the projector awake where supported.
+3. Share the code via `Copy code` or `Copy join message` (includes the participant URL).
+4. Join at least two phones; confirm names appear on the participant wall and the count updates live.
+5. `Start session` asks for confirmation and shows the late-join setting — read it before confirming.
+6. During play: participants see only their own rank (never the leaderboard); the host screen shows full standings. If the realtime banner appears, gameplay is unaffected; wait for `Connection restored.`
+7. At the finish, the podium reveals 3rd → 2nd → 1st (Skip available; Replay is display-only). A refresh renders the completed results from the backend — it never replays commands.

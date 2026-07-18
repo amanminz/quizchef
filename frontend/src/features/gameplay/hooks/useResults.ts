@@ -4,7 +4,12 @@ import { sessionApi } from "@/api/sessionApi";
 import { gameplayKeys } from "@/features/gameplay/queryKeys";
 import type { GameplayPhase } from "@/features/gameplay/types";
 
-const RESULTS_PHASES: readonly GameplayPhase[] = ["ANSWER_REVEALED", "LEADERBOARD", "FINISHED"];
+/** The phases in which the server will answer a results read. */
+export const RESULTS_PHASES: readonly GameplayPhase[] = [
+  "ANSWER_REVEALED",
+  "LEADERBOARD",
+  "FINISHED"
+];
 
 /**
  * The session's standings — interim (reveal/leaderboard) and final

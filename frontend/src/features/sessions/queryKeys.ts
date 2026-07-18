@@ -9,5 +9,7 @@
 export const sessionKeys = {
   all: ["sessions"] as const,
   details: () => [...sessionKeys.all, "detail"] as const,
-  detail: (sessionId: string) => [...sessionKeys.details(), sessionId] as const
+  detail: (sessionId: string) => [...sessionKeys.details(), sessionId] as const,
+  /** The host's roster read (names in join order) — the lobby wall's data. */
+  roster: (sessionId: string) => [...sessionKeys.all, "roster", sessionId] as const
 };
