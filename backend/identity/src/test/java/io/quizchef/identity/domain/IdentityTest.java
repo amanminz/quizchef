@@ -1,6 +1,7 @@
 package io.quizchef.identity.domain;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIllegalStateException;
 
 import org.junit.jupiter.api.Test;
 
@@ -52,5 +53,31 @@ class IdentityTest {
         assertThat(reference.identityId()).isEqualTo(identity.getId());
         assertThat(reference.identityType()).isEqualTo(IdentityType.GUEST);
         assertThat(reference.isGuest()).isTrue();
+    }
+
+    @Test
+    void shouldSeedEveryRegisteredIdentityWithTheUserRole() {
+        assertThat(Identity.registered().roles()).containsExactly(Role.USER);
+        assertThat(Identity.registered().hasRole(Role.USER)).isTrue();
+    }
+
+    @Test
+    void shouldSeedGuestsWithNoRoles() {
+        assertThat(Identity.guest().roles()).isEmpty();
+    }
+
+    @Test
+    void shouldGrantRolesAdditivelyAndIdempotently() {
+        Identity identity = Identity.registered();
+
+        assertThat(identity.grantRole(Role.QUIZ_MASTER)).as("first grant changes state").isTrue();
+        assertThat(identity.grantRole(Role.QUIZ_MASTER)).as("repeat grant is a no-op").isFalse();
+        assertThat(identity.roles()).containsExactlyInAnyOrder(Role.USER, Role.QUIZ_MASTER);
+    }
+
+    @Test
+    void shouldRefuseGrantingRolesToGuests() {
+        assertThatIllegalStateException()
+                .isThrownBy(() -> Identity.guest().grantRole(Role.QUIZ_MASTER));
     }
 }

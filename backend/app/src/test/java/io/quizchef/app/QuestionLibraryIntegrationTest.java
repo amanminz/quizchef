@@ -458,7 +458,11 @@ class QuestionLibraryIntegrationTest {
     }
 
     private String quizMasterToken() {
-        Identity identity = identityRepository.save(Identity.registered());
+        // Roles are durable (Phase 3): the grant must be persisted — the
+        // token claim alone no longer authorizes anything.
+        Identity identity = Identity.registered();
+        identity.grantRole(Role.QUIZ_MASTER);
+        identityRepository.save(identity);
         IdentitySession session = identitySessionRepository.save(
                 IdentitySession.start(identity.getId(), "JUnit", "127.0.0.1", null));
         return tokenGenerator.generate(identity.getId(), session.getId(), IdentityType.REGISTERED,

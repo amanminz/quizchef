@@ -11,6 +11,7 @@ import io.quizchef.identity.domain.Identity;
 import io.quizchef.identity.domain.IdentitySession;
 import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.identity.domain.Permission;
+import io.quizchef.identity.domain.Role;
 import io.quizchef.identity.domain.event.IdentityAuthorizedEvent;
 import io.quizchef.identity.infrastructure.jwt.JwtTokenGenerator;
 import io.quizchef.identity.infrastructure.persistence.IdentityRepository;
@@ -119,20 +120,48 @@ class AccessControlIntegrationTest {
 
     @Test
     void shouldForbidAuthenticatedIdentityWithoutPermission() throws Exception {
-        Identity identity = identityRepository.save(Identity.registered());
+        // Roles are durable now: a registered identity always holds USER, so
+        // the genuinely role-less authenticated caller is a guest — guests
+        // hold no roles, ever (RFC-002). A stripped-down *claim* would no
+        // longer matter either way: authorization reads persisted roles.
+        Identity guest = identityRepository.save(Identity.guest());
         IdentitySession session = identitySessionRepository.save(
-                IdentitySession.start(identity.getId(), "JUnit", "127.0.0.1", null));
-        String roleLessToken = tokenGenerator.generate(
-                identity.getId(), session.getId(), IdentityType.REGISTERED, Set.of()).token();
+                IdentitySession.start(guest.getId(), "JUnit", "127.0.0.1", null));
+        String guestToken = tokenGenerator.generate(
+                guest.getId(), session.getId(), IdentityType.GUEST, Set.of()).token();
 
         mockMvc.perform(get("/api/v1/users/me")
-                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + roleLessToken))
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + guestToken))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.code").value("auth.permission.denied"));
 
         assertThat(eventCapture.authorized)
                 .as("denied authorization must not publish an event")
                 .isEmpty();
+    }
+
+    @Test
+    void shouldAuthorizeFromPersistedRolesNotTokenClaims() throws Exception {
+        // A token minted with an inflated QUIZ_MASTER claim authorizes only
+        // what the identity durably holds — the claim is not the authority.
+        Identity identity = identityRepository.save(Identity.registered());
+        IdentitySession session = identitySessionRepository.save(
+                IdentitySession.start(identity.getId(), "JUnit", "127.0.0.1", null));
+        String inflatedToken = tokenGenerator.generate(
+                identity.getId(), session.getId(), IdentityType.REGISTERED,
+                Set.of(Role.USER, Role.QUIZ_MASTER)).token();
+
+        mockMvc.perform(post("/api/v1/quizzes")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + inflatedToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "defaultLanguage": "en",
+                                  "localization": {"languageCode": "en", "title": "Nope"}
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.code").value("auth.permission.denied"));
     }
 
     private String registerAndLogin() throws Exception {

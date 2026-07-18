@@ -8,13 +8,18 @@ import java.util.UUID;
 
 /**
  * What an authenticated caller sees about themselves: their identity,
- * roles, and the permissions derived from them. No PII.
+ * roles, the permissions derived from them, and — for a registered user —
+ * their own profile basics. The caller's own data is not "PII leakage";
+ * it is theirs (USER_PROFILE_READ gates the read). Null profile fields
+ * for identities without a profile (guests).
  */
 public record CurrentUserView(
         UUID identityId,
         IdentityType identityType,
         Set<Role> roles,
-        Set<Permission> permissions
+        Set<Permission> permissions,
+        String displayName,
+        String email
 ) {
 
     public CurrentUserView {

@@ -13,6 +13,7 @@ import io.quizchef.identity.infrastructure.jwt.IdentityToken;
 import io.quizchef.identity.infrastructure.jwt.InvalidTokenException;
 import io.quizchef.identity.infrastructure.jwt.JwtTokenValidator;
 import java.time.Instant;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.AfterEach;
@@ -73,7 +74,8 @@ class JwtAuthenticationFilterTest {
         when(tokenValidator.validate("valid-token")).thenReturn(new IdentityToken(
                 identityId, sessionId, IdentityType.REGISTERED, Set.of(Role.USER),
                 Instant.parse("2026-07-14T11:00:00Z")));
-        when(sessionQueryService.isSessionActive(sessionId, identityId)).thenReturn(true);
+        when(sessionQueryService.activeSessionRoles(sessionId, identityId))
+                .thenReturn(Optional.of(Set.of(Role.USER)));
 
         filter.doFilter(request, response, chain);
 
@@ -85,6 +87,29 @@ class JwtAuthenticationFilterTest {
         assertThat(authentication.getAuthorities())
                 .extracting("authority")
                 .containsExactly("ROLE_USER");
+    }
+
+    @Test
+    void shouldAuthorizeFromPersistedRolesNotTheTokenClaim() throws Exception {
+        // The token was issued before a promotion: its claim says USER, the
+        // durable roles now include QUIZ_MASTER — persisted roles win.
+        UUID identityId = UUID.randomUUID();
+        UUID sessionId = UUID.randomUUID();
+        request.addHeader("Authorization", "Bearer pre-promotion-token");
+        when(tokenValidator.validate("pre-promotion-token")).thenReturn(new IdentityToken(
+                identityId, sessionId, IdentityType.REGISTERED, Set.of(Role.USER),
+                Instant.parse("2026-07-14T11:00:00Z")));
+        when(sessionQueryService.activeSessionRoles(sessionId, identityId))
+                .thenReturn(Optional.of(Set.of(Role.USER, Role.QUIZ_MASTER)));
+
+        filter.doFilter(request, response, chain);
+
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        assertThat(authentication.getPrincipal()).isEqualTo(new IdentityPrincipal(
+                identityId, IdentityType.REGISTERED, Set.of(Role.USER, Role.QUIZ_MASTER)));
+        assertThat(authentication.getAuthorities())
+                .extracting("authority")
+                .containsExactlyInAnyOrder("ROLE_USER", "ROLE_QUIZ_MASTER");
     }
 
     @Test
@@ -108,7 +133,8 @@ class JwtAuthenticationFilterTest {
         when(tokenValidator.validate("stale-token")).thenReturn(new IdentityToken(
                 identityId, sessionId, IdentityType.REGISTERED, Set.of(Role.USER),
                 Instant.parse("2026-07-14T11:00:00Z")));
-        when(sessionQueryService.isSessionActive(sessionId, identityId)).thenReturn(false);
+        when(sessionQueryService.activeSessionRoles(sessionId, identityId))
+                .thenReturn(Optional.empty());
 
         filter.doFilter(request, response, chain);
 

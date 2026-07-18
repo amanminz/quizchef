@@ -248,6 +248,12 @@ class SessionOrchestrationIntegrationTest {
     }
 
     private String tokenFor(Identity identity, Role... roles) {
+        // Roles are durable (Phase 3): the grant must be persisted — the
+        // token claim alone no longer authorizes anything.
+        for (Role role : roles) {
+            identity.grantRole(role);
+        }
+        identityRepository.save(identity);
         IdentitySession session = identitySessionRepository.save(
                 IdentitySession.start(identity.getId(), "JUnit", "127.0.0.1", null));
         return tokenGenerator.generate(identity.getId(), session.getId(), IdentityType.REGISTERED,

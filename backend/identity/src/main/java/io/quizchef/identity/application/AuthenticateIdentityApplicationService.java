@@ -37,12 +37,6 @@ public class AuthenticateIdentityApplicationService {
 
     private static final Logger log = LoggerFactory.getLogger(AuthenticateIdentityApplicationService.class);
 
-    /**
-     * Until role assignment exists, every registered identity carries the
-     * implicit USER authority (documented in RFC-002).
-     */
-    private static final Set<Role> IMPLICIT_AUTHORITIES = Set.of(Role.USER);
-
     private final UserProfileRepository userProfileRepository;
     private final CredentialsRepository credentialsRepository;
     private final IdentityRepository identityRepository;
@@ -103,15 +97,19 @@ public class AuthenticateIdentityApplicationService {
         IdentitySession session = identitySessionRepository.save(IdentitySession.start(
                 identity.getId(), command.userAgent(), command.ipAddress(), null));
 
+        // The token's roles claim reflects the durable roles at issuance;
+        // request-time authorization re-reads the persisted roles through
+        // the session check, so later grants apply without a new login.
+        Set<Role> roles = identity.roles();
         IssuedToken issued = tokenGenerator.generate(
-                identity.getId(), session.getId(), identity.getIdentityType(), IMPLICIT_AUTHORITIES);
+                identity.getId(), session.getId(), identity.getIdentityType(), roles);
 
         eventPublisher.publish(new IdentityAuthenticatedEvent(identity.reference(), clock.instant()));
         log.info("Identity {} authenticated, session {}", identity.getId(), session.getId());
 
         return new AuthenticationResult(
                 identity.getId(), profile.getDisplayName(), issued.token(), issued.expiresAt(),
-                null, IMPLICIT_AUTHORITIES);
+                null, roles);
     }
 
     private void revokeActiveSessions(Identity identity) {
