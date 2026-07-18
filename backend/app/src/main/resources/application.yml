@@ -63,6 +63,42 @@ quizchef:
       secret: ${JWT_SECRET}
       access-token-ttl: ${JWT_ACCESS_TOKEN_TTL:PT15M}
       audience: ${JWT_AUDIENCE:}
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS}
+    max-request-size-bytes: 262144
+    rate-limit:
+      default-rule:
+        capacity: 60
+        window: PT1M
+      # Map keys with spaces/slashes need bracket notation or Spring Boot's
+      # relaxed binding silently strips the special characters, mangling the
+      # key into something that never matches (caught by
+      # RateLimitingIntegrationTest before this comment existed).
+      rules:
+        "[POST /api/v1/auth/login]":
+          capacity: 5
+          window: PT1M
+        "[POST /api/v1/auth/register]":
+          capacity: 3
+          window: PT1M
+        "[POST /api/v1/sessions]":
+          capacity: 10
+          window: PT1M
+        "[POST /api/v1/sessions/{pin}/join]":
+          capacity: 10
+          window: PT1M
+        "[POST /api/v1/sessions/reconnect]":
+          capacity: 10
+          window: PT1M
+        "[POST /api/v1/sessions/{id}/answers]":
+          capacity: 20
+          window: PT10S
+        "[POST /api/v1/quizzes/{quizId}/publish]":
+          capacity: 10
+          window: PT1M
+        "[POST /api/v1/users/me/host-access]":
+          capacity: 3
+          window: PT1M
   storage:
     endpoint: ${MINIO_ENDPOINT}
     access-key: ${MINIO_ACCESS_KEY}
