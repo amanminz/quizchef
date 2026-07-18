@@ -12,6 +12,10 @@ export interface QuestionRowProps {
   isPending?: boolean;
   /** Optional leading slot — a drag handle, supplied by whatever composes reordering. */
   leading?: ReactNode;
+  /** Extra badges or links rendered with the metadata (status pill, edit link). */
+  meta?: ReactNode;
+  /** Disables the action and states why — e.g. a draft is not attachable yet. */
+  disabledReason?: string;
 }
 
 /**
@@ -19,7 +23,15 @@ export interface QuestionRowProps {
  * and a single action. Presentational and DnD-agnostic on purpose — the
  * questions page wraps it in whatever reorder mechanism it uses.
  */
-export function QuestionRow({ question, action, onAction, isPending, leading }: QuestionRowProps) {
+export function QuestionRow({
+  question,
+  action,
+  onAction,
+  isPending,
+  leading,
+  meta,
+  disabledReason
+}: QuestionRowProps) {
   const questionId = question.id ?? "";
 
   return (
@@ -28,6 +40,7 @@ export function QuestionRow({ question, action, onAction, isPending, leading }: 
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm font-medium">{question.title}</p>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
+          {meta}
           {question.difficulty && <DifficultyBadge difficulty={question.difficulty} />}
           {question.availableLanguages?.map((language) => (
             <LanguageChip key={language} language={language} />
@@ -38,12 +51,14 @@ export function QuestionRow({ question, action, onAction, isPending, leading }: 
             </span>
           ))}
         </div>
+        {disabledReason && <p className="mt-1 text-xs text-muted-foreground">{disabledReason}</p>}
       </div>
       <Button
         variant={action === "remove" ? "destructive" : "secondary"}
         size="sm"
         onClick={() => onAction(questionId)}
         isLoading={isPending}
+        disabled={disabledReason !== undefined}
       >
         {action === "add" ? "Add" : "Remove"}
       </Button>

@@ -2,7 +2,7 @@ import { useQueries } from "@tanstack/react-query";
 import { questionApi } from "@/api/questionApi";
 import { usePublishQuiz } from "@/features/quizzes/hooks/usePublishQuiz";
 import { useQuiz } from "@/features/quizzes/hooks/useQuiz";
-import { questionKeys } from "@/features/quizzes/queryKeys";
+import { questionKeys } from "@/features/questions/queryKeys";
 import type { QuestionResponse } from "@/types/api";
 
 /**
@@ -40,8 +40,7 @@ export function useQuizPublishing(quizId: string) {
   const languages = Array.from(
     new Set(
       questions.flatMap(
-        (question) =>
-          question.localizations?.map((localization) => localization.languageCode) ?? []
+        (question) => question.localizations?.map((localization) => localization.languageCode) ?? []
       )
     )
   ).filter((language): language is string => language !== undefined);
@@ -54,7 +53,9 @@ export function useQuizPublishing(quizId: string) {
   if (defaultLanguage && questions.length > 0) {
     const untranslated = questions.filter(
       (question) =>
-        !question.localizations?.some((localization) => localization.languageCode === defaultLanguage)
+        !question.localizations?.some(
+          (localization) => localization.languageCode === defaultLanguage
+        )
     );
     if (untranslated.length > 0) {
       validationWarnings.push(
