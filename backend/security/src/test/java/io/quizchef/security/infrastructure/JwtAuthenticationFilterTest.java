@@ -6,6 +6,7 @@ import static org.mockito.Mockito.when;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.json.JsonMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
+import io.quizchef.common.correlation.CorrelationKeys;
 import io.quizchef.identity.application.IdentitySessionQueryService;
 import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.identity.domain.Role;
@@ -22,6 +23,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.slf4j.MDC;
 import org.springframework.mock.web.MockFilterChain;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
@@ -56,6 +58,7 @@ class JwtAuthenticationFilterTest {
     @AfterEach
     void clearSecurityContext() {
         SecurityContextHolder.clearContext();
+        MDC.clear();
     }
 
     @Test
@@ -87,6 +90,7 @@ class JwtAuthenticationFilterTest {
         assertThat(authentication.getAuthorities())
                 .extracting("authority")
                 .containsExactly("ROLE_USER");
+        assertThat(MDC.get(CorrelationKeys.IDENTITY_ID_MDC_KEY)).isEqualTo(identityId.toString());
     }
 
     @Test
