@@ -190,6 +190,8 @@ Security
 
 WebSocket
 
+Platform
+
 Common
 
 └─────────────────────────────────────────────┘
@@ -513,6 +515,20 @@ Expected to generalize into a transport module (websocket, sse, mqtt) as deliver
 
 ---
 
+## Platform (RFC-010)
+
+Observability and operational readiness — orthogonal to every business module, and provably so: an ArchUnit rule and the absence of any business module's Gradle dependency on it both enforce that no feature reads a metric or branches on logging.
+
+Request correlation — a caller-supplied or generated correlation id and a per-request id, carried through SLF4J MDC for the lifetime of a request (this codebase runs each request synchronously on one thread, so no application or domain method signature ever carries a correlation parameter). Structured (JSON) logging, using Spring Boot's native support — no added logging framework.
+
+Operational domain-event logging — one thin listener per bounded context (identity, quiz, session, gameplay, participant), the same shape as the websocket module's realtime projector, turning meaningful domain transitions into log lines without becoming audit history.
+
+Backend-owned, in-process metrics (Micrometer, exposed through `/actuator/metrics`, no external exporter) for sessions, gameplay, and identity; realtime transport metrics and the realtime health indicator live in the websocket module itself, the one module that knows STOMP exists.
+
+Health, readiness, and liveness endpoints, and the correlation id every `ApiError` now carries so a client-side fatal error can be matched back to server logs.
+
+---
+
 ## Frontend (RFC-009)
 
 The React application, in `frontend/` — a client of the platform, never part of it: it renders state, submits commands, and receives projections (ADR-006). Business rules live on the server; any optimistic UI reconciles to server state.
@@ -833,9 +849,19 @@ Every request has
 
 Correlation ID
 
-User ID
+Request ID (unique per attempt, even when the correlation id is reused across a retry)
+
+Identity ID (once authenticated)
+
+Session ID / Quiz ID / Question ID (when the request is about one)
 
 Execution Time
+
+Structured (JSON, Elastic Common Schema) — Spring Boot's native structured logging, no added framework. All of the above ride SLF4J's MDC and are included automatically; they never travel as method parameters through application or domain code (RFC-010).
+
+Meaningful domain transitions (registration, login, host promotion; quiz/question lifecycle; session lifecycle; the gameplay phase machine; participant lifecycle) are logged as operational events, distinct from audit history, by the `platform` module.
+
+The one exception to "every log line has a correlation id from a request": the scheduled task that closes an expired question runs off any request, so it seeds a synthetic per-firing id instead.
 
 Never log
 
@@ -847,13 +873,15 @@ Secrets
 
 Tokens
 
+Answer correctness before reveal
+
 ---
 
 # 18. Error Handling
 
 Single global exception handler.
 
-Consistent API response format.
+Consistent API response format, including a correlation id on every error so a client-side report can be matched back to server logs.
 
 Never expose stack traces.
 

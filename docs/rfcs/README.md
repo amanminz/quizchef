@@ -17,6 +17,7 @@ Every RFC carries a `Status`. It answers the first question any reader has: **do
 - [RFC-007 Media](RFC-007-media-storage.md) — **Draft**
 - [RFC-008 Deployment](RFC-008-deployment.md) — **Draft**
 - [RFC-009 Frontend Architecture](RFC-009-frontend-architecture.md) — **Implemented** (React platform foundation; feature UIs build on it)
+- [RFC-010 Observability and Operational Readiness](RFC-010-observability-and-operational-readiness.md) — **Implemented** (correlation, structured logging, domain event logging, metrics, health/readiness, sanitized errors)
 
 ---
 
