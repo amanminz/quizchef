@@ -66,7 +66,7 @@ Backend service variables:
 | `JWT_SECRET` | Yes | At least 32 random characters; never use local/test placeholders. |
 | `JWT_ACCESS_TOKEN_TTL` | No | Defaults to `PT15M`. |
 | `JWT_AUDIENCE` | No | Optional audience claim. |
-| `CORS_ALLOWED_ORIGINS` | Yes | Frontend origin, for example `https://quizchef.example.com`. |
+| `CORS_ALLOWED_ORIGINS` | Yes | Frontend origin, for example `https://quizchef.example.com`. Governs both REST CORS and the WebSocket handshake — a wrong value leaves REST working while the realtime lobby connection is refused with 403. |
 | `MINIO_ENDPOINT` | Yes | S3-compatible endpoint. |
 | `MINIO_ACCESS_KEY` | Yes | Object storage access key. |
 | `MINIO_SECRET_KEY` | Yes | Object storage secret key. |
@@ -78,7 +78,7 @@ Frontend service variables:
 | --- | --- | --- |
 | `PORT` | No | Railway injects this automatically; the image defaults to `8080` for local/container Compose use. |
 | `VITE_API_BASE_URL` | Depends | Use the backend public origin when backend and frontend are separate domains. Leave empty only for same-origin deployments. |
-| `VITE_WS_URL` | Depends | Use `wss://<backend-domain>/ws/websocket` when frontend and backend are separate domains. Leave empty only for same-origin deployments. |
+| `VITE_WS_URL` | No | Optional override. When unset, the frontend derives `wss://<api-host>/ws/websocket` from `VITE_API_BASE_URL`; leave both empty only for same-origin deployments. |
 
 ## Deploying Backend
 
