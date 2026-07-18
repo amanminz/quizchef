@@ -18,6 +18,7 @@ Every RFC carries a `Status`. It answers the first question any reader has: **do
 - [RFC-008 Deployment](RFC-008-deployment.md) — **Draft**
 - [RFC-009 Frontend Architecture](RFC-009-frontend-architecture.md) — **Implemented** (React platform foundation; feature UIs build on it)
 - [RFC-010 Observability and Operational Readiness](RFC-010-observability-and-operational-readiness.md) — **Implemented** (correlation, structured logging, domain event logging, metrics, health/readiness, sanitized errors)
+- [RFC-011 Security Hardening and Abuse Prevention](RFC-011-security-hardening-and-abuse-prevention.md) — **Implemented** (security headers, CORS, rate limiting, STOMP destination validation, input validation, secrets audit)
 
 ---
 

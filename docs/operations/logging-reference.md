@@ -66,6 +66,21 @@ Every line below is INFO, one per event, logged by the named `platform`-module l
 
 ---
 
+## Security events (RFC-011)
+
+Operational signal — "why is this user getting blocked," "are we seeing join-code brute-forcing" — never audit/SIEM. Each is logged where the detecting code already lives, not centralized through an event listener unless that plumbing already existed in the right direction.
+
+| Event | Level | Logged by | Fields |
+|---|---|---|---|
+| `security.rate_limit_triggered` | WARN | `RateLimitingInterceptor` (`platform`) | `method`, `route`, `subject` (`identity:<id>` or `ip:<address>`) |
+| `security.oversized_request` | WARN | `MaxRequestSizeFilter` (`platform`) | `contentLength`, `maxAllowedBytes` |
+| `security.jwt_secret_validation_failed` | ERROR | `JwtSecretSafetyCheck` (`platform`, `prod` only) | — (fails startup) |
+| `security.invalid_jwt` | WARN | `JwtAuthenticationFilter` (`security`) | `reason` (the `ApiError` code — e.g. `identity.token.invalid`, `identity.session.revoked`) |
+| `security.invalid_stomp_destination` | WARN | `StompDestinationValidationInterceptor` (`websocket`) | `destination` |
+| `security.authorization_denied` | INFO | `IdentityEventLogger` (`platform`), listening to `IdentityAuthorizationDeniedEvent` published by `AuthorizationService` (`identity`) | `identityId`, `permission` |
+
+---
+
 ## Never log
 
 - Passwords, password hashes.
