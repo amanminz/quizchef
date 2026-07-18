@@ -1,4 +1,3 @@
-import type { QuestionLibraryFilters } from "@/api/questionApi";
 import type { QuizListFilters } from "@/api/quizApi";
 
 /**
@@ -12,11 +11,4 @@ export const quizKeys = {
   lists: () => [...quizKeys.all, "list"] as const,
   list: (filters: QuizListFilters) => [...quizKeys.lists(), filters] as const,
   detail: (quizId: string) => [...quizKeys.all, "detail", quizId] as const
-};
-
-export const questionKeys = {
-  all: ["questions"] as const,
-  libraries: () => [...questionKeys.all, "library"] as const,
-  library: (filters: QuestionLibraryFilters) => [...questionKeys.libraries(), filters] as const,
-  detail: (questionId: string) => [...questionKeys.all, "detail", questionId] as const
 };

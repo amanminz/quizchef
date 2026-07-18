@@ -98,7 +98,7 @@ frontend/src/
   layouts/    PublicLayout, DashboardLayout, Breadcrumbs (route-aware, not generic — see below)
   pages/      one component per route
   components/ common/ forms/ feedback/ navigation/ — generic only, nothing feature-specific
-  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/, sessions/, gameplay/, identity/)
+  features/   <name>/ — hooks/, components/, queryKeys.ts (PR #2 established this; quizzes/, sessions/, gameplay/, identity/, questions/ — the fifth module, Phase 3 PR #4A, RFC-013)
   theme/      tokens.css, uiPreferencesStore, useApplyTheme
   types/      api.gen.ts (generated), api.ts (aliases), protocol.ts (RFC-005, hand-written by design)
   utils/      cn, env, validation
@@ -124,6 +124,9 @@ React Router v7, data router in the app (`createBrowserRouter`), one exported ro
 /quizzes/:quizId           edit metadata               RequireAuth
 /quizzes/:quizId/questions compose (search + reorder)  RequireAuth
 /quizzes/:quizId/review    read-only summary + publish RequireAuth
+/questions                 Question Library            RequireAuth (added Phase 3 PR #4A, RFC-013)
+/questions/new             author a question           RequireAuth (quiz-launched via ?quizId=…, RFC-013)
+/questions/:questionId/edit edit a draft               RequireAuth (RFC-013)
 /sessions                  hosting dashboard           RequireAuth
 /sessions/new              create a session            RequireAuth
 /sessions/:sessionId       session details             RequireAuth

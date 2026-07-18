@@ -2,8 +2,10 @@ import { createBrowserRouter, type RouteObject } from "react-router-dom";
 import { RequireAuth } from "@/auth/RequireAuth";
 import { DashboardLayout } from "@/layouts/DashboardLayout";
 import { PublicLayout } from "@/layouts/PublicLayout";
+import { CreateQuestionPage } from "@/pages/CreateQuestionPage";
 import { CreateQuizPage } from "@/pages/CreateQuizPage";
 import { DashboardPage } from "@/pages/DashboardPage";
+import { EditQuestionPage } from "@/pages/EditQuestionPage";
 import { EditQuizMetadataPage } from "@/pages/EditQuizMetadataPage";
 import { HomePage } from "@/pages/HomePage";
 import { LoginPage } from "@/pages/LoginPage";
@@ -12,6 +14,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { PlayPage } from "@/pages/PlayPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { PlaySessionPage } from "@/pages/PlaySessionPage";
+import { QuestionLibraryPage } from "@/pages/QuestionLibraryPage";
 import { QuizQuestionsPage } from "@/pages/QuizQuestionsPage";
 import { QuizReviewPage } from "@/pages/QuizReviewPage";
 import { QuizzesPage } from "@/pages/QuizzesPage";
@@ -54,6 +57,9 @@ export const routes: RouteObject[] = [
           { path: "/quizzes/:quizId", element: <EditQuizMetadataPage /> },
           { path: "/quizzes/:quizId/questions", element: <QuizQuestionsPage /> },
           { path: "/quizzes/:quizId/review", element: <QuizReviewPage /> },
+          { path: "/questions", element: <QuestionLibraryPage /> },
+          { path: "/questions/new", element: <CreateQuestionPage /> },
+          { path: "/questions/:questionId/edit", element: <EditQuestionPage /> },
           { path: "/sessions", element: <SessionsPage /> },
           { path: "/sessions/new", element: <CreateSessionPage /> },
           { path: "/sessions/:sessionId", element: <SessionDetailsPage /> },

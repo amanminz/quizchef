@@ -1,5 +1,6 @@
 import { ChevronRight } from "lucide-react";
 import { Link, useLocation, useParams } from "react-router-dom";
+import { useQuestion } from "@/features/questions/hooks/useQuestion";
 import { useQuiz } from "@/features/quizzes/hooks/useQuiz";
 import { useSession } from "@/features/sessions/hooks/useSession";
 
@@ -15,6 +16,7 @@ const STATIC_LABELS: Record<string, string> = {
   quizzes: "Quizzes",
   sessions: "Sessions",
   questions: "Questions",
+  edit: "Edit",
   review: "Review",
   lobby: "Lobby",
   play: "Live"
@@ -28,9 +30,10 @@ const STATIC_LABELS: Record<string, string> = {
  */
 export function Breadcrumbs() {
   const location = useLocation();
-  const params = useParams<{ quizId?: string; sessionId?: string }>();
+  const params = useParams<{ quizId?: string; sessionId?: string; questionId?: string }>();
   const { data: quiz } = useQuiz(params.quizId);
   const { data: session } = useSession(params.sessionId);
+  const { data: question } = useQuestion(params.questionId);
 
   const segments = location.pathname.split("/").filter(Boolean);
   if (segments.length <= 1) {
@@ -52,9 +55,20 @@ export function Breadcrumbs() {
         label: session?.sessionPin ? `Session ${session.sessionPin}` : "Session",
         href: path
       });
+    } else if (segment === params.questionId) {
+      const questionTitle = question?.localizations?.find(
+        (localization) => localization.languageCode === question.defaultLanguage
+      )?.title;
+      crumbs.push({ label: questionTitle ?? "Question", href: path });
     } else if (segment === "new") {
-      // "new" appears under both /quizzes and /sessions.
-      crumbs.push({ label: segments[0] === "sessions" ? "New Session" : "New Quiz", href: path });
+      // "new" appears under /quizzes, /sessions, and /questions.
+      const newLabels: Record<string, string> = {
+        sessions: "New Session",
+        questions: "New Question"
+      };
+      crumbs.push({ label: newLabels[segments[0]] ?? "New Quiz", href: path });
+    } else if (segment === "questions" && segments[0] === "questions") {
+      crumbs.push({ label: "Question Library", href: path });
     } else {
       crumbs.push({ label: STATIC_LABELS[segment] ?? segment, href: path });
     }
@@ -66,7 +80,9 @@ export function Breadcrumbs() {
         const isLast = index === crumbs.length - 1;
         return (
           <span key={crumb.href} className="flex items-center gap-1.5">
-            {index > 0 && <ChevronRight aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />}
+            {index > 0 && (
+              <ChevronRight aria-hidden className="h-3.5 w-3.5 text-muted-foreground" />
+            )}
             {isLast || !crumb.href ? (
               <span aria-current="page" className="font-medium text-foreground">
                 {crumb.label}
