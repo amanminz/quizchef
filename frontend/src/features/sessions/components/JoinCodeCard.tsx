@@ -41,12 +41,12 @@ export function JoinCodeCard({ sessionPin, quizTitle, presentation = false }: Jo
     }
     // The configured production frontend URL is this app's own origin.
     const joinUrl = `${window.location.origin}/play/${sessionPin}`;
-    const lines = [
-      quizTitle ? `Join the ${quizTitle} quiz` : "Join the quiz",
+    const message = [
+      quizTitle ? `Join ${quizTitle}` : "Join the quiz",
       `Code: ${sessionPin}`,
-      `Open: ${joinUrl}`
-    ];
-    await copyText("message", lines.join("\n"));
+      joinUrl
+    ].join("\n\n");
+    await copyText("message", message);
   };
 
   return (
@@ -89,7 +89,7 @@ export function JoinCodeCard({ sessionPin, quizTitle, presentation = false }: Jo
               </>
             ) : (
               <>
-                <Share2 aria-hidden className="h-4 w-4" /> Copy join message
+                <Share2 aria-hidden className="h-4 w-4" /> Copy Join Details
               </>
             )}
           </Button>

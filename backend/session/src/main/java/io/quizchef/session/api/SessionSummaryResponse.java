@@ -20,6 +20,9 @@ public record SessionSummaryResponse(
         UUID currentQuestionId,
         UUID hostIdentityId,
         UUID publishedQuizVersionId,
+        @Schema(description = "The quiz's display title (default localization); present on the "
+                + "summary read, null on command responses", example = "BELC Bible Quiz — Gospel of Mark")
+        String quizTitle,
         int participantCount,
         SessionSettingsDto settings,
         long version,
@@ -35,6 +38,7 @@ public record SessionSummaryResponse(
                 view.currentQuestionId(),
                 view.hostIdentityId(),
                 view.publishedQuizVersionId(),
+                view.quizTitle(),
                 view.participantCount(),
                 SessionSettingsDto.from(view.settings()),
                 view.version(),

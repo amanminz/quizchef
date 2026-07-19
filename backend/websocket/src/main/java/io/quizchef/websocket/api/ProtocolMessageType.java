@@ -36,6 +36,13 @@ public enum ProtocolMessageType {
     LEADERBOARD_UPDATED("leaderboard.updated"),
     ANSWER_ACCEPTED("participant.answer.accepted"),
 
+    /**
+     * A pure notification that the current question's answer counts moved
+     * — no counts and no participant in the payload (privacy: who answered
+     * is host material, read through the host-only progress endpoint).
+     */
+    ANSWER_PROGRESS("answer.progress"),
+
     // Reconnection — the replay/sync snapshot delivered to one participant.
     SESSION_SNAPSHOT("session.snapshot");
 

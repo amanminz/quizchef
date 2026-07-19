@@ -96,4 +96,15 @@ final class SessionProtocolMapper {
         return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.ANSWER_ACCEPTED,
                 event.occurredAt(), new QuestionPayload(event.questionId()));
     }
+
+    /**
+     * The session-wide face of the same event: a pure "counts moved"
+     * notification. Deliberately no participant id and no counts — the
+     * authoritative numbers are the host-only answer-progress read, and
+     * the broadcast must leak nothing about who answered.
+     */
+    static ProtocolMessage toProgressMessage(AnswerSubmittedEvent event) {
+        return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.ANSWER_PROGRESS,
+                event.occurredAt(), new QuestionPayload(event.questionId()));
+    }
 }

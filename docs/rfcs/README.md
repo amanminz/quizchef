@@ -21,6 +21,7 @@ Every RFC carries a `Status`. It answers the first question any reader has: **do
 - [RFC-011 Security Hardening and Abuse Prevention](RFC-011-security-hardening-and-abuse-prevention.md) — **Implemented** (security headers, CORS, rate limiting, STOMP destination validation, input validation, secrets audit)
 - RFC-012 Performance and Scalability — **Draft** (number reserved for Phase 3 PR #4, planned; not yet written)
 - [RFC-013 Question Authoring and Quiz Composition](RFC-013-question-authoring-and-quiz-composition.md) — **Implemented** (question editor, Question Library page, quiz-launched authoring with auto-attach; frontend-only — the RFC-003 APIs were already complete)
+- [RFC-014 Multilingual Live-Event Polish](RFC-014-multilingual-live-event-polish.md) — **Implemented** (English/Hindi authoring tabs and bilingual host projection, participant language delivery, live answer progress with safe early reveal, question restore/safe-delete/detail page, quiz identity on participant screens; session history deferred to PR #46B)
 
 ---
 

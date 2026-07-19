@@ -1,6 +1,7 @@
 import { apiClient } from "@/api/axios";
 import type {
   AnswerAcceptedResponse,
+  AnswerProgressResponse,
   CreateSessionRequest,
   CurrentQuestionResponse,
   JoinSessionRequest,
@@ -115,6 +116,20 @@ export const sessionApi = {
   async currentQuestion(sessionId: string): Promise<CurrentQuestionResponse> {
     const { data } = await apiClient.get<CurrentQuestionResponse>(
       `/api/v1/sessions/${sessionId}/questions/current`
+    );
+    return data;
+  },
+
+  /**
+   * The current question's answer progress — HOST ONLY: how many
+   * participants have an accepted answer out of how many could answer
+   * right now. Counts only, never who. Refreshed on each answer.progress
+   * broadcast; throws `session.no-current-question` (409) between
+   * questions.
+   */
+  async answerProgress(sessionId: string): Promise<AnswerProgressResponse> {
+    const { data } = await apiClient.get<AnswerProgressResponse>(
+      `/api/v1/sessions/${sessionId}/answer-progress`
     );
     return data;
   },

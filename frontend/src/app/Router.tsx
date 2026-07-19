@@ -14,6 +14,7 @@ import { NotFoundPage } from "@/pages/NotFoundPage";
 import { PlayPage } from "@/pages/PlayPage";
 import { ProfilePage } from "@/pages/ProfilePage";
 import { PlaySessionPage } from "@/pages/PlaySessionPage";
+import { QuestionDetailPage } from "@/pages/QuestionDetailPage";
 import { QuestionLibraryPage } from "@/pages/QuestionLibraryPage";
 import { QuizQuestionsPage } from "@/pages/QuizQuestionsPage";
 import { QuizReviewPage } from "@/pages/QuizReviewPage";
@@ -59,6 +60,7 @@ export const routes: RouteObject[] = [
           { path: "/quizzes/:quizId/review", element: <QuizReviewPage /> },
           { path: "/questions", element: <QuestionLibraryPage /> },
           { path: "/questions/new", element: <CreateQuestionPage /> },
+          { path: "/questions/:questionId", element: <QuestionDetailPage /> },
           { path: "/questions/:questionId/edit", element: <EditQuestionPage /> },
           { path: "/sessions", element: <SessionsPage /> },
           { path: "/sessions/new", element: <CreateSessionPage /> },

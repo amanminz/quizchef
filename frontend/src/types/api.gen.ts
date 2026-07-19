@@ -4,3221 +4,3530 @@
  */
 
 export interface paths {
-  "/api/v1/quizzes/{quizId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/quizzes/{quizId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a quiz
+         * @description Metadata, settings, state, visibility, default language, available localizations, and ordered question ids. Questions are separate resources. Requires QUIZ_VIEW; private quizzes are visible to their owner only.
+         */
+        get: operations["get"];
+        /**
+         * Update a quiz
+         * @description Owner only, requires QUIZ_EDIT. Omitted fields stay unchanged; a provided localization list replaces all translations. Drafts change freely; published quizzes accept nothing but visibility; archived quizzes are immutable. The version must be the one last read — stale versions are rejected.
+         */
+        put: operations["update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read a quiz
-     * @description Metadata, settings, state, visibility, default language, available localizations, and ordered question ids. Questions are separate resources. Requires QUIZ_VIEW; private quizzes are visible to their owner only.
-     */
-    get: operations["get"];
-    /**
-     * Update a quiz
-     * @description Owner only, requires QUIZ_EDIT. Omitted fields stay unchanged; a provided localization list replaces all translations. Drafts change freely; published quizzes accept nothing but visibility; archived quizzes are immutable. The version must be the one last read — stale versions are rejected.
-     */
-    put: operations["update"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/questions/{questionId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/questions/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a question
+         * @description Metadata, options, every localization with its option texts, scripture and media references, and tags. Quiz references are absent — questions do not know where they are used. Requires QUIZ_VIEW; questions are visible to their owner only.
+         */
+        get: operations["get_1"];
+        /**
+         * Update a draft question
+         * @description Owner only, requires QUIZ_EDIT. A true PUT: every field is the complete new value; the localizations must include the default language, and options keep their ids to preserve translations. Published and archived questions are immutable. The version must be the one last read.
+         */
+        put: operations["update_1"];
+        post?: never;
+        /**
+         * Delete an unused question
+         * @description Owner only, requires QUIZ_EDIT. One consistent rule across the lifecycle: a question is deletable if and only if no quiz composes it. The reference check and the delete share one transaction — a direct API request is rejected exactly like the UI's disabled button.
+         */
+        delete: operations["delete"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read a question
-     * @description Metadata, options, every localization with its option texts, scripture and media references, and tags. Quiz references are absent — questions do not know where they are used. Requires QUIZ_VIEW; questions are visible to their owner only.
-     */
-    get: operations["get_1"];
-    /**
-     * Update a draft question
-     * @description Owner only, requires QUIZ_EDIT. A true PUT: every field is the complete new value; the localizations must include the default language, and options keep their ids to preserve translations. Published and archived questions are immutable. The version must be the one last read.
-     */
-    put: operations["update_1"];
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/users/me/host-access": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/users/me/host-access": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Request host access
+         * @description Grants the caller the QUIZ_MASTER role, durably and idempotently — the product rule is automatic self-service promotion (RFC-002); PENDING/DENIED are reserved for a future approval gate. Because request-time authorization reads persisted roles, the grant takes effect on the very next request with the same token — no new login needed. Guests cannot request host access.
+         */
+        post: operations["requestHostAccess"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Request host access
-     * @description Grants the caller the QUIZ_MASTER role, durably and idempotently — the product rule is automatic self-service promotion (RFC-002); PENDING/DENIED are reserved for a future approval gate. Because request-time authorization reads persisted roles, the grant takes effect on the very next request with the same token — no new login needed. Guests cannot request host access.
-     */
-    post: operations["requestHostAccess"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a session
+         * @description Creates a session for a published quiz version, hosted by the caller, and assigns a unique PIN. Requires QUIZ_HOST.
+         */
+        post: operations["create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Create a session
-     * @description Creates a session for a published quiz version, hosted by the caller, and assigns a unique PIN. Requires QUIZ_HOST.
-     */
-    post: operations["create"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{pin}/lobby": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{pin}/lobby": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the lobby
+         * @description Moves the session from CREATED to LOBBY so participants may join. Host only, requires QUIZ_HOST.
+         */
+        post: operations["openLobby"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Open the lobby
-     * @description Moves the session from CREATED to LOBBY so participants may join. Host only, requires QUIZ_HOST.
-     */
-    post: operations["openLobby"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{pin}/join": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{pin}/join": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Join a session by PIN
+         * @description Open to everyone — anonymous callers join as guests (and receive a reconnection token), authenticated callers join backed by their identity. The session must be accepting joins (lobby, or in progress if late join is enabled) and not full.
+         */
+        post: operations["join"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Join a session by PIN
-     * @description Open to everyone — anonymous callers join as guests (and receive a reconnection token), authenticated callers join backed by their identity. The session must be accepting joins (lobby, or in progress if late join is enabled) and not full.
-     */
-    post: operations["join"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/start": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Start a session
+         * @description Moves the session from LOBBY to IN_PROGRESS. Host only, requires QUIZ_HOST. Needs at least one participant. No question opens and no timer starts here — that is the gameplay engine.
+         */
+        post: operations["start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Start a session
-     * @description Moves the session from LOBBY to IN_PROGRESS. Host only, requires QUIZ_HOST. Needs at least one participant. No question opens and no timer starts here — that is the gameplay engine.
-     */
-    post: operations["start"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/questions/start": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/questions/start": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Open the first question
+         * @description Host only. Opens the quiz's first question and arms the server timer. The engine chooses the question; the host drives the pace.
+         */
+        post: operations["startQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Open the first question
-     * @description Host only. Opens the quiz's first question and arms the server timer. The engine chooses the question; the host drives the pace.
-     */
-    post: operations["startQuestion"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/questions/reveal": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/questions/reveal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reveal the correct answer
+         * @description Host only. Broadcasts the correct options for the closed question.
+         */
+        post: operations["revealAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Reveal the correct answer
-     * @description Host only. Broadcasts the correct options for the closed question.
-     */
-    post: operations["revealAnswer"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/questions/close": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/questions/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Close the current question
+         * @description Host only. Stops accepting answers early; the timer would otherwise close it.
+         */
+        post: operations["closeQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Close the current question
-     * @description Host only. Stops accepting answers early; the timer would otherwise close it.
-     */
-    post: operations["closeQuestion"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/questions/advance": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/questions/advance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Advance to the next question, or finish
+         * @description Host only. From the leaderboard, opens the next question in order, or finishes the session when the quiz is exhausted.
+         */
+        post: operations["advanceQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Advance to the next question, or finish
-     * @description Host only. From the leaderboard, opens the next question in order, or finishes the session when the quiz is exhausted.
-     */
-    post: operations["advanceQuestion"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/leaderboard": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/leaderboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Show the leaderboard
+         * @description Host only. Projects and broadcasts the standings, and returns them. The leaderboard is computed, never stored.
+         */
+        post: operations["showLeaderboard"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Show the leaderboard
-     * @description Host only. Projects and broadcasts the standings, and returns them. The leaderboard is computed, never stored.
-     */
-    post: operations["showLeaderboard"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/answers": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/answers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Submit an answer
+         * @description Open to participants (anonymous-friendly). The server validates the answer, stamps the response time, and scores it — the response confirms receipt and carries no score.
+         */
+        post: operations["submitAnswer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Submit an answer
-     * @description Open to participants (anonymous-friendly). The server validates the answer, stamps the response time, and scores it — the response confirms receipt and carries no score.
-     */
-    post: operations["submitAnswer"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/reconnect": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/reconnect": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reconnect to a session
+         * @description Rebinds to an existing participant, preserving identity, score, and answers. A guest sends their reconnection token; a registered player sends the session id and reconnects through their bearer token. Returns the reconnection snapshot.
+         */
+        post: operations["reconnect"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Reconnect to a session
-     * @description Rebinds to an existing participant, preserving identity, score, and answers. A guest sends their reconnection token; a registered player sends the session id and reconnects through their bearer token. Returns the reconnection snapshot.
-     */
-    post: operations["reconnect"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/quizzes": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/quizzes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Create a draft quiz
+         * @description Creates a private draft owned by the caller. The localization becomes the quiz's default language content. Requires QUIZ_CREATE.
+         */
+        post: operations["create_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Create a draft quiz
-     * @description Creates a private draft owned by the caller. The localization becomes the quiz's default language content. Requires QUIZ_CREATE.
-     */
-    post: operations["create_1"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/quizzes/{quizId}/questions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/quizzes/{quizId}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Attach a question to the quiz
+         * @description Owner only, requires QUIZ_EDIT. Attaches one of the caller's own questions — draft or published, refined further after attaching if still draft; only an archived question is rejected, retired from new use. Allowed while the quiz is DRAFT or PUBLISHED (a published quiz may gain questions, never lose them); appended to the end of the ordering. Publishing the quiz itself still requires every attached question to carry the quiz's default language.
+         */
+        post: operations["addQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Attach a question to the quiz
-     * @description Owner only, requires QUIZ_EDIT. Attaches one of the caller's own questions — draft or published, refined further after attaching if still draft; only an archived question is rejected, retired from new use. Allowed while the quiz is DRAFT or PUBLISHED (a published quiz may gain questions, never lose them); appended to the end of the ordering. Publishing the quiz itself still requires every attached question to carry the quiz's default language.
-     */
-    post: operations["addQuestion"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/quizzes/{quizId}/publish": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/quizzes/{quizId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a draft quiz
+         * @description Owner only, requires QUIZ_EDIT. Publishing needs at least one question, and every attached question must be localized in the quiz's default language.
+         */
+        post: operations["publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Publish a draft quiz
-     * @description Owner only, requires QUIZ_EDIT. Publishing needs at least one question, and every attached question must be localized in the quiz's default language.
-     */
-    post: operations["publish"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/quizzes/{quizId}/archive": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/quizzes/{quizId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a published quiz
+         * @description Owner only, requires QUIZ_EDIT. Only published quizzes can be archived; archiving is terminal and archived quizzes are retained, never deleted.
+         */
+        post: operations["archive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Archive a published quiz
-     * @description Owner only, requires QUIZ_EDIT. Only published quizzes can be archived; archiving is terminal and archived quizzes are retained, never deleted.
-     */
-    post: operations["archive"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/questions": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Search the caller's own question library
+         * @description Read-only browse/picker endpoint: filterable and paged. Every filter is optional. Sortable only by updatedAt, createdAt, or state (title lives in per-language localizations, not a root column). Requires QUIZ_VIEW; only the caller's own questions are searched — there is no cross-author library yet.
+         */
+        get: operations["library"];
+        put?: never;
+        /**
+         * Create a draft question
+         * @description Creates a draft owned by the caller, authored in its default language. Option ids are assigned by the server and returned for later translation. Requires QUIZ_CREATE.
+         */
+        post: operations["create_2"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Search the caller's own question library
-     * @description Read-only browse/picker endpoint: filterable and paged. Every filter is optional. Sortable only by updatedAt, createdAt, or state (title lives in per-language localizations, not a root column). Requires QUIZ_VIEW; only the caller's own questions are searched — there is no cross-author library yet.
-     */
-    get: operations["library"];
-    put?: never;
-    /**
-     * Create a draft question
-     * @description Creates a draft owned by the caller, authored in its default language. Option ids are assigned by the server and returned for later translation. Requires QUIZ_CREATE.
-     */
-    post: operations["create_2"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/questions/{questionId}/publish": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/questions/{questionId}/restore": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Restore an archived question
+         * @description Owner only, requires QUIZ_EDIT. The same question (same id, same content, same quiz references) returns to PUBLISHED and becomes available for new quizzes again — never a copy. Repeated restores are rejected.
+         */
+        post: operations["restore"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Publish a draft question
-     * @description Owner only, requires QUIZ_EDIT. Publishing freezes the question — quizzes may rely on it from now on. The localization invariants hold by construction: the default language and complete option texts per stored language always exist.
-     */
-    post: operations["publish_1"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/questions/{questionId}/archive": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/questions/{questionId}/publish": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Publish a draft question
+         * @description Owner only, requires QUIZ_EDIT. Publishing freezes the question — quizzes may rely on it from now on. The localization invariants hold by construction: the default language and complete option texts per stored language always exist.
+         */
+        post: operations["publish_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Archive a published question
-     * @description Owner only, requires QUIZ_EDIT. Archived questions are unavailable for new quizzes while existing published quizzes continue functioning. Archiving is terminal; questions are retained, never deleted.
-     */
-    post: operations["archive_1"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/auth/register": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/questions/{questionId}/archive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Archive a published question
+         * @description Owner only, requires QUIZ_EDIT. Archived questions are unavailable for new quizzes while existing published quizzes continue functioning. Archiving is terminal; questions are retained, never deleted.
+         */
+        post: operations["archive_1"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Register a new identity
-     * @description Creates a registered identity with credentials and profile. Does not log the user in and returns no token.
-     */
-    post: operations["register"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/auth/login": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/auth/register": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Register a new identity
+         * @description Creates a registered identity with credentials and profile. Does not log the user in and returns no token.
+         */
+        post: operations["register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    /**
-     * Authenticate with email and password
-     * @description Verifies credentials, revokes previous login sessions (single active session per identity), and returns a session-bound JWT.
-     */
-    post: operations["login"];
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/quizzes/{quizId}/questions/order": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/auth/login": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Authenticate with email and password
+         * @description Verifies credentials, revokes previous login sessions (single active session per identity), and returns a session-bound JWT.
+         */
+        post: operations["login"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    /**
-     * Reorder the quiz's questions
-     * @description Owner only, requires QUIZ_EDIT. Draft only. The request must name exactly the quiz's current questions, each once, in their new order; positions are reassigned 1..n accordingly. Persisted atomically.
-     */
-    patch: operations["reorderQuestions"];
-    trace?: never;
-  };
-  "/api/v1/users/me": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/quizzes/{quizId}/questions/order": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Reorder the quiz's questions
+         * @description Owner only, requires QUIZ_EDIT. Draft only. The request must name exactly the quiz's current questions, each once, in their new order; positions are reassigned 1..n accordingly. Persisted atomically.
+         */
+        patch: operations["reorderQuestions"];
+        trace?: never;
     };
-    /**
-     * Who am I?
-     * @description Returns the authenticated identity with its roles and derived permissions. Requires a bearer token from POST /api/v1/auth/login.
-     */
-    get: operations["me"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/users/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Who am I?
+         * @description Returns the authenticated identity with its roles and derived permissions. Requires a bearer token from POST /api/v1/auth/login.
+         */
+        get: operations["me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read a session summary
-     * @description Metadata, host, lifecycle state, roster size, and settings — no gameplay state. Open by id so lobby participants (guests included) can see it.
-     */
-    get: operations["get_2"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/results": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a session summary
+         * @description Metadata, host, lifecycle state, roster size, and settings — no gameplay state. Open by id so lobby participants (guests included) can see it.
+         */
+        get: operations["get_2"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read the session's full standings (host only)
-     * @description The ranked standings with the counts a results screen frames them with — interim between questions and final after FINISHED share this one read. Host only since the live-event privacy split: every name, score, and rank is the host's projection; a participant device reads its own row through the personal-result endpoint instead. Phase-gated for the same ADR-006 reason correctness is: readable only once the current question's answer is revealed (or the leaderboard is showing, or the session has finished).
-     */
-    get: operations["results"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/questions/current": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/results": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the session's full standings (host only)
+         * @description The ranked standings with the counts a results screen frames them with — interim between questions and final after FINISHED share this one read. Host only since the live-event privacy split: every name, score, and rank is the host's projection; a participant device reads its own row through the personal-result endpoint instead. Phase-gated for the same ADR-006 reason correctness is: readable only once the current question's answer is revealed (or the leaderboard is showing, or the session has finished).
+         */
+        get: operations["results"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read the question in play
-     * @description The current question's participant-safe content: prompt and options in every authored language, position in the quiz, phase, and the server clock's remaining time. Open by session id — the players it serves are anonymous guests, and the unguessable id (like the summary endpoint) is the gate. Options never carry correctness; correctOptionIds appears only once the phase has revealed it, exactly like the answer.revealed event.
-     */
-    get: operations["currentQuestion"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/participants": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/questions/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the question in play
+         * @description The current question's participant-safe content: prompt and options in every authored language, position in the quiz, phase, and the server clock's remaining time. Open by session id — the players it serves are anonymous guests, and the unguessable id (like the summary endpoint) is the gate. Options never carry correctness; correctOptionIds appears only once the phase has revealed it, exactly like the answer.revealed event.
+         */
+        get: operations["currentQuestion"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read the roster (host only)
-     * @description Every joined participant's display name and connection state, in stable join order — what the projected lobby wall renders. Host only: names across the whole roster are the host's projection; realtime join events deliberately carry only ids, so the wall re-reads this on each roster event. Closes RFC-004's flagged "no roster read endpoint yet" gap.
-     */
-    get: operations["participants"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/sessions/{id}/participants/{participantId}/result": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/participants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the roster (host only)
+         * @description Every joined participant's display name and connection state, in stable join order — what the projected lobby wall renders. Host only: names across the whole roster are the host's projection; realtime join events deliberately carry only ids, so the wall re-reads this on each roster event. Closes RFC-004's flagged "no roster read endpoint yet" gap.
+         */
+        get: operations["participants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * Read one participant's own result
-     * @description The participant's rank, score, and the counts that frame them — and nothing about anyone else. Open like the summary and current-question reads: the audience is anonymous guests, and the unguessable session and participant ids gate it — the same trust answer submission places in the participant id. Phase-gated exactly like the host standings read.
-     */
-    get: operations["participantResult"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/quizzes/mine": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/participants/{participantId}/result": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one participant's own result
+         * @description The participant's rank, score, and the counts that frame them — and nothing about anyone else. Open like the summary and current-question reads: the audience is anonymous guests, and the unguessable session and participant ids gate it — the same trust answer submission places in the participant id. Phase-gated exactly like the host standings read.
+         */
+        get: operations["participantResult"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    /**
-     * List the caller's own quizzes
-     * @description "My Quizzes": every state, filterable and paged. There is no endpoint to list quizzes across authors — this is deliberately owner-scoped only. Sortable only by updatedAt, createdAt, or state (content lives in per-language localizations, not a root column). Requires QUIZ_VIEW.
-     */
-    get: operations["mine"];
-    put?: never;
-    post?: never;
-    delete?: never;
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
-  "/api/v1/quizzes/{quizId}/questions/{questionId}": {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
+    "/api/v1/sessions/{id}/answer-progress": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the current question's answer progress (host only)
+         * @description How many participants have an accepted answer for the question in play, out of how many are eligible to answer right now — the authoritative counts behind the host's "5 / 10 answered". Counts only, never who; participants see only their own acknowledgement. Refreshed by the host on each answer.progress broadcast.
+         */
+        get: operations["answerProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
     };
-    get?: never;
-    put?: never;
-    post?: never;
-    /**
-     * Detach a question from the quiz
-     * @description Owner only, requires QUIZ_EDIT. Draft only — a published quiz may gain questions but never lose them. No quiz deletion; this only removes the composition reference.
-     */
-    delete: operations["removeQuestion"];
-    options?: never;
-    head?: never;
-    patch?: never;
-    trace?: never;
-  };
+    "/api/v1/quizzes/mine": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * List the caller's own quizzes
+         * @description "My Quizzes": every state, filterable and paged. There is no endpoint to list quizzes across authors — this is deliberately owner-scoped only. Sortable only by updatedAt, createdAt, or state (content lives in per-language localizations, not a root column). Requires QUIZ_VIEW.
+         */
+        get: operations["mine"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/questions/{questionId}/usage": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read how many quizzes use a question
+         * @description Owner only, requires QUIZ_VIEW. The number of the caller's quizzes that compose this question — what frames the delete affordance: zero means deletable, more means the references must be removed first.
+         */
+        get: operations["usage"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/quizzes/{quizId}/questions/{questionId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Detach a question from the quiz
+         * @description Owner only, requires QUIZ_EDIT. Draft only — a published quiz may gain questions but never lose them. No quiz deletion; this only removes the composition reference.
+         */
+        delete: operations["removeQuestion"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
-  schemas: {
-    QuizLocalizationDto: {
-      /** @example en */
-      languageCode?: string;
-      /** @example Bible Quiz */
-      title?: string;
-      /** @example Sunday Youth Fellowship */
-      description?: string;
+    schemas: {
+        QuizLocalizationDto: {
+            /** @example en */
+            languageCode?: string;
+            /** @example Bible Quiz */
+            title?: string;
+            /** @example Sunday Youth Fellowship */
+            description?: string;
+        };
+        QuizSettingsDto: {
+            randomizeQuestionOrder: boolean;
+            randomizeOptionOrder: boolean;
+            /**
+             * Format: int32
+             * @example 30
+             */
+            questionTimeLimitSeconds: number;
+            showLeaderboardAfterQuestion: boolean;
+            showExplanationAfterQuestion: boolean;
+        };
+        UpdateQuizRequest: {
+            /**
+             * Format: int64
+             * @description The version returned by the last read of this quiz
+             * @example 0
+             */
+            version: number;
+            /** @enum {string} */
+            visibility?: "PRIVATE" | "UNLISTED" | "PUBLIC";
+            settings?: components["schemas"]["QuizSettingsDto"];
+            localizations?: components["schemas"]["QuizLocalizationDto"][];
+        };
+        ApiError: {
+            code?: string;
+            message?: string;
+            /** Format: date-time */
+            timestamp?: string;
+            correlationId?: string;
+            fieldErrors?: components["schemas"]["ApiFieldError"][];
+        };
+        ApiFieldError: {
+            field?: string;
+            message?: string;
+        };
+        QuizResponse: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            ownerIdentityId?: string;
+            /** @example en */
+            defaultLanguage?: string;
+            /** @enum {string} */
+            state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            /** @enum {string} */
+            visibility?: "PRIVATE" | "UNLISTED" | "PUBLIC";
+            /**
+             * Format: int64
+             * @description Send this back with PUT; stale versions are rejected with 409
+             */
+            version?: number;
+            settings?: components["schemas"]["QuizSettingsDto"];
+            localizations?: components["schemas"]["QuizLocalizationDto"][];
+            /** @description Question ids in display order */
+            questionIds?: string[];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        BibleReferenceDto: {
+            /** @example Exodus */
+            book?: string;
+            /**
+             * Format: int32
+             * @example 3
+             */
+            chapter: number;
+            /**
+             * Format: int32
+             * @example 1
+             */
+            verseStart: number;
+            /**
+             * Format: int32
+             * @description Omit for a single verse
+             * @example 10
+             */
+            verseEnd?: number;
+            /** @example ESV */
+            translation?: string;
+            verseRangeValid?: boolean;
+        };
+        MediaReferenceDto: {
+            /**
+             * Format: uuid
+             * @description Server-assigned when omitted
+             */
+            id?: string;
+            /** @enum {string} */
+            mediaType: "IMAGE" | "AUDIO" | "VIDEO";
+            /** @example media/burning-bush.png */
+            storageKey?: string;
+            /** @example Burning bush */
+            altText?: string;
+            /**
+             * Format: int32
+             * @example 1
+             */
+            displayOrder: number;
+        };
+        OptionTextDto: {
+            /** Format: uuid */
+            optionId: string;
+            text?: string;
+        };
+        QuestionLocalizationDto: {
+            /** @example en */
+            languageCode?: string;
+            /** @example Exodus leader */
+            title?: string;
+            /** @example Who led Israel out of Egypt? */
+            prompt?: string;
+            /** @example See Exodus 3. */
+            explanation?: string;
+            optionTexts: components["schemas"]["OptionTextDto"][];
+        };
+        UpdateOptionDto: {
+            /** Format: uuid */
+            id: string;
+            correct: boolean;
+            /**
+             * Format: int32
+             * @example 1
+             */
+            displayOrder: number;
+        };
+        UpdateQuestionRequest: {
+            /**
+             * Format: int64
+             * @description The version returned by the last read of this question
+             * @example 0
+             */
+            version: number;
+            /**
+             * @description The draft's new question type; omit to keep the current one
+             * @enum {string}
+             */
+            questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+            /**
+             * @description The draft's new default language (must be fully localized in this request); omit to keep the current one
+             * @example en
+             */
+            defaultLanguage?: string;
+            /** @enum {string} */
+            difficulty: "EASY" | "MEDIUM" | "HARD";
+            options: components["schemas"]["UpdateOptionDto"][];
+            localizations: components["schemas"]["QuestionLocalizationDto"][];
+            bibleReferences: components["schemas"]["BibleReferenceDto"][];
+            mediaReferences: components["schemas"]["MediaReferenceDto"][];
+            tags: string[];
+        };
+        OptionDto: {
+            /** Format: uuid */
+            id?: string;
+            correct?: boolean;
+            /** Format: int32 */
+            displayOrder?: number;
+        };
+        QuestionResponse: {
+            /** Format: uuid */
+            id?: string;
+            /** Format: uuid */
+            ownerIdentityId?: string;
+            /** @example en */
+            defaultLanguage?: string;
+            /** @enum {string} */
+            state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            /** @enum {string} */
+            questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+            /** @enum {string} */
+            difficulty?: "EASY" | "MEDIUM" | "HARD";
+            /** @enum {string} */
+            source?: "MANUAL" | "AI" | "IMPORT";
+            /**
+             * Format: int64
+             * @description Send this back with PUT; stale versions are rejected with 409
+             */
+            version?: number;
+            options?: components["schemas"]["OptionDto"][];
+            localizations?: components["schemas"]["QuestionLocalizationDto"][];
+            bibleReferences?: components["schemas"]["BibleReferenceDto"][];
+            mediaReferences?: components["schemas"]["MediaReferenceDto"][];
+            tags?: components["schemas"]["TagDto"][];
+            /** Format: date-time */
+            createdAt?: string;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        TagDto: {
+            /** Format: uuid */
+            id?: string;
+            /** @example exodus */
+            name?: string;
+        };
+        HostAccessResponse: {
+            /**
+             * @example GRANTED
+             * @enum {string}
+             */
+            status?: "GRANTED" | "PENDING" | "DENIED";
+            /**
+             * @example [
+             *       "USER",
+             *       "QUIZ_MASTER"
+             *     ]
+             */
+            roles?: ("ADMIN" | "QUIZ_MASTER" | "USER")[];
+            /**
+             * @example [
+             *       "QUIZ_VIEW",
+             *       "QUIZ_CREATE",
+             *       "QUIZ_EDIT",
+             *       "QUIZ_HOST",
+             *       "USER_PROFILE_READ",
+             *       "USER_PROFILE_UPDATE"
+             *     ]
+             */
+            permissions?: ("QUIZ_VIEW" | "QUIZ_CREATE" | "QUIZ_EDIT" | "QUIZ_DELETE" | "QUIZ_HOST" | "USER_PROFILE_READ" | "USER_PROFILE_UPDATE")[];
+        };
+        CreateSessionRequest: {
+            /**
+             * Format: uuid
+             * @description The published quiz version to run
+             */
+            publishedQuizVersionId: string;
+        };
+        SessionSettingsDto: {
+            allowLateJoin?: boolean;
+            allowReconnect?: boolean;
+            showLiveLeaderboard?: boolean;
+            /** Format: int32 */
+            maxParticipants?: number;
+        };
+        SessionSummaryResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** @example 042317 */
+            sessionPin?: string;
+            /** @enum {string} */
+            state?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
+            /**
+             * @description The gameplay phase while IN_PROGRESS; null otherwise
+             * @enum {string}
+             */
+            currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            /** Format: uuid */
+            currentQuestionId?: string;
+            /** Format: uuid */
+            hostIdentityId?: string;
+            /** Format: uuid */
+            publishedQuizVersionId?: string;
+            /**
+             * @description The quiz's display title (default localization); present on the summary read, null on command responses
+             * @example BELC Bible Quiz — Gospel of Mark
+             */
+            quizTitle?: string;
+            /** Format: int32 */
+            participantCount?: number;
+            settings?: components["schemas"]["SessionSettingsDto"];
+            /** Format: int64 */
+            version?: number;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        JoinSessionRequest: {
+            /**
+             * @description The per-session nickname; need not be unique
+             * @example Aman
+             */
+            displayName?: string;
+            /**
+             * @description BCP-47 tag the participant wants to play in
+             * @example en
+             */
+            preferredLanguage?: string;
+        };
+        ParticipantSessionResponse: {
+            /** Format: uuid */
+            participantId?: string;
+            /** Format: uuid */
+            sessionId?: string;
+            /** @description The guest's reconnection token; null for a registered participant */
+            guestParticipantToken?: string;
+            /** @enum {string} */
+            sessionState?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
+        };
+        LeaderboardEntryDto: {
+            /** Format: uuid */
+            participantId?: string;
+            displayName?: string;
+            /** Format: int32 */
+            score?: number;
+            /** Format: int32 */
+            rank?: number;
+        };
+        LeaderboardResponse: {
+            entries?: components["schemas"]["LeaderboardEntryDto"][];
+        };
+        SubmitAnswerRequest: {
+            /**
+             * Format: uuid
+             * @description The participant id returned when joining
+             */
+            participantId: string;
+            /** Format: uuid */
+            questionId: string;
+            /** @description Chosen option ids; must be options of this question */
+            selectedOptionIds?: string[];
+        };
+        AnswerAcceptedResponse: {
+            /** Format: uuid */
+            participantId?: string;
+            /** Format: uuid */
+            questionId?: string;
+            /** @example true */
+            accepted?: boolean;
+        };
+        ReconnectRequest: {
+            /**
+             * Format: uuid
+             * @description Required for a registered reconnect; omit for a guest
+             */
+            sessionId?: string;
+            /** @description The guest's reconnection token; omit for a registered reconnect */
+            guestParticipantToken?: string;
+            exactlyOneIdentifierPresent?: boolean;
+        };
+        SessionSnapshotResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            participantId?: string;
+            sessionState?: string;
+            /** Format: uuid */
+            currentQuestionId?: string;
+            currentPhase?: string;
+            /** Format: int64 */
+            remainingMillis?: number;
+            /** Format: int32 */
+            participantScore?: number;
+            submittedOptionIds?: string[];
+            leaderboard?: components["schemas"]["LeaderboardEntryDto"][];
+        };
+        CreateQuizRequest: {
+            /**
+             * @description BCP-47 tag; the localization must be in this language
+             * @example en
+             */
+            defaultLanguage?: string;
+            /**
+             * @description PRIVATE when omitted
+             * @enum {string}
+             */
+            visibility?: "PRIVATE" | "UNLISTED" | "PUBLIC";
+            localization: components["schemas"]["QuizLocalizationDto"];
+            /** @description Defaults applied when omitted */
+            settings?: components["schemas"]["QuizSettingsDto"];
+        };
+        AddQuestionRequest: {
+            /** Format: uuid */
+            questionId: string;
+        };
+        CreateOptionDto: {
+            /** @example Moses */
+            text?: string;
+            correct: boolean;
+            /**
+             * Format: int32
+             * @example 1
+             */
+            displayOrder: number;
+        };
+        CreateQuestionRequest: {
+            /**
+             * @description BCP-47 tag; the content is authored in this language
+             * @example en
+             */
+            defaultLanguage?: string;
+            /** @enum {string} */
+            questionType: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+            /** @enum {string} */
+            difficulty: "EASY" | "MEDIUM" | "HARD";
+            localization: components["schemas"]["QuestionContentDto"];
+            options: components["schemas"]["CreateOptionDto"][];
+            bibleReferences?: components["schemas"]["BibleReferenceDto"][];
+            mediaReferences?: components["schemas"]["MediaReferenceDto"][];
+            /**
+             * @description Resolved or created by name; normalized to lowercase
+             * @example [
+             *       "exodus",
+             *       "moses"
+             *     ]
+             */
+            tags?: string[];
+        };
+        QuestionContentDto: {
+            /** @example Exodus leader */
+            title?: string;
+            /** @example Who led Israel out of Egypt? */
+            prompt?: string;
+            /** @example See Exodus 3. */
+            explanation?: string;
+        };
+        RegisterIdentityRequest: {
+            /** @example Aman Minz */
+            displayName?: string;
+            /** @example aman@example.com */
+            email?: string;
+            /**
+             * @description 8-128 characters
+             * @example StrongPassword@123
+             */
+            password?: string;
+            /**
+             * @description Optional, E.164 format
+             * @example +919999999999
+             */
+            phoneNumber?: string;
+        };
+        RegisterIdentityResponse: {
+            /** Format: uuid */
+            identityId?: string;
+            displayName?: string;
+            email?: string;
+            /** Format: date-time */
+            createdAt?: string;
+        };
+        LoginRequest: {
+            /** @example aman@example.com */
+            email?: string;
+            /** @example StrongPassword@123 */
+            password?: string;
+        };
+        LoginResponse: {
+            /** Format: uuid */
+            identityId?: string;
+            displayName?: string;
+            token?: string;
+            /** Format: date-time */
+            expiresAt?: string;
+            authorities?: ("ADMIN" | "QUIZ_MASTER" | "USER")[];
+        };
+        ReorderQuestionsRequest: {
+            questionIds?: string[];
+        };
+        CurrentUserResponse: {
+            /**
+             * Format: uuid
+             * @example 1557e119-29db-4e3a-b3ed-ea47233e8a59
+             */
+            identityId?: string;
+            /**
+             * @example REGISTERED
+             * @enum {string}
+             */
+            identityType?: "REGISTERED" | "GUEST";
+            /**
+             * @example [
+             *       "USER"
+             *     ]
+             */
+            roles?: ("ADMIN" | "QUIZ_MASTER" | "USER")[];
+            /**
+             * @example [
+             *       "QUIZ_VIEW",
+             *       "USER_PROFILE_READ",
+             *       "USER_PROFILE_UPDATE"
+             *     ]
+             */
+            permissions?: ("QUIZ_VIEW" | "QUIZ_CREATE" | "QUIZ_EDIT" | "QUIZ_DELETE" | "QUIZ_HOST" | "USER_PROFILE_READ" | "USER_PROFILE_UPDATE")[];
+            /**
+             * @description The caller's own display name; null for identities without a profile
+             * @example Aman
+             */
+            displayName?: string;
+            /**
+             * @description The caller's own email; null for identities without a profile
+             * @example aman@example.com
+             */
+            email?: string;
+        };
+        SessionResultsResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** @enum {string} */
+            state?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
+            /**
+             * @description The gameplay phase while IN_PROGRESS; null once FINISHED
+             * @enum {string}
+             */
+            currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            /** Format: int32 */
+            totalQuestions?: number;
+            /** Format: int32 */
+            participantCount?: number;
+            entries?: components["schemas"]["LeaderboardEntryDto"][];
+        };
+        CurrentQuestionResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            questionId?: string;
+            /** @enum {string} */
+            phase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            /**
+             * Format: int32
+             * @description 1-based position of this question in the quiz
+             * @example 3
+             */
+            questionNumber?: number;
+            /** Format: int32 */
+            totalQuestions?: number;
+            /** @enum {string} */
+            questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+            /** @example en */
+            defaultLanguage?: string;
+            /** Format: int32 */
+            durationSeconds?: number;
+            /**
+             * Format: date-time
+             * @description The server's close time; null unless the question is open
+             */
+            endsAt?: string;
+            /**
+             * Format: int64
+             * @description Milliseconds still on the clock; 0 unless the question is open
+             */
+            remainingMillis?: number;
+            options?: components["schemas"]["PlayableOptionDto"][];
+            localizations?: components["schemas"]["PlayableLocalizationDto"][];
+            /** @description Null until the answer has been revealed */
+            correctOptionIds?: string[];
+        };
+        PlayableLocalizationDto: {
+            /** @example en */
+            languageCode?: string;
+            prompt?: string;
+            /** @description The author's explanation; null until the answer is revealed */
+            explanation?: string;
+            optionTexts?: components["schemas"]["PlayableOptionTextDto"][];
+        };
+        PlayableOptionDto: {
+            /** Format: uuid */
+            optionId?: string;
+            /** Format: int32 */
+            displayOrder?: number;
+        };
+        PlayableOptionTextDto: {
+            /** Format: uuid */
+            optionId?: string;
+            text?: string;
+        };
+        SessionParticipantDto: {
+            /** Format: uuid */
+            participantId?: string;
+            /** @example Amelia */
+            displayName?: string;
+            connected?: boolean;
+        };
+        SessionParticipantsResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: int32 */
+            participantCount?: number;
+            participants?: components["schemas"]["SessionParticipantDto"][];
+        };
+        ParticipantResultResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** @enum {string} */
+            state?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
+            /**
+             * @description The gameplay phase while IN_PROGRESS; null once FINISHED
+             * @enum {string}
+             */
+            currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            /** Format: int32 */
+            totalQuestions?: number;
+            /** Format: int32 */
+            participantCount?: number;
+            /** Format: uuid */
+            participantId?: string;
+            displayName?: string;
+            /** Format: int32 */
+            rank?: number;
+            /** Format: int32 */
+            score?: number;
+        };
+        AnswerProgressResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            questionId?: string;
+            /**
+             * Format: int32
+             * @example 5
+             */
+            answeredCount?: number;
+            /**
+             * Format: int32
+             * @example 10
+             */
+            eligibleCount?: number;
+        };
+        Pageable: {
+            /** Format: int32 */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            sort?: string[];
+        };
+        QuizPageResponse: {
+            items?: components["schemas"]["QuizSummaryResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based page index
+             */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        QuizSummaryResponse: {
+            /** Format: uuid */
+            id?: string;
+            title?: string;
+            description?: string;
+            /** @enum {string} */
+            state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            /** @example en */
+            defaultLanguage?: string;
+            /** Format: int32 */
+            questionCount?: number;
+            /** Format: int64 */
+            version?: number;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        QuestionPageResponse: {
+            items?: components["schemas"]["QuestionSummaryResponse"][];
+            /**
+             * Format: int32
+             * @description Zero-based page index
+             */
+            page?: number;
+            /** Format: int32 */
+            size?: number;
+            /** Format: int64 */
+            totalElements?: number;
+            /** Format: int32 */
+            totalPages?: number;
+        };
+        QuestionSummaryResponse: {
+            /** Format: uuid */
+            id?: string;
+            defaultLanguage?: string;
+            /** @enum {string} */
+            state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+            /** @enum {string} */
+            questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+            /** @enum {string} */
+            difficulty?: "EASY" | "MEDIUM" | "HARD";
+            title?: string;
+            availableLanguages?: string[];
+            tags?: components["schemas"]["TagDto"][];
+            /** Format: int64 */
+            version?: number;
+            /** Format: date-time */
+            updatedAt?: string;
+        };
+        QuestionUsageResponse: {
+            /** Format: uuid */
+            questionId?: string;
+            /**
+             * Format: int64
+             * @example 2
+             */
+            quizCount?: number;
+        };
     };
-    QuizSettingsDto: {
-      randomizeQuestionOrder: boolean;
-      randomizeOptionOrder: boolean;
-      /**
-       * Format: int32
-       * @example 30
-       */
-      questionTimeLimitSeconds: number;
-      showLeaderboardAfterQuestion: boolean;
-      showExplanationAfterQuestion: boolean;
-    };
-    UpdateQuizRequest: {
-      /**
-       * Format: int64
-       * @description The version returned by the last read of this quiz
-       * @example 0
-       */
-      version: number;
-      /** @enum {string} */
-      visibility?: "PRIVATE" | "UNLISTED" | "PUBLIC";
-      settings?: components["schemas"]["QuizSettingsDto"];
-      localizations?: components["schemas"]["QuizLocalizationDto"][];
-    };
-    ApiError: {
-      code?: string;
-      message?: string;
-      /** Format: date-time */
-      timestamp?: string;
-      correlationId?: string;
-      fieldErrors?: components["schemas"]["ApiFieldError"][];
-    };
-    ApiFieldError: {
-      field?: string;
-      message?: string;
-    };
-    QuizResponse: {
-      /** Format: uuid */
-      id?: string;
-      /** Format: uuid */
-      ownerIdentityId?: string;
-      /** @example en */
-      defaultLanguage?: string;
-      /** @enum {string} */
-      state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
-      /** @enum {string} */
-      visibility?: "PRIVATE" | "UNLISTED" | "PUBLIC";
-      /**
-       * Format: int64
-       * @description Send this back with PUT; stale versions are rejected with 409
-       */
-      version?: number;
-      settings?: components["schemas"]["QuizSettingsDto"];
-      localizations?: components["schemas"]["QuizLocalizationDto"][];
-      /** @description Question ids in display order */
-      questionIds?: string[];
-      /** Format: date-time */
-      createdAt?: string;
-      /** Format: date-time */
-      updatedAt?: string;
-    };
-    BibleReferenceDto: {
-      /** @example Exodus */
-      book?: string;
-      /**
-       * Format: int32
-       * @example 3
-       */
-      chapter: number;
-      /**
-       * Format: int32
-       * @example 1
-       */
-      verseStart: number;
-      /**
-       * Format: int32
-       * @description Omit for a single verse
-       * @example 10
-       */
-      verseEnd?: number;
-      /** @example ESV */
-      translation?: string;
-      verseRangeValid?: boolean;
-    };
-    MediaReferenceDto: {
-      /**
-       * Format: uuid
-       * @description Server-assigned when omitted
-       */
-      id?: string;
-      /** @enum {string} */
-      mediaType: "IMAGE" | "AUDIO" | "VIDEO";
-      /** @example media/burning-bush.png */
-      storageKey?: string;
-      /** @example Burning bush */
-      altText?: string;
-      /**
-       * Format: int32
-       * @example 1
-       */
-      displayOrder: number;
-    };
-    OptionTextDto: {
-      /** Format: uuid */
-      optionId: string;
-      text?: string;
-    };
-    QuestionLocalizationDto: {
-      /** @example en */
-      languageCode?: string;
-      /** @example Exodus leader */
-      title?: string;
-      /** @example Who led Israel out of Egypt? */
-      prompt?: string;
-      /** @example See Exodus 3. */
-      explanation?: string;
-      optionTexts: components["schemas"]["OptionTextDto"][];
-    };
-    UpdateOptionDto: {
-      /** Format: uuid */
-      id: string;
-      correct: boolean;
-      /**
-       * Format: int32
-       * @example 1
-       */
-      displayOrder: number;
-    };
-    UpdateQuestionRequest: {
-      /**
-       * Format: int64
-       * @description The version returned by the last read of this question
-       * @example 0
-       */
-      version: number;
-      /** @enum {string} */
-      difficulty: "EASY" | "MEDIUM" | "HARD";
-      options: components["schemas"]["UpdateOptionDto"][];
-      localizations: components["schemas"]["QuestionLocalizationDto"][];
-      bibleReferences: components["schemas"]["BibleReferenceDto"][];
-      mediaReferences: components["schemas"]["MediaReferenceDto"][];
-      tags: string[];
-    };
-    OptionDto: {
-      /** Format: uuid */
-      id?: string;
-      correct?: boolean;
-      /** Format: int32 */
-      displayOrder?: number;
-    };
-    QuestionResponse: {
-      /** Format: uuid */
-      id?: string;
-      /** Format: uuid */
-      ownerIdentityId?: string;
-      /** @example en */
-      defaultLanguage?: string;
-      /** @enum {string} */
-      state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
-      /** @enum {string} */
-      questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
-      /** @enum {string} */
-      difficulty?: "EASY" | "MEDIUM" | "HARD";
-      /** @enum {string} */
-      source?: "MANUAL" | "AI" | "IMPORT";
-      /**
-       * Format: int64
-       * @description Send this back with PUT; stale versions are rejected with 409
-       */
-      version?: number;
-      options?: components["schemas"]["OptionDto"][];
-      localizations?: components["schemas"]["QuestionLocalizationDto"][];
-      bibleReferences?: components["schemas"]["BibleReferenceDto"][];
-      mediaReferences?: components["schemas"]["MediaReferenceDto"][];
-      tags?: components["schemas"]["TagDto"][];
-      /** Format: date-time */
-      createdAt?: string;
-      /** Format: date-time */
-      updatedAt?: string;
-    };
-    TagDto: {
-      /** Format: uuid */
-      id?: string;
-      /** @example exodus */
-      name?: string;
-    };
-    HostAccessResponse: {
-      /**
-       * @example GRANTED
-       * @enum {string}
-       */
-      status?: "GRANTED" | "PENDING" | "DENIED";
-      /**
-       * @example [
-       *       "USER",
-       *       "QUIZ_MASTER"
-       *     ]
-       */
-      roles?: ("ADMIN" | "QUIZ_MASTER" | "USER")[];
-      /**
-       * @example [
-       *       "QUIZ_VIEW",
-       *       "QUIZ_CREATE",
-       *       "QUIZ_EDIT",
-       *       "QUIZ_HOST",
-       *       "USER_PROFILE_READ",
-       *       "USER_PROFILE_UPDATE"
-       *     ]
-       */
-      permissions?: (
-        | "QUIZ_VIEW"
-        | "QUIZ_CREATE"
-        | "QUIZ_EDIT"
-        | "QUIZ_DELETE"
-        | "QUIZ_HOST"
-        | "USER_PROFILE_READ"
-        | "USER_PROFILE_UPDATE"
-      )[];
-    };
-    CreateSessionRequest: {
-      /**
-       * Format: uuid
-       * @description The published quiz version to run
-       */
-      publishedQuizVersionId: string;
-    };
-    SessionSettingsDto: {
-      allowLateJoin?: boolean;
-      allowReconnect?: boolean;
-      showLiveLeaderboard?: boolean;
-      /** Format: int32 */
-      maxParticipants?: number;
-    };
-    SessionSummaryResponse: {
-      /** Format: uuid */
-      sessionId?: string;
-      /** @example 042317 */
-      sessionPin?: string;
-      /** @enum {string} */
-      state?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
-      /**
-       * @description The gameplay phase while IN_PROGRESS; null otherwise
-       * @enum {string}
-       */
-      currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
-      /** Format: uuid */
-      currentQuestionId?: string;
-      /** Format: uuid */
-      hostIdentityId?: string;
-      /** Format: uuid */
-      publishedQuizVersionId?: string;
-      /** Format: int32 */
-      participantCount?: number;
-      settings?: components["schemas"]["SessionSettingsDto"];
-      /** Format: int64 */
-      version?: number;
-      /** Format: date-time */
-      createdAt?: string;
-    };
-    JoinSessionRequest: {
-      /**
-       * @description The per-session nickname; need not be unique
-       * @example Aman
-       */
-      displayName?: string;
-      /**
-       * @description BCP-47 tag the participant wants to play in
-       * @example en
-       */
-      preferredLanguage?: string;
-    };
-    ParticipantSessionResponse: {
-      /** Format: uuid */
-      participantId?: string;
-      /** Format: uuid */
-      sessionId?: string;
-      /** @description The guest's reconnection token; null for a registered participant */
-      guestParticipantToken?: string;
-      /** @enum {string} */
-      sessionState?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
-    };
-    LeaderboardEntryDto: {
-      /** Format: uuid */
-      participantId?: string;
-      displayName?: string;
-      /** Format: int32 */
-      score?: number;
-      /** Format: int32 */
-      rank?: number;
-    };
-    LeaderboardResponse: {
-      entries?: components["schemas"]["LeaderboardEntryDto"][];
-    };
-    SubmitAnswerRequest: {
-      /**
-       * Format: uuid
-       * @description The participant id returned when joining
-       */
-      participantId: string;
-      /** Format: uuid */
-      questionId: string;
-      /** @description Chosen option ids; must be options of this question */
-      selectedOptionIds?: string[];
-    };
-    AnswerAcceptedResponse: {
-      /** Format: uuid */
-      participantId?: string;
-      /** Format: uuid */
-      questionId?: string;
-      /** @example true */
-      accepted?: boolean;
-    };
-    ReconnectRequest: {
-      /**
-       * Format: uuid
-       * @description Required for a registered reconnect; omit for a guest
-       */
-      sessionId?: string;
-      /** @description The guest's reconnection token; omit for a registered reconnect */
-      guestParticipantToken?: string;
-      exactlyOneIdentifierPresent?: boolean;
-    };
-    SessionSnapshotResponse: {
-      /** Format: uuid */
-      sessionId?: string;
-      /** Format: uuid */
-      participantId?: string;
-      sessionState?: string;
-      /** Format: uuid */
-      currentQuestionId?: string;
-      currentPhase?: string;
-      /** Format: int64 */
-      remainingMillis?: number;
-      /** Format: int32 */
-      participantScore?: number;
-      submittedOptionIds?: string[];
-      leaderboard?: components["schemas"]["LeaderboardEntryDto"][];
-    };
-    CreateQuizRequest: {
-      /**
-       * @description BCP-47 tag; the localization must be in this language
-       * @example en
-       */
-      defaultLanguage?: string;
-      /**
-       * @description PRIVATE when omitted
-       * @enum {string}
-       */
-      visibility?: "PRIVATE" | "UNLISTED" | "PUBLIC";
-      localization: components["schemas"]["QuizLocalizationDto"];
-      /** @description Defaults applied when omitted */
-      settings?: components["schemas"]["QuizSettingsDto"];
-    };
-    AddQuestionRequest: {
-      /** Format: uuid */
-      questionId: string;
-    };
-    CreateOptionDto: {
-      /** @example Moses */
-      text?: string;
-      correct: boolean;
-      /**
-       * Format: int32
-       * @example 1
-       */
-      displayOrder: number;
-    };
-    CreateQuestionRequest: {
-      /**
-       * @description BCP-47 tag; the content is authored in this language
-       * @example en
-       */
-      defaultLanguage?: string;
-      /** @enum {string} */
-      questionType: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
-      /** @enum {string} */
-      difficulty: "EASY" | "MEDIUM" | "HARD";
-      localization: components["schemas"]["QuestionContentDto"];
-      options: components["schemas"]["CreateOptionDto"][];
-      bibleReferences?: components["schemas"]["BibleReferenceDto"][];
-      mediaReferences?: components["schemas"]["MediaReferenceDto"][];
-      /**
-       * @description Resolved or created by name; normalized to lowercase
-       * @example [
-       *       "exodus",
-       *       "moses"
-       *     ]
-       */
-      tags?: string[];
-    };
-    QuestionContentDto: {
-      /** @example Exodus leader */
-      title?: string;
-      /** @example Who led Israel out of Egypt? */
-      prompt?: string;
-      /** @example See Exodus 3. */
-      explanation?: string;
-    };
-    RegisterIdentityRequest: {
-      /** @example Aman Minz */
-      displayName?: string;
-      /** @example aman@example.com */
-      email?: string;
-      /**
-       * @description 8-128 characters
-       * @example StrongPassword@123
-       */
-      password?: string;
-      /**
-       * @description Optional, E.164 format
-       * @example +919999999999
-       */
-      phoneNumber?: string;
-    };
-    RegisterIdentityResponse: {
-      /** Format: uuid */
-      identityId?: string;
-      displayName?: string;
-      email?: string;
-      /** Format: date-time */
-      createdAt?: string;
-    };
-    LoginRequest: {
-      /** @example aman@example.com */
-      email?: string;
-      /** @example StrongPassword@123 */
-      password?: string;
-    };
-    LoginResponse: {
-      /** Format: uuid */
-      identityId?: string;
-      displayName?: string;
-      token?: string;
-      /** Format: date-time */
-      expiresAt?: string;
-      authorities?: ("ADMIN" | "QUIZ_MASTER" | "USER")[];
-    };
-    ReorderQuestionsRequest: {
-      questionIds?: string[];
-    };
-    CurrentUserResponse: {
-      /**
-       * Format: uuid
-       * @example 1557e119-29db-4e3a-b3ed-ea47233e8a59
-       */
-      identityId?: string;
-      /**
-       * @example REGISTERED
-       * @enum {string}
-       */
-      identityType?: "REGISTERED" | "GUEST";
-      /**
-       * @example [
-       *       "USER"
-       *     ]
-       */
-      roles?: ("ADMIN" | "QUIZ_MASTER" | "USER")[];
-      /**
-       * @example [
-       *       "QUIZ_VIEW",
-       *       "USER_PROFILE_READ",
-       *       "USER_PROFILE_UPDATE"
-       *     ]
-       */
-      permissions?: (
-        | "QUIZ_VIEW"
-        | "QUIZ_CREATE"
-        | "QUIZ_EDIT"
-        | "QUIZ_DELETE"
-        | "QUIZ_HOST"
-        | "USER_PROFILE_READ"
-        | "USER_PROFILE_UPDATE"
-      )[];
-      /**
-       * @description The caller's own display name; null for identities without a profile
-       * @example Aman
-       */
-      displayName?: string;
-      /**
-       * @description The caller's own email; null for identities without a profile
-       * @example aman@example.com
-       */
-      email?: string;
-    };
-    SessionResultsResponse: {
-      /** Format: uuid */
-      sessionId?: string;
-      /** @enum {string} */
-      state?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
-      /**
-       * @description The gameplay phase while IN_PROGRESS; null once FINISHED
-       * @enum {string}
-       */
-      currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
-      /** Format: int32 */
-      totalQuestions?: number;
-      /** Format: int32 */
-      participantCount?: number;
-      entries?: components["schemas"]["LeaderboardEntryDto"][];
-    };
-    CurrentQuestionResponse: {
-      /** Format: uuid */
-      sessionId?: string;
-      /** Format: uuid */
-      questionId?: string;
-      /** @enum {string} */
-      phase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
-      /**
-       * Format: int32
-       * @description 1-based position of this question in the quiz
-       * @example 3
-       */
-      questionNumber?: number;
-      /** Format: int32 */
-      totalQuestions?: number;
-      /** @enum {string} */
-      questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
-      /** @example en */
-      defaultLanguage?: string;
-      /** Format: int32 */
-      durationSeconds?: number;
-      /**
-       * Format: date-time
-       * @description The server's close time; null unless the question is open
-       */
-      endsAt?: string;
-      /**
-       * Format: int64
-       * @description Milliseconds still on the clock; 0 unless the question is open
-       */
-      remainingMillis?: number;
-      options?: components["schemas"]["PlayableOptionDto"][];
-      localizations?: components["schemas"]["PlayableLocalizationDto"][];
-      /** @description Null until the answer has been revealed */
-      correctOptionIds?: string[];
-    };
-    PlayableLocalizationDto: {
-      /** @example en */
-      languageCode?: string;
-      prompt?: string;
-      /** @description The author's explanation; null until the answer is revealed */
-      explanation?: string;
-      optionTexts?: components["schemas"]["PlayableOptionTextDto"][];
-    };
-    PlayableOptionDto: {
-      /** Format: uuid */
-      optionId?: string;
-      /** Format: int32 */
-      displayOrder?: number;
-    };
-    PlayableOptionTextDto: {
-      /** Format: uuid */
-      optionId?: string;
-      text?: string;
-    };
-    SessionParticipantDto: {
-      /** Format: uuid */
-      participantId?: string;
-      /** @example Amelia */
-      displayName?: string;
-      connected?: boolean;
-    };
-    SessionParticipantsResponse: {
-      /** Format: uuid */
-      sessionId?: string;
-      /** Format: int32 */
-      participantCount?: number;
-      participants?: components["schemas"]["SessionParticipantDto"][];
-    };
-    ParticipantResultResponse: {
-      /** Format: uuid */
-      sessionId?: string;
-      /** @enum {string} */
-      state?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
-      /**
-       * @description The gameplay phase while IN_PROGRESS; null once FINISHED
-       * @enum {string}
-       */
-      currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
-      /** Format: int32 */
-      totalQuestions?: number;
-      /** Format: int32 */
-      participantCount?: number;
-      /** Format: uuid */
-      participantId?: string;
-      displayName?: string;
-      /** Format: int32 */
-      rank?: number;
-      /** Format: int32 */
-      score?: number;
-    };
-    Pageable: {
-      /** Format: int32 */
-      page?: number;
-      /** Format: int32 */
-      size?: number;
-      sort?: string[];
-    };
-    QuizPageResponse: {
-      items?: components["schemas"]["QuizSummaryResponse"][];
-      /**
-       * Format: int32
-       * @description Zero-based page index
-       */
-      page?: number;
-      /** Format: int32 */
-      size?: number;
-      /** Format: int64 */
-      totalElements?: number;
-      /** Format: int32 */
-      totalPages?: number;
-    };
-    QuizSummaryResponse: {
-      /** Format: uuid */
-      id?: string;
-      title?: string;
-      description?: string;
-      /** @enum {string} */
-      state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
-      /** @example en */
-      defaultLanguage?: string;
-      /** Format: int32 */
-      questionCount?: number;
-      /** Format: int64 */
-      version?: number;
-      /** Format: date-time */
-      updatedAt?: string;
-    };
-    QuestionPageResponse: {
-      items?: components["schemas"]["QuestionSummaryResponse"][];
-      /**
-       * Format: int32
-       * @description Zero-based page index
-       */
-      page?: number;
-      /** Format: int32 */
-      size?: number;
-      /** Format: int64 */
-      totalElements?: number;
-      /** Format: int32 */
-      totalPages?: number;
-    };
-    QuestionSummaryResponse: {
-      /** Format: uuid */
-      id?: string;
-      defaultLanguage?: string;
-      /** @enum {string} */
-      state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
-      /** @enum {string} */
-      questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
-      /** @enum {string} */
-      difficulty?: "EASY" | "MEDIUM" | "HARD";
-      title?: string;
-      availableLanguages?: string[];
-      tags?: components["schemas"]["TagDto"][];
-      /** Format: int64 */
-      version?: number;
-      /** Format: date-time */
-      updatedAt?: string;
-    };
-  };
-  responses: never;
-  parameters: never;
-  requestBodies: never;
-  headers: never;
-  pathItems: never;
+    responses: never;
+    parameters: never;
+    requestBodies: never;
+    headers: never;
+    pathItems: never;
 }
 export type $defs = Record<string, never>;
 export interface operations {
-  get: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        quizId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The quiz */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_VIEW */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown quiz, or another owner's private quiz */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  update: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        quizId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateQuizRequest"];
-      };
-    };
-    responses: {
-      /** @description The updated quiz with its new version */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description Validation failed */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_EDIT, or not the owner */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown quiz, or another owner's private quiz */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Stale version (quiz.concurrent-modification), content change on a published quiz (quiz.content.locked), archived quiz (quiz.archived), or default localization removal (quiz.localization.default-required) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  get_1: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        questionId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The question */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuestionResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_VIEW */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown question, or another owner's question */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  update_1: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        questionId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["UpdateQuestionRequest"];
-      };
-    };
-    responses: {
-      /** @description The updated question with its new version */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuestionResponse"];
-        };
-      };
-      /** @description Validation failed */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_EDIT */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown question, or another owner's question */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Stale version (question.concurrent-modification), published question (question.content.locked), or archived question (question.archived) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  requestHostAccess: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description Host access granted (idempotent) */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["HostAccessResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description The caller may not modify their account (guests) */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  create: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["CreateSessionRequest"];
-      };
-    };
-    responses: {
-      /** @description Session created; Location points to it */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Validation failed */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_HOST */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description The quiz version does not exist */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description The quiz is not published (quiz.not-published) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  openLobby: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        pin: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The session, now in LOBBY */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description No active session for the PIN */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description The session is not in CREATED (session.invalid-transition) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  join: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        pin: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["JoinSessionRequest"];
-      };
-    };
-    responses: {
-      /** @description Joined; a guest's token is in the response */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ParticipantSessionResponse"];
-        };
-      };
-      /** @description Validation failed (blank name, bad language tag) */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description No active session for the PIN */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lobby closed (session.invalid-transition), full (session.full), or already joined (session.participant.already-joined) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  start: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The session, now IN_PROGRESS */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown session */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not in LOBBY (session.invalid-transition) or empty (session.not-startable) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  startQuestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The session, now QUESTION_OPEN */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown session */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not startable here (session.invalid-transition, session.not-startable) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  revealAnswer: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The session, now ANSWER_REVEALED */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description The question is not closed (session.invalid-transition) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  closeQuestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The session, now QUESTION_CLOSED */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description No question is open (session.invalid-transition) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  advanceQuestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description QUESTION_OPEN for the next question, or FINISHED */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not at the leaderboard (session.invalid-transition) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  showLeaderboard: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The current standings */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["LeaderboardResponse"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description The answer is not revealed yet (session.invalid-transition) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  submitAnswer: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["SubmitAnswerRequest"];
-      };
-    };
-    responses: {
-      /** @description Answer accepted (no score returned) */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["AnswerAcceptedResponse"];
-        };
-      };
-      /** @description Validation failed (empty or invalid options) */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown participant (session.participant.not-found) */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not accepted — question not open, already answered (session.answer.not-accepted), or not connected (session.participant.not-connected) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  reconnect: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ReconnectRequest"];
-      };
-    };
-    responses: {
-      /** @description Reconnected; returns the session snapshot */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSnapshotResponse"];
-        };
-      };
-      /** @description A registered reconnect without a token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description No participant matches (session.participant.not-found) */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description The participant is not in a reconnectable state (participant.invalid-transition) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  create_1: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        /**
-         * @example {
-         *       "defaultLanguage": "en",
-         *       "visibility": "PRIVATE",
-         *       "localization": {
-         *         "languageCode": "en",
-         *         "title": "Bible Quiz",
-         *         "description": "Sunday Youth Fellowship"
-         *       },
-         *       "settings": {
-         *         "questionTimeLimitSeconds": 30,
-         *         "randomizeQuestionOrder": false,
-         *         "randomizeOptionOrder": false,
-         *         "showLeaderboardAfterQuestion": true,
-         *         "showExplanationAfterQuestion": true
-         *       }
-         *     }
-         */
-        "application/json": components["schemas"]["CreateQuizRequest"];
-      };
-    };
-    responses: {
-      /** @description Draft created; Location points to the quiz */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description Validation failed (unknown language tag, blank title, settings out of range) */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_CREATE */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  addQuestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        quizId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["AddQuestionRequest"];
-      };
-    };
-    responses: {
-      /** @description The quiz, with the question attached */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description Validation failed */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_EDIT, or not the quiz owner */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown quiz or question, or one owned by someone else */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Archived quiz (quiz.archived), duplicate attachment (quiz.question.duplicate), or the question is archived (quiz.question.not-attachable) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  publish: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        quizId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The quiz, now PUBLISHED */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_EDIT, or not the owner */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown quiz, or another owner's private quiz */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not publishable (quiz.not-publishable) or archived (quiz.archived) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  archive: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        quizId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The quiz, now ARCHIVED */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_EDIT, or not the owner */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown quiz, or another owner's private quiz */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not archivable from the current state (quiz.not-archivable, quiz.archived) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  library: {
-    parameters: {
-      query: {
-        state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
-        difficulty?: "EASY" | "MEDIUM" | "HARD";
-        /** @description BCP-47 tag; matches questions with a localization in this language */
-        language?: string;
-        tags?: string[];
-        /** @description Case-insensitive match against any localization's title or prompt */
-        search?: string;
-        pageable: components["schemas"]["Pageable"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description A page of matching questions */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuestionPageResponse"];
-        };
-      };
-      /** @description Unsupported sort property, or unknown language tag */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_VIEW */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  create_2: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        /**
-         * @example {
-         *       "defaultLanguage": "en",
-         *       "questionType": "SINGLE_CHOICE",
-         *       "difficulty": "EASY",
-         *       "localization": {
-         *         "title": "Exodus leader",
-         *         "prompt": "Who led Israel out of Egypt?",
-         *         "explanation": "See Exodus 3."
-         *       },
-         *       "options": [
-         *         {
-         *           "text": "Moses",
-         *           "correct": true,
-         *           "displayOrder": 1
-         *         },
-         *         {
-         *           "text": "Aaron",
-         *           "correct": false,
-         *           "displayOrder": 2
-         *         }
-         *       ],
-         *       "bibleReferences": [
-         *         {
-         *           "book": "Exodus",
-         *           "chapter": 3,
-         *           "verseStart": 1,
-         *           "verseEnd": 10
-         *         }
-         *       ],
-         *       "tags": [
-         *         "exodus",
-         *         "moses"
-         *       ]
-         *     }
-         */
-        "application/json": components["schemas"]["CreateQuestionRequest"];
-      };
-    };
-    responses: {
-      /** @description Draft created; Location points to the question */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuestionResponse"];
-        };
-      };
-      /** @description Validation failed (unknown language tag, option rules of the question type violated, blank texts) */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_CREATE */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  publish_1: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        questionId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The question, now PUBLISHED */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuestionResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_EDIT */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown question, or another owner's question */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not publishable (question.not-publishable) or archived (question.archived) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  archive_1: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        questionId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The question, now ARCHIVED */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuestionResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_EDIT */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown question, or another owner's question */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Not archivable from the current state (question.not-archivable, question.archived) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  register: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["RegisterIdentityRequest"];
-      };
-    };
-    responses: {
-      /** @description Identity registered; Location points to the new resource */
-      201: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["RegisterIdentityResponse"];
-        };
-      };
-      /** @description Request validation failed */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Email address is already registered */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  login: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["LoginRequest"];
-      };
-    };
-    responses: {
-      /** @description Authenticated; token returned */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["LoginResponse"];
-        };
-      };
-      /** @description Request validation failed */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Invalid email or password */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  reorderQuestions: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        quizId: string;
-      };
-      cookie?: never;
-    };
-    requestBody: {
-      content: {
-        "application/json": components["schemas"]["ReorderQuestionsRequest"];
-      };
-    };
-    responses: {
-      /** @description The quiz, questions in their new order */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description The list is not exactly the quiz's current questions (missing, extra, or duplicate ids) */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_EDIT, or not the quiz owner */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown quiz, or another owner's private quiz */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Published or archived quiz (quiz.questions.locked, quiz.archived) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  me: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The authenticated identity */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["CurrentUserResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking USER_PROFILE_READ */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  get_2: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The session summary */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionSummaryResponse"];
-        };
-      };
-      /** @description Unknown session */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  results: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The current standings */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionResultsResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown session */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Results not readable yet (session.results.not-available) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  currentQuestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The question in play */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["CurrentQuestionResponse"];
-        };
-      };
-      /** @description Unknown session */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description No question is in play (session.no-current-question) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  participants: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The roster, in join order */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["SessionParticipantsResponse"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_HOST, or not the host */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown session */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  participantResult: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        id: string;
-        participantId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The participant's own result */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ParticipantResultResponse"];
-        };
-      };
-      /** @description Unknown session, or no such participant in it (session.participant.not-found) */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Results not readable yet (session.results.not-available) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  mine: {
-    parameters: {
-      query: {
-        state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
-        /** @description Case-insensitive match against any localization's title */
-        search?: string;
-        pageable: components["schemas"]["Pageable"];
-      };
-      header?: never;
-      path?: never;
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description A page of the caller's quizzes */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizPageResponse"];
-        };
-      };
-      /** @description Unsupported sort property */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Authenticated but lacking QUIZ_VIEW */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
-  removeQuestion: {
-    parameters: {
-      query?: never;
-      header?: never;
-      path: {
-        quizId: string;
-        questionId: string;
-      };
-      cookie?: never;
-    };
-    requestBody?: never;
-    responses: {
-      /** @description The quiz, with the question detached */
-      200: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["QuizResponse"];
-        };
-      };
-      /** @description The question is not part of this quiz */
-      400: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Missing, invalid, or revoked token */
-      401: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Lacking QUIZ_EDIT, or not the quiz owner */
-      403: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Unknown quiz, or another owner's private quiz */
-      404: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-      /** @description Published or archived quiz (quiz.questions.locked, quiz.archived) */
-      409: {
-        headers: {
-          [name: string]: unknown;
-        };
-        content: {
-          "*/*": components["schemas"]["ApiError"];
-        };
-      };
-    };
-  };
+    get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quizId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quiz */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_VIEW */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown quiz, or another owner's private quiz */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quizId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateQuizRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated quiz with its new version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_EDIT, or not the owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown quiz, or another owner's private quiz */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Stale version (quiz.concurrent-modification), content change on a published quiz (quiz.content.locked), archived quiz (quiz.archived), or default localization removal (quiz.localization.default-required) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    get_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The question */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_VIEW */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown question, or another owner's question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    update_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description The updated question with its new version */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_EDIT */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown question, or another owner's question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Stale version (question.concurrent-modification), published question (question.content.locked), or archived question (question.archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    delete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Deleted */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_EDIT */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown question, or another owner's question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Used by at least one quiz (question.in-use) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    requestHostAccess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Host access granted (idempotent) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["HostAccessResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The caller may not modify their account (guests) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Session created; Location points to it */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_HOST */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The quiz version does not exist */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The quiz is not published (quiz.not-published) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    openLobby: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, now in LOBBY */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No active session for the PIN */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The session is not in CREATED (session.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    join: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pin: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["JoinSessionRequest"];
+            };
+        };
+        responses: {
+            /** @description Joined; a guest's token is in the response */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ParticipantSessionResponse"];
+                };
+            };
+            /** @description Validation failed (blank name, bad language tag) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No active session for the PIN */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lobby closed (session.invalid-transition), full (session.full), or already joined (session.participant.already-joined) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, now IN_PROGRESS */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not in LOBBY (session.invalid-transition) or empty (session.not-startable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    startQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, now QUESTION_OPEN */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not startable here (session.invalid-transition, session.not-startable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    revealAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, now ANSWER_REVEALED */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The question is not closed (session.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    closeQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, now QUESTION_CLOSED */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No question is open (session.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    advanceQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description QUESTION_OPEN for the next question, or FINISHED */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not at the leaderboard (session.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    showLeaderboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current standings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LeaderboardResponse"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The answer is not revealed yet (session.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    submitAnswer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitAnswerRequest"];
+            };
+        };
+        responses: {
+            /** @description Answer accepted (no score returned) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AnswerAcceptedResponse"];
+                };
+            };
+            /** @description Validation failed (empty or invalid options) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown participant (session.participant.not-found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not accepted — question not open, already answered (session.answer.not-accepted), or not connected (session.participant.not-connected) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    reconnect: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReconnectRequest"];
+            };
+        };
+        responses: {
+            /** @description Reconnected; returns the session snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSnapshotResponse"];
+                };
+            };
+            /** @description A registered reconnect without a token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No participant matches (session.participant.not-found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The participant is not in a reconnectable state (participant.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    create_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "defaultLanguage": "en",
+                 *       "visibility": "PRIVATE",
+                 *       "localization": {
+                 *         "languageCode": "en",
+                 *         "title": "Bible Quiz",
+                 *         "description": "Sunday Youth Fellowship"
+                 *       },
+                 *       "settings": {
+                 *         "questionTimeLimitSeconds": 30,
+                 *         "randomizeQuestionOrder": false,
+                 *         "randomizeOptionOrder": false,
+                 *         "showLeaderboardAfterQuestion": true,
+                 *         "showExplanationAfterQuestion": true
+                 *       }
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateQuizRequest"];
+            };
+        };
+        responses: {
+            /** @description Draft created; Location points to the quiz */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description Validation failed (unknown language tag, blank title, settings out of range) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_CREATE */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    addQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quizId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description The quiz, with the question attached */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description Validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_EDIT, or not the quiz owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown quiz or question, or one owned by someone else */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Archived quiz (quiz.archived), duplicate attachment (quiz.question.duplicate), or the question is archived (quiz.question.not-attachable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quizId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quiz, now PUBLISHED */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_EDIT, or not the owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown quiz, or another owner's private quiz */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not publishable (quiz.not-publishable) or archived (quiz.archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quizId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quiz, now ARCHIVED */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_EDIT, or not the owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown quiz, or another owner's private quiz */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not archivable from the current state (quiz.not-archivable, quiz.archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    library: {
+        parameters: {
+            query: {
+                state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                difficulty?: "EASY" | "MEDIUM" | "HARD";
+                /** @description BCP-47 tag; matches questions with a localization in this language */
+                language?: string;
+                tags?: string[];
+                /** @description Case-insensitive match against any localization's title or prompt */
+                search?: string;
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of matching questions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionPageResponse"];
+                };
+            };
+            /** @description Unsupported sort property, or unknown language tag */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_VIEW */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    create_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                /**
+                 * @example {
+                 *       "defaultLanguage": "en",
+                 *       "questionType": "SINGLE_CHOICE",
+                 *       "difficulty": "EASY",
+                 *       "localization": {
+                 *         "title": "Exodus leader",
+                 *         "prompt": "Who led Israel out of Egypt?",
+                 *         "explanation": "See Exodus 3."
+                 *       },
+                 *       "options": [
+                 *         {
+                 *           "text": "Moses",
+                 *           "correct": true,
+                 *           "displayOrder": 1
+                 *         },
+                 *         {
+                 *           "text": "Aaron",
+                 *           "correct": false,
+                 *           "displayOrder": 2
+                 *         }
+                 *       ],
+                 *       "bibleReferences": [
+                 *         {
+                 *           "book": "Exodus",
+                 *           "chapter": 3,
+                 *           "verseStart": 1,
+                 *           "verseEnd": 10
+                 *         }
+                 *       ],
+                 *       "tags": [
+                 *         "exodus",
+                 *         "moses"
+                 *       ]
+                 *     }
+                 */
+                "application/json": components["schemas"]["CreateQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description Draft created; Location points to the question */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Validation failed (unknown language tag, option rules of the question type violated, blank texts) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_CREATE */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    restore: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The question, PUBLISHED again */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_EDIT */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown question, or another owner's question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not archived (question.not-restorable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    publish_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The question, now PUBLISHED */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_EDIT */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown question, or another owner's question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not publishable (question.not-publishable) or archived (question.archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    archive_1: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The question, now ARCHIVED */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_EDIT */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown question, or another owner's question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not archivable from the current state (question.not-archivable, question.archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    register: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterIdentityRequest"];
+            };
+        };
+        responses: {
+            /** @description Identity registered; Location points to the new resource */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RegisterIdentityResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Email address is already registered */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    login: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LoginRequest"];
+            };
+        };
+        responses: {
+            /** @description Authenticated; token returned */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["LoginResponse"];
+                };
+            };
+            /** @description Request validation failed */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Invalid email or password */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    reorderQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quizId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReorderQuestionsRequest"];
+            };
+        };
+        responses: {
+            /** @description The quiz, questions in their new order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description The list is not exactly the quiz's current questions (missing, extra, or duplicate ids) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_EDIT, or not the quiz owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown quiz, or another owner's private quiz */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Published or archived quiz (quiz.questions.locked, quiz.archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The authenticated identity */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CurrentUserResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking USER_PROFILE_READ */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    get_2: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session summary */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    results: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current standings */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionResultsResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Results not readable yet (session.results.not-available) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    currentQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The question in play */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["CurrentQuestionResponse"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No question is in play (session.no-current-question) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The roster, in join order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionParticipantsResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    participantResult: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                participantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The participant's own result */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ParticipantResultResponse"];
+                };
+            };
+            /** @description Unknown session, or no such participant in it (session.participant.not-found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Results not readable yet (session.results.not-available) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    answerProgress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current counts */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AnswerProgressResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No question is in play (session.no-current-question) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    mine: {
+        parameters: {
+            query: {
+                state?: "DRAFT" | "PUBLISHED" | "ARCHIVED";
+                /** @description Case-insensitive match against any localization's title */
+                search?: string;
+                pageable: components["schemas"]["Pageable"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description A page of the caller's quizzes */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizPageResponse"];
+                };
+            };
+            /** @description Unsupported sort property */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_VIEW */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    usage: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The usage count */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuestionUsageResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Authenticated but lacking QUIZ_VIEW */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown question, or another owner's question */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    removeQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                quizId: string;
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The quiz, with the question detached */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["QuizResponse"];
+                };
+            };
+            /** @description The question is not part of this quiz */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_EDIT, or not the quiz owner */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown quiz, or another owner's private quiz */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Published or archived quiz (quiz.questions.locked, quiz.archived) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
 }

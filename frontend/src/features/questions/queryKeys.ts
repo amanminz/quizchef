@@ -12,5 +12,6 @@ export const questionKeys = {
   all: ["questions"] as const,
   libraries: () => [...questionKeys.all, "library"] as const,
   library: (filters: QuestionLibraryFilters) => [...questionKeys.libraries(), filters] as const,
-  detail: (questionId: string) => [...questionKeys.all, "detail", questionId] as const
+  detail: (questionId: string) => [...questionKeys.all, "detail", questionId] as const,
+  usage: (questionId: string) => [...questionKeys.all, "usage", questionId] as const
 };

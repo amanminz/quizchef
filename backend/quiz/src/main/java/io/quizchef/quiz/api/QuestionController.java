@@ -5,11 +5,13 @@ import io.quizchef.identity.domain.CurrentUserProvider;
 import io.quizchef.quiz.application.ArchiveQuestionApplicationService;
 import io.quizchef.quiz.application.ArchiveQuestionCommand;
 import io.quizchef.quiz.application.CreateQuestionApplicationService;
+import io.quizchef.quiz.application.DeleteQuestionApplicationService;
 import io.quizchef.quiz.application.PublishQuestionApplicationService;
 import io.quizchef.quiz.application.PublishQuestionCommand;
 import io.quizchef.quiz.application.QuestionQueryService;
 import io.quizchef.quiz.application.QuestionSearchQuery;
 import io.quizchef.quiz.application.QuestionView;
+import io.quizchef.quiz.application.RestoreQuestionApplicationService;
 import io.quizchef.quiz.application.UpdateQuestionApplicationService;
 import io.quizchef.quiz.domain.Difficulty;
 import io.quizchef.quiz.domain.LanguageCode;
@@ -31,6 +33,7 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -53,6 +56,8 @@ public class QuestionController {
     private final UpdateQuestionApplicationService updateQuestionApplicationService;
     private final PublishQuestionApplicationService publishQuestionApplicationService;
     private final ArchiveQuestionApplicationService archiveQuestionApplicationService;
+    private final RestoreQuestionApplicationService restoreQuestionApplicationService;
+    private final DeleteQuestionApplicationService deleteQuestionApplicationService;
     private final QuestionQueryService questionQueryService;
     private final CurrentUserProvider currentUserProvider;
 
@@ -60,12 +65,16 @@ public class QuestionController {
                               UpdateQuestionApplicationService updateQuestionApplicationService,
                               PublishQuestionApplicationService publishQuestionApplicationService,
                               ArchiveQuestionApplicationService archiveQuestionApplicationService,
+                              RestoreQuestionApplicationService restoreQuestionApplicationService,
+                              DeleteQuestionApplicationService deleteQuestionApplicationService,
                               QuestionQueryService questionQueryService,
                               CurrentUserProvider currentUserProvider) {
         this.createQuestionApplicationService = createQuestionApplicationService;
         this.updateQuestionApplicationService = updateQuestionApplicationService;
         this.publishQuestionApplicationService = publishQuestionApplicationService;
         this.archiveQuestionApplicationService = archiveQuestionApplicationService;
+        this.restoreQuestionApplicationService = restoreQuestionApplicationService;
+        this.deleteQuestionApplicationService = deleteQuestionApplicationService;
         this.questionQueryService = questionQueryService;
         this.currentUserProvider = currentUserProvider;
     }
@@ -245,5 +254,73 @@ public class QuestionController {
     public QuestionResponse archive(@PathVariable UUID questionId) {
         return QuestionResponse.from(archiveQuestionApplicationService.archive(
                 currentUserProvider.currentUser(), new ArchiveQuestionCommand(questionId)));
+    }
+
+    @PostMapping("/{questionId}/restore")
+    @Operation(
+            summary = "Restore an archived question",
+            description = "Owner only, requires QUIZ_EDIT. The same question (same id, same content, "
+                    + "same quiz references) returns to PUBLISHED and becomes available for new "
+                    + "quizzes again — never a copy. Repeated restores are rejected.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The question, PUBLISHED again"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Authenticated but lacking QUIZ_EDIT",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown question, or another owner's question",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Not archived (question.not-restorable)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public QuestionResponse restore(@PathVariable UUID questionId) {
+        return QuestionResponse.from(restoreQuestionApplicationService.restore(
+                currentUserProvider.currentUser(), questionId));
+    }
+
+    @GetMapping("/{questionId}/usage")
+    @Operation(
+            summary = "Read how many quizzes use a question",
+            description = "Owner only, requires QUIZ_VIEW. The number of the caller's quizzes that "
+                    + "compose this question — what frames the delete affordance: zero means "
+                    + "deletable, more means the references must be removed first.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The usage count"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Authenticated but lacking QUIZ_VIEW",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown question, or another owner's question",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public QuestionUsageResponse usage(@PathVariable UUID questionId) {
+        return new QuestionUsageResponse(questionId, deleteQuestionApplicationService
+                .quizReferenceCount(currentUserProvider.currentUser(), questionId));
+    }
+
+    @DeleteMapping("/{questionId}")
+    @Operation(
+            summary = "Delete an unused question",
+            description = "Owner only, requires QUIZ_EDIT. One consistent rule across the lifecycle: "
+                    + "a question is deletable if and only if no quiz composes it. The reference "
+                    + "check and the delete share one transaction — a direct API request is rejected "
+                    + "exactly like the UI's disabled button.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "Deleted"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Authenticated but lacking QUIZ_EDIT",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown question, or another owner's question",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Used by at least one quiz (question.in-use)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public ResponseEntity<Void> delete(@PathVariable UUID questionId) {
+        deleteQuestionApplicationService.delete(currentUserProvider.currentUser(), questionId);
+        return ResponseEntity.noContent().build();
     }
 }

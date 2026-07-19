@@ -3,6 +3,7 @@ package io.quizchef.session.api;
 import io.quizchef.common.api.ApiError;
 import io.quizchef.identity.domain.CurrentUserProvider;
 import io.quizchef.session.application.AdvanceQuestionApplicationService;
+import io.quizchef.session.application.AnswerProgressQueryService;
 import io.quizchef.session.application.CloseQuestionApplicationService;
 import io.quizchef.session.application.CurrentQuestionQueryService;
 import io.quizchef.session.application.SessionResultsQueryService;
@@ -44,6 +45,7 @@ public class GameplayController {
     private final SubmitAnswerApplicationService submitAnswerApplicationService;
     private final CurrentQuestionQueryService currentQuestionQueryService;
     private final SessionResultsQueryService sessionResultsQueryService;
+    private final AnswerProgressQueryService answerProgressQueryService;
     private final CurrentUserProvider currentUserProvider;
 
     public GameplayController(StartQuestionApplicationService startQuestionApplicationService,
@@ -54,6 +56,7 @@ public class GameplayController {
                              SubmitAnswerApplicationService submitAnswerApplicationService,
                              CurrentQuestionQueryService currentQuestionQueryService,
                              SessionResultsQueryService sessionResultsQueryService,
+                             AnswerProgressQueryService answerProgressQueryService,
                              CurrentUserProvider currentUserProvider) {
         this.startQuestionApplicationService = startQuestionApplicationService;
         this.closeQuestionApplicationService = closeQuestionApplicationService;
@@ -63,6 +66,7 @@ public class GameplayController {
         this.submitAnswerApplicationService = submitAnswerApplicationService;
         this.currentQuestionQueryService = currentQuestionQueryService;
         this.sessionResultsQueryService = sessionResultsQueryService;
+        this.answerProgressQueryService = answerProgressQueryService;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -115,6 +119,32 @@ public class GameplayController {
                                                        @PathVariable UUID participantId) {
         return ParticipantResultResponse.from(
                 sessionResultsQueryService.personalResult(id, participantId));
+    }
+
+    @GetMapping("/{id}/answer-progress")
+    @Operation(
+            summary = "Read the current question's answer progress (host only)",
+            description = "How many participants have an accepted answer for the question in play, "
+                    + "out of how many are eligible to answer right now — the authoritative counts "
+                    + "behind the host's \"5 / 10 answered\". Counts only, never who; participants "
+                    + "see only their own acknowledgement. Refreshed by the host on each "
+                    + "answer.progress broadcast.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The current counts"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "No question is in play "
+                    + "(session.no-current-question)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public AnswerProgressResponse answerProgress(@PathVariable UUID id) {
+        return AnswerProgressResponse.from(
+                answerProgressQueryService.progress(currentUserProvider.currentUser(), id));
     }
 
     @GetMapping("/{id}/questions/current")

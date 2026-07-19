@@ -11,6 +11,7 @@ import io.quizchef.quiz.domain.exception.QuestionArchivedException;
 import io.quizchef.quiz.domain.exception.QuestionContentLockedException;
 import io.quizchef.quiz.domain.exception.QuestionNotArchivableException;
 import io.quizchef.quiz.domain.exception.QuestionNotPublishableException;
+import io.quizchef.quiz.domain.exception.QuestionNotRestorableException;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -311,6 +312,84 @@ class QuestionTest {
                 .isThrownBy(() -> question.changeDifficulty(Difficulty.HARD));
         assertThatExceptionOfType(QuestionArchivedException.class)
                 .isThrownBy(() -> localizeInKannada(question));
+    }
+
+    @Test
+    void restoreBringsAnArchivedQuestionBackToPublished() {
+        Question question = singleChoice();
+        UUID originalId = question.getId();
+        question.publish();
+        question.archive();
+
+        question.restore();
+
+        assertThat(question.isPublished()).isTrue();
+        assertThat(question.getId()).isEqualTo(originalId);
+        // ... and archiving works again, it was never a copy.
+        question.archive();
+        assertThat(question.isArchived()).isTrue();
+    }
+
+    @Test
+    void onlyArchivedQuestionsCanBeRestored() {
+        Question draft = singleChoice();
+        assertThatExceptionOfType(QuestionNotRestorableException.class)
+                .isThrownBy(draft::restore);
+
+        Question published = singleChoice();
+        published.publish();
+        assertThatExceptionOfType(QuestionNotRestorableException.class)
+                .isThrownBy(published::restore);
+    }
+
+    @Test
+    void replaceStructureChangesTheQuestionTypeWithRevalidatedOptions() {
+        Question question = singleChoice();
+        Option trueOption = Option.of(true, 1);
+        Option falseOption = Option.of(false, 2);
+
+        question.replaceStructure(QuestionType.TRUE_FALSE, englishContent(),
+                List.of(trueOption, falseOption),
+                List.of(trueOption.localized(EN, "True"), falseOption.localized(EN, "False")));
+
+        assertThat(question.getQuestionType()).isEqualTo(QuestionType.TRUE_FALSE);
+        assertThat(question.options()).hasSize(2);
+
+        // The new type's structural rules bind immediately.
+        assertThatIllegalArgumentException().isThrownBy(() ->
+                question.replaceStructure(QuestionType.TRUE_FALSE, englishContent(),
+                        List.of(MOSES, AARON, Option.of(false, 3)),
+                        List.of(MOSES.localized(EN, "A"), AARON.localized(EN, "B"))));
+    }
+
+    @Test
+    void replaceStructureMovesTheDefaultLanguageToAFullyLocalizedOne() {
+        Question question = singleChoice();
+        localizeInKannada(question);
+
+        question.replaceStructure(QuestionType.SINGLE_CHOICE,
+                new QuestionLocalization(KN, "ನಾಯಕ", "ಯಾರು?", null),
+                List.of(MOSES, AARON),
+                List.of(MOSES.localized(KN, "ಮೋಶೆ"), AARON.localized(KN, "ಆರೋನ್")));
+
+        assertThat(question.getDefaultLanguage()).isEqualTo(KN);
+        // The old default survives as a regular translation ...
+        assertThat(question.localization(EN)).isPresent();
+        // ... and is now removable, while the new default is not.
+        question.removeLocalization(EN);
+        assertThatExceptionOfType(DefaultLocalizationRequiredException.class)
+                .isThrownBy(() -> question.removeLocalization(KN));
+    }
+
+    @Test
+    void replaceStructureIsForDraftsOnly() {
+        Question question = singleChoice();
+        question.publish();
+
+        assertThatExceptionOfType(QuestionContentLockedException.class)
+                .isThrownBy(() -> question.replaceStructure(QuestionType.SINGLE_CHOICE,
+                        englishContent(), List.of(MOSES, AARON),
+                        List.of(MOSES.localized(EN, "Moses"), AARON.localized(EN, "Aaron"))));
     }
 
     @Test

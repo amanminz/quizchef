@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
@@ -70,14 +70,35 @@ describe("EditQuestionPage", () => {
     ]);
   });
 
-  it("locks type and language on an existing draft", async () => {
+  it("breadcrumbs to the question's detail route by real id, never by title", async () => {
     signIn();
     server.use(http.get("/api/v1/questions/q-1", () => HttpResponse.json(draftQuestion())));
 
     renderApp("/questions/q-1/edit");
 
-    expect(await screen.findByLabelText("Question type")).toBeDisabled();
-    expect(screen.getByLabelText("Language")).toBeDisabled();
+    const breadcrumb = await screen.findByRole("navigation", { name: /breadcrumb/i });
+    const questionCrumb = await within(breadcrumb).findByRole("link", {
+      name: "Exodus leader"
+    });
+    expect(questionCrumb).toHaveAttribute("href", "/questions/q-1");
+    expect(
+      within(breadcrumb).getByRole("link", { name: "Question Library" })
+    ).toHaveAttribute("href", "/questions");
+    // "Edit" is the current page — present, but never a link.
+    expect(within(breadcrumb).getByText("Edit")).toBeInTheDocument();
+    expect(
+      within(breadcrumb).queryByRole("link", { name: "Edit" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("lets a draft change its question type and default language", async () => {
+    signIn();
+    server.use(http.get("/api/v1/questions/q-1", () => HttpResponse.json(draftQuestion())));
+
+    renderApp("/questions/q-1/edit");
+
+    expect(await screen.findByLabelText("Question type")).toBeEnabled();
+    expect(screen.getByLabelText("Default language")).toBeEnabled();
   });
 
   it("refuses to edit a published question and explains why", async () => {

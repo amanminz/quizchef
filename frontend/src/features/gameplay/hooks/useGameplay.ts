@@ -93,6 +93,23 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
         void queryClient.invalidateQueries({ queryKey: sessionKeys.detail(sessionId) });
         void queryClient.invalidateQueries({ queryKey: gameplayKeys.currentQuestion(sessionId) });
       }
+      // Host-only answer progress: the broadcast carries no counts (and
+      // no participant) — it only says the authoritative read moved.
+      // Roster events move the eligible denominator the same way. A
+      // participant device (participantId set) never mounts this query,
+      // so it has nothing to invalidate.
+      if (
+        !participantId &&
+        (message.type === "answer.progress" ||
+          message.type === "question.started" ||
+          message.type === "participant.joined" ||
+          message.type === "participant.disconnected" ||
+          message.type === "participant.reconnected")
+      ) {
+        void queryClient.invalidateQueries({
+          queryKey: gameplayKeys.answerProgress(sessionId)
+        });
+      }
       if (RESULTS_EVENTS.has(message.type)) {
         // Role-specific invalidation (live-event privacy): a participant
         // device refreshes only its own personal result; the host (no

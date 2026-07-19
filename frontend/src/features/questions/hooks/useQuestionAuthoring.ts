@@ -43,6 +43,19 @@ export function useQuestionAuthoring() {
     onSuccess: reconcile
   });
 
+  const restoreMutation = useMutation({
+    mutationFn: (questionId: string) => questionApi.restore(questionId),
+    onSuccess: reconcile
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (questionId: string) => questionApi.delete(questionId),
+    onSuccess: (_, questionId) => {
+      queryClient.removeQueries({ queryKey: questionKeys.detail(questionId) });
+      queryClient.invalidateQueries({ queryKey: questionKeys.libraries() });
+    }
+  });
+
   return {
     create: createMutation.mutateAsync,
     isCreating: createMutation.isPending,
@@ -51,6 +64,10 @@ export function useQuestionAuthoring() {
     publish: publishMutation.mutateAsync,
     isPublishing: publishMutation.isPending,
     archive: archiveMutation.mutateAsync,
-    isArchiving: archiveMutation.isPending
+    isArchiving: archiveMutation.isPending,
+    restore: restoreMutation.mutateAsync,
+    isRestoring: restoreMutation.isPending,
+    deleteQuestion: deleteMutation.mutateAsync,
+    isDeleting: deleteMutation.isPending
   };
 }
