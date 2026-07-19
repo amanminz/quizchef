@@ -666,7 +666,7 @@ describe("PlaySessionPage", () => {
       await screen.findByText("BELC Bible Quiz — Gospel of Mark")
     ).toBeInTheDocument();
     expect(await screen.findByText(question.localizations![0].prompt!)).toBeInTheDocument();
-    expect(document.title).toBe("BELC Bible Quiz — Gospel of Mark | QuizChef");
+    expect(document.title).toBe("BELC Bible Quiz — Gospel of Mark | BELC Family Quiz Platform");
   });
 
   it("keeps the quiz title on the recovered final screen", async () => {
