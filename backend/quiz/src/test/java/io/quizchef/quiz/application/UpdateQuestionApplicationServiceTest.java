@@ -16,6 +16,8 @@ import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.identity.domain.Role;
 import io.quizchef.quiz.domain.Difficulty;
+import io.quizchef.quiz.domain.LanguageCode;
+import io.quizchef.quiz.domain.QuestionType;
 import io.quizchef.quiz.domain.Question;
 import io.quizchef.quiz.domain.Tag;
 import io.quizchef.quiz.domain.exception.QuestionArchivedException;
@@ -65,7 +67,7 @@ class UpdateQuestionApplicationServiceTest {
 
         UpdateQuestionCommand command = unchangedUpdateOf(question);
         QuestionView view = service.update(owner, new UpdateQuestionCommand(
-                command.questionId(), command.version(), Difficulty.HARD, command.options(),
+                command.questionId(), command.version(), null, null, Difficulty.HARD, command.options(),
                 command.localizations(), command.bibleReferences(), command.mediaReferences(),
                 List.of("Exodus")));
 
@@ -83,14 +85,14 @@ class UpdateQuestionApplicationServiceTest {
         List<QuestionContentCommand> withKannada = new ArrayList<>(command.localizations());
         withKannada.add(kannadaContentFor(question));
         service.update(owner, new UpdateQuestionCommand(
-                command.questionId(), command.version(), command.difficulty(), command.options(),
+                command.questionId(), command.version(), null, null, command.difficulty(), command.options(),
                 withKannada, command.bibleReferences(), command.mediaReferences(), List.of()));
         assertThat(question.localization(KN)).isPresent();
 
         // omitting it removes it again
         UpdateQuestionCommand englishOnly = unchangedUpdateOf(question);
         service.update(owner, new UpdateQuestionCommand(
-                englishOnly.questionId(), englishOnly.version(), englishOnly.difficulty(),
+                englishOnly.questionId(), englishOnly.version(), null, null, englishOnly.difficulty(),
                 englishOnly.options(),
                 englishOnly.localizations().stream()
                         .filter(content -> content.languageCode().equals("en"))
@@ -108,8 +110,50 @@ class UpdateQuestionApplicationServiceTest {
 
         assertThatIllegalArgumentException()
                 .isThrownBy(() -> service.update(owner, new UpdateQuestionCommand(
-                        command.questionId(), command.version(), command.difficulty(),
+                        command.questionId(), command.version(), null, null, command.difficulty(),
                         command.options(), List.of(kannadaContentFor(question)),
+                        command.bibleReferences(), command.mediaReferences(), List.of())))
+                .withMessageContaining("default language");
+    }
+
+    @Test
+    void aDraftChangesItsQuestionTypeThroughThePut() {
+        Question question = storedQuestion(englishQuestionOwnedBy(owner));
+        UpdateQuestionCommand command = unchangedUpdateOf(question);
+
+        QuestionView view = service.update(owner, new UpdateQuestionCommand(
+                command.questionId(), command.version(), QuestionType.MULTIPLE_CHOICE, null,
+                command.difficulty(), command.options(), command.localizations(),
+                command.bibleReferences(), command.mediaReferences(), List.of()));
+
+        assertThat(view.questionType()).isEqualTo(QuestionType.MULTIPLE_CHOICE);
+    }
+
+    @Test
+    void aDraftMovesItsDefaultLanguageToAFullyLocalizedOne() {
+        Question question = storedQuestion(englishQuestionOwnedBy(owner));
+        UpdateQuestionCommand command = unchangedUpdateOf(question);
+        List<QuestionContentCommand> withKannada = new ArrayList<>(command.localizations());
+        withKannada.add(kannadaContentFor(question));
+
+        service.update(owner, new UpdateQuestionCommand(
+                command.questionId(), command.version(), null, "kn",
+                command.difficulty(), command.options(), withKannada,
+                command.bibleReferences(), command.mediaReferences(), List.of()));
+
+        assertThat(question.getDefaultLanguage()).isEqualTo(LanguageCode.of("kn"));
+        assertThat(question.localization(LanguageCode.of("en"))).isPresent();
+    }
+
+    @Test
+    void theNewDefaultLanguageMustBeInTheLocalizations() {
+        Question question = storedQuestion(englishQuestionOwnedBy(owner));
+        UpdateQuestionCommand command = unchangedUpdateOf(question);
+
+        assertThatIllegalArgumentException()
+                .isThrownBy(() -> service.update(owner, new UpdateQuestionCommand(
+                        command.questionId(), command.version(), null, "kn",
+                        command.difficulty(), command.options(), command.localizations(),
                         command.bibleReferences(), command.mediaReferences(), List.of())))
                 .withMessageContaining("default language");
     }
@@ -121,7 +165,7 @@ class UpdateQuestionApplicationServiceTest {
 
         assertThatExceptionOfType(QuestionModifiedConcurrentlyException.class)
                 .isThrownBy(() -> service.update(owner, new UpdateQuestionCommand(
-                        command.questionId(), command.version() + 1, command.difficulty(),
+                        command.questionId(), command.version() + 1, null, null, command.difficulty(),
                         command.options(), command.localizations(), command.bibleReferences(),
                         command.mediaReferences(), command.tags())));
     }

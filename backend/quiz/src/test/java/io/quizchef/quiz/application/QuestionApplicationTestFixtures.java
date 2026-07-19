@@ -51,6 +51,8 @@ final class QuestionApplicationTestFixtures {
         return new UpdateQuestionCommand(
                 question.getId(),
                 question.getVersion(),
+                null,
+                null,
                 question.getDifficulty(),
                 question.options().stream()
                         .map(option -> new UpdateQuestionCommand.UpdateQuestionOptionCommand(

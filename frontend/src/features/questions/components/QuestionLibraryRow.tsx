@@ -1,7 +1,7 @@
 import { Link } from "react-router-dom";
 import { Button } from "@/components/common/Button";
 import { EntityStatusBadge } from "@/components/common/EntityStatusBadge";
-import { editQuestionPath } from "@/features/questions/quizReturn";
+import { editQuestionPath, questionDetailPath } from "@/features/questions/quizReturn";
 import { DifficultyBadge } from "@/features/quizzes/components/DifficultyBadge";
 import { LanguageChip } from "@/features/quizzes/components/LanguageChip";
 import { lifecycleStateTone } from "@/features/quizzes/statusTone";
@@ -12,21 +12,26 @@ export interface QuestionLibraryRowProps {
   question: QuestionSummaryResponse;
   onPublish: (questionId: string) => void;
   onArchive: (questionId: string) => void;
+  onRestore: (questionId: string) => void;
   isPublishing?: boolean;
   isArchiving?: boolean;
+  isRestoring?: boolean;
 }
 
 /**
  * One library entry with its lifecycle actions: drafts can be edited and
- * published, published questions archived, archived ones only inspected.
- * The page owns the mutations (and the archive confirmation).
+ * published, published questions archived, archived ones restored. The
+ * title links to the question's detail page. The page owns the mutations
+ * (and the archive confirmation).
  */
 export function QuestionLibraryRow({
   question,
   onPublish,
   onArchive,
+  onRestore,
   isPublishing,
-  isArchiving
+  isArchiving,
+  isRestoring
 }: QuestionLibraryRowProps) {
   const questionId = question.id ?? "";
   const typeLabel = QUESTION_TYPES.find((type) => type.value === question.questionType)?.label;
@@ -34,7 +39,12 @@ export function QuestionLibraryRow({
   return (
     <div className="flex flex-wrap items-center gap-3 rounded-md border border-border px-3 py-2">
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{question.title}</p>
+        <Link
+          to={questionDetailPath(questionId)}
+          className="block truncate text-sm font-medium hover:underline"
+        >
+          {question.title}
+        </Link>
         <div className="mt-1 flex flex-wrap items-center gap-1.5">
           <EntityStatusBadge
             label={question.state ?? "DRAFT"}
@@ -73,6 +83,16 @@ export function QuestionLibraryRow({
             onClick={() => onArchive(questionId)}
           >
             Archive
+          </Button>
+        )}
+        {question.state === "ARCHIVED" && (
+          <Button
+            variant="outline"
+            size="sm"
+            isLoading={isRestoring}
+            onClick={() => onRestore(questionId)}
+          >
+            Restore
           </Button>
         )}
       </div>

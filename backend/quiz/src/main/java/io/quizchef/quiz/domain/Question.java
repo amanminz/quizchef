@@ -7,6 +7,7 @@ import io.quizchef.quiz.domain.exception.QuestionArchivedException;
 import io.quizchef.quiz.domain.exception.QuestionContentLockedException;
 import io.quizchef.quiz.domain.exception.QuestionNotArchivableException;
 import io.quizchef.quiz.domain.exception.QuestionNotPublishableException;
+import io.quizchef.quiz.domain.exception.QuestionNotRestorableException;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.CollectionTable;
 import jakarta.persistence.Column;
@@ -52,9 +53,10 @@ import org.hibernate.annotations.BatchSize;
  * displayable text lives in {@link QuestionLocalization} and
  * {@link OptionLocalization}. A language is either fully present —
  * question text plus a text for every option — or absent; partial
- * translations cannot exist. The default language is fixed at creation
- * (the language the question was authored in) and its localization can
- * never be removed.
+ * translations cannot exist. The default language starts as the language
+ * the question was authored in; while the question is a draft it can move
+ * to another fully-localized language ({@link #replaceStructure}), and the
+ * default localization can never be removed.
  */
 @Entity
 @Table(name = "questions")
@@ -184,6 +186,19 @@ public class Question extends AuditableEntity {
         this.state = QuestionState.ARCHIVED;
     }
 
+    /**
+     * Brings an archived question back to PUBLISHED — same id, same
+     * content, available for new quizzes again. Restoring is the inverse
+     * of archiving and only makes sense from ARCHIVED; the content was
+     * frozen at publish time and stays frozen.
+     */
+    public void restore() {
+        if (state != QuestionState.ARCHIVED) {
+            throw new QuestionNotRestorableException();
+        }
+        this.state = QuestionState.PUBLISHED;
+    }
+
     public void changeDifficulty(Difficulty difficulty) {
         requireDraft();
         this.difficulty = Objects.requireNonNull(difficulty, "difficulty must not be null");
@@ -232,8 +247,31 @@ public class Question extends AuditableEntity {
      */
     public void replaceOptions(List<Option> options, List<OptionLocalization> defaultOptionTexts) {
         requireDraft();
+        replaceStructure(questionType, defaultLocalization(), options, defaultOptionTexts);
+    }
+
+    /**
+     * Replaces a draft's whole structure in one validated step: question
+     * type, default language (via the given default content's language),
+     * options, and the default-language texts covering them. This is the
+     * only way type or default language change — separately they could
+     * leave the aggregate momentarily invalid (options violating the new
+     * type, a default language without its localization).
+     *
+     * <p>The given content becomes (or replaces) the default localization.
+     * Every other stored language survives only if its texts still cover
+     * every new option; a language left incomplete is removed entirely and
+     * must be re-translated — translated texts of surviving options are
+     * never silently discarded.
+     */
+    public void replaceStructure(QuestionType questionType, QuestionLocalization defaultContent,
+                                 List<Option> options, List<OptionLocalization> defaultOptionTexts) {
+        requireDraft();
+        Objects.requireNonNull(questionType, "questionType must not be null");
+        Objects.requireNonNull(defaultContent, "defaultContent must not be null");
+        LanguageCode newDefaultLanguage = defaultContent.languageCode();
         List<Option> validated = validateOptions(questionType, options);
-        validateOptionTexts(defaultLanguage, validated, defaultOptionTexts);
+        validateOptionTexts(newDefaultLanguage, validated, defaultOptionTexts);
 
         Set<UUID> newOptionIds = new HashSet<>();
         validated.forEach(option -> newOptionIds.add(option.id()));
@@ -241,7 +279,7 @@ public class Question extends AuditableEntity {
         List<OptionLocalization> survivingTexts = new ArrayList<>(defaultOptionTexts);
         for (QuestionLocalization localization : List.copyOf(localizations)) {
             LanguageCode language = localization.languageCode();
-            if (language.equals(defaultLanguage)) {
+            if (language.equals(newDefaultLanguage)) {
                 continue;
             }
             List<OptionLocalization> covering = optionLocalizations.stream()
@@ -255,6 +293,10 @@ public class Question extends AuditableEntity {
             }
         }
 
+        this.questionType = questionType;
+        this.defaultLanguage = newDefaultLanguage;
+        localizations.removeIf(existing -> existing.languageCode().equals(newDefaultLanguage));
+        localizations.add(defaultContent);
         this.options.clear();
         this.options.addAll(validated);
         this.optionLocalizations.clear();

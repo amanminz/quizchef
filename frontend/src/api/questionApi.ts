@@ -6,6 +6,7 @@ import type {
   QuestionPageResponse,
   QuestionResponse,
   QuestionState,
+  QuestionUsageResponse,
   UpdateQuestionRequest
 } from "@/types/api";
 
@@ -66,5 +67,30 @@ export const questionApi = {
       `/api/v1/questions/${questionId}/archive`
     );
     return data;
+  },
+
+  /** Restores an archived question to PUBLISHED — same id, never a copy. */
+  async restore(questionId: string): Promise<QuestionResponse> {
+    const { data } = await apiClient.post<QuestionResponse>(
+      `/api/v1/questions/${questionId}/restore`
+    );
+    return data;
+  },
+
+  /** How many quizzes compose the question — zero means deletable. */
+  async usage(questionId: string): Promise<QuestionUsageResponse> {
+    const { data } = await apiClient.get<QuestionUsageResponse>(
+      `/api/v1/questions/${questionId}/usage`
+    );
+    return data;
+  },
+
+  /**
+   * Deletes an unused question. The backend enforces the rule
+   * transactionally — a question referenced by any quiz is rejected with
+   * `question.in-use` (409), UI state notwithstanding.
+   */
+  async delete(questionId: string): Promise<void> {
+    await apiClient.delete(`/api/v1/questions/${questionId}`);
   }
 };

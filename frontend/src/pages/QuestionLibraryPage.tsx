@@ -29,7 +29,8 @@ export function QuestionLibraryPage() {
   const notice = (location.state as { notice?: AuthoringNotice } | null)?.notice;
   const [filters, setFilters] = useState<QuestionLibraryFilters>({});
   const libraryQuery = useQuestionLibrary(filters);
-  const { publish, isPublishing, archive, isArchiving } = useQuestionAuthoring();
+  const { publish, isPublishing, archive, isArchiving, restore, isRestoring } =
+    useQuestionAuthoring();
   const [pendingQuestionId, setPendingQuestionId] = useState<string | null>(null);
   const [confirmArchiveId, setConfirmArchiveId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
@@ -42,6 +43,18 @@ export function QuestionLibraryPage() {
     setPendingQuestionId(questionId);
     try {
       await publish(questionId);
+    } catch (error) {
+      setActionError(error);
+    } finally {
+      setPendingQuestionId(null);
+    }
+  }
+
+  async function handleRestore(questionId: string) {
+    setActionError(null);
+    setPendingQuestionId(questionId);
+    try {
+      await restore(questionId);
     } catch (error) {
       setActionError(error);
     } finally {
@@ -192,8 +205,10 @@ export function QuestionLibraryPage() {
               question={question}
               onPublish={(questionId) => void handlePublish(questionId)}
               onArchive={setConfirmArchiveId}
+              onRestore={(questionId) => void handleRestore(questionId)}
               isPublishing={isPublishing && pendingQuestionId === question.id}
               isArchiving={isArchiving && pendingQuestionId === question.id}
+              isRestoring={isRestoring && pendingQuestionId === question.id}
             />
           ))}
         </div>
@@ -202,7 +217,7 @@ export function QuestionLibraryPage() {
       <ConfirmDialog
         open={confirmArchiveId !== null}
         title="Archive this question?"
-        description="Archiving is terminal — the question becomes unavailable for new quizzes, while published quizzes that already use it keep working."
+        description="The question becomes unavailable for new quizzes, while published quizzes that already use it keep working. You can restore it later."
         confirmLabel="Archive"
         destructive
         isConfirming={isArchiving}

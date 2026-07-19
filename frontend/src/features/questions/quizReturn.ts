@@ -26,6 +26,11 @@ export function editQuestionPath(questionId: string, quizId?: string): string {
   return quizId ? `${base}?quizId=${quizId}` : base;
 }
 
+/** The question's read-only detail page — always keyed by the real question id. */
+export function questionDetailPath(questionId: string): string {
+  return `/questions/${questionId}`;
+}
+
 /**
  * The notice the quiz Questions step (or the library) shows after a
  * return navigation — carried in router state, never in the URL.

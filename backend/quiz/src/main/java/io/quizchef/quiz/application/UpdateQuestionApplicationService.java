@@ -7,6 +7,7 @@ import io.quizchef.quiz.domain.LanguageCode;
 import io.quizchef.quiz.domain.Option;
 import io.quizchef.quiz.domain.Question;
 import io.quizchef.quiz.domain.QuestionLocalization;
+import io.quizchef.quiz.domain.QuestionType;
 import io.quizchef.quiz.domain.Tag;
 import io.quizchef.quiz.domain.exception.QuestionModifiedConcurrentlyException;
 import io.quizchef.quiz.domain.exception.QuestionNotFoundException;
@@ -20,8 +21,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Replaces a draft question's full editable representation: difficulty,
- * options, every localization, references, and tags. The aggregate decides
+ * Replaces a draft question's full editable representation: question type,
+ * default language, difficulty, options, every localization, references,
+ * and tags. The aggregate decides
  * what the lifecycle allows — published and archived questions reject all
  * of it.
  *
@@ -66,23 +68,31 @@ public class UpdateQuestionApplicationService {
 
     /**
      * The localizations are the complete new set: each entry is upserted,
-     * every language not in the list is removed. Options are replaced
-     * first, using the default-language entry's texts — which is why that
-     * entry must always be present.
+     * every language not in the list is removed. The structure (type,
+     * default language, options) is replaced first in one validated step,
+     * using the target default language's entry — which is why that entry
+     * must always be present. Type and default language only differ for
+     * drafts; the aggregate rejects everything else anyway.
      */
     private static void replaceOptionsAndLocalizations(Question question, UpdateQuestionCommand command) {
+        QuestionType questionType = command.questionType() != null
+                ? command.questionType()
+                : question.getQuestionType();
+        LanguageCode defaultLanguage = command.defaultLanguage() != null
+                ? LanguageCode.of(command.defaultLanguage())
+                : question.getDefaultLanguage();
         QuestionContentCommand defaultContent = command.localizations().stream()
-                .filter(content -> LanguageCode.of(content.languageCode())
-                        .equals(question.getDefaultLanguage()))
+                .filter(content -> LanguageCode.of(content.languageCode()).equals(defaultLanguage))
                 .findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "localizations must include the default language (%s)"
-                                .formatted(question.getDefaultLanguage().value())));
+                                .formatted(defaultLanguage.value())));
 
         List<Option> options = command.options().stream()
                 .map(option -> new Option(option.id(), option.correct(), option.displayOrder()))
                 .toList();
-        question.replaceOptions(options, defaultContent.toOptionTexts());
+        question.replaceStructure(questionType, defaultContent.toLocalization(),
+                options, defaultContent.toOptionTexts());
 
         Set<LanguageCode> provided = new HashSet<>();
         for (QuestionContentCommand content : command.localizations()) {

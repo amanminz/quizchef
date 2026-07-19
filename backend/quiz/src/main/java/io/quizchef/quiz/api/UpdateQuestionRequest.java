@@ -2,6 +2,7 @@ package io.quizchef.quiz.api;
 
 import io.quizchef.quiz.application.UpdateQuestionCommand;
 import io.quizchef.quiz.domain.Difficulty;
+import io.quizchef.quiz.domain.QuestionType;
 import io.swagger.v3.oas.annotations.media.Schema;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -22,6 +23,11 @@ import java.util.UUID;
 public record UpdateQuestionRequest(
         @Schema(example = "0", description = "The version returned by the last read of this question")
         @NotNull Long version,
+        @Schema(description = "The draft's new question type; omit to keep the current one")
+        QuestionType questionType,
+        @Schema(example = "en", description = "The draft's new default language (must be fully "
+                + "localized in this request); omit to keep the current one")
+        @Size(max = 20) String defaultLanguage,
         @NotNull Difficulty difficulty,
         @NotNull @Size(min = 1, max = 20) @Valid List<UpdateOptionDto> options,
         @NotNull @Size(min = 1, max = 50) @Valid List<QuestionLocalizationDto> localizations,
@@ -41,6 +47,8 @@ public record UpdateQuestionRequest(
         return new UpdateQuestionCommand(
                 questionId,
                 version,
+                questionType,
+                defaultLanguage,
                 difficulty,
                 options.stream()
                         .map(option -> new UpdateQuestionCommand.UpdateQuestionOptionCommand(

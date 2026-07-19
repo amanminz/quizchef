@@ -96,7 +96,7 @@ class QuizApiValidationTest {
             tooMany.add(new QuestionLocalizationDto("en", "T", "P", null, List.of()));
         }
         UpdateQuestionRequest request = new UpdateQuestionRequest(
-                1L, Difficulty.EASY, List.of(option), tooMany, List.of(), List.of(),
+                1L, null, null, Difficulty.EASY, List.of(option), tooMany, List.of(), List.of(),
                 List.of("a"));
 
         assertThat(propertyViolations(request, "localizations")).isNotEmpty();
