@@ -1,4 +1,4 @@
-import { act, screen, waitFor } from "@testing-library/react";
+import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
@@ -612,5 +612,110 @@ describe("PlaySessionPage", () => {
     expect(screen.queryByLabelText("Podium")).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByText("Ann")).not.toBeInTheDocument();
+  });
+
+  it("offers only English and Hindi, with a neutral name placeholder", () => {
+    renderApp("/play");
+
+    const nameField = screen.getByLabelText(/your name/i);
+    expect(nameField).toHaveAttribute("placeholder", "Type your name");
+    // A placeholder is a hint, never a value that could be submitted.
+    expect(nameField).toHaveValue("");
+    const languageSelect = screen.getByLabelText(/language/i);
+    const options = within(languageSelect).getAllByRole("option");
+    expect(options.map((option) => option.textContent)).toEqual(["English", "हिन्दी"]);
+  });
+
+  it("shows the authoritative quiz title during play and on the final screen", async () => {
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN",
+      quizTitle: "BELC Bible Quiz — Gospel of Mark"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-2",
+      displayName: "Priya",
+      preferredLanguage: "hi"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "QUESTION_OPEN",
+            submittedOptionIds: []
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    // The title comes from the participant-safe session summary — the
+    // participant client never calls a host-only quiz endpoint.
+    expect(
+      await screen.findByText("BELC Bible Quiz — Gospel of Mark")
+    ).toBeInTheDocument();
+    expect(await screen.findByText(question.localizations![0].prompt!)).toBeInTheDocument();
+    expect(document.title).toBe("BELC Bible Quiz — Gospel of Mark | QuizChef");
+  });
+
+  it("keeps the quiz title on the recovered final screen", async () => {
+    const session = sessionSummary({
+      state: "FINISHED",
+      currentQuestionId: undefined,
+      quizTitle: "BELC Bible Quiz — Gospel of Mark"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-3",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            sessionState: "FINISHED",
+            currentPhase: undefined
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        () =>
+          HttpResponse.json(
+            participantResultResponse({
+              sessionId: session.sessionId,
+              participantId: record.participantId,
+              state: "FINISHED",
+              currentPhase: undefined,
+              rank: 2,
+              score: 2032
+            })
+          )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
+    expect(screen.getByText("BELC Bible Quiz — Gospel of Mark")).toBeInTheDocument();
+    expect(screen.getByText("You finished")).toBeInTheDocument();
+    expect(screen.getByText("2nd")).toBeInTheDocument();
   });
 });

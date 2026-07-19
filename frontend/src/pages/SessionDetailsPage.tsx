@@ -97,7 +97,7 @@ export function SessionDetailsPage() {
       {session && (
         <div className="grid gap-6 lg:grid-cols-[1fr_1fr]">
           <div className="flex flex-col gap-4">
-            <JoinCodeCard sessionPin={session.sessionPin} />
+            <JoinCodeCard sessionPin={session.sessionPin} quizTitle={quizTitle} />
             <ConfigurationSection settings={session.settings} />
           </div>
           <Card>

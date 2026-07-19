@@ -24,6 +24,7 @@ import { WaitingOverlay } from "@/features/gameplay/components/WaitingOverlay";
 import { useCountdown } from "@/features/gameplay/hooks/useCountdown";
 import { usePlayerGameplay } from "@/features/gameplay/hooks/usePlayerGameplay";
 import { verdictFor } from "@/features/gameplay/verdict";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
 /**
  * The participant's gameplay screen. Everything renders off one FSM phase
@@ -35,6 +36,11 @@ import { verdictFor } from "@/features/gameplay/verdict";
 export function PlaySessionPage() {
   const { pin = "" } = useParams<{ pin: string }>();
   const player = usePlayerGameplay(pin);
+  // The quiz's identity comes from the participant-safe session summary —
+  // authoritative data, never local navigation state, so it survives
+  // refreshes and reconnects on every screen of the journey.
+  const quizTitle = player.session?.quizTitle;
+  useDocumentTitle(quizTitle);
 
   const onJoin = async (values: JoinSessionFormValues) => {
     await player.join({
@@ -63,6 +69,11 @@ export function PlaySessionPage() {
 
   return (
     <PageContainer className="max-w-2xl py-8">
+      {quizTitle && (
+        <h1 className="mx-auto mb-4 max-w-prose break-words text-center text-xl font-bold leading-snug tracking-tight sm:text-2xl">
+          {quizTitle}
+        </h1>
+      )}
       <GameConnectionBanner status={player.connectionStatus} />
       <div aria-live="polite" role="status" className="sr-only">
         {player.announcement}

@@ -21,6 +21,7 @@ public record SessionSummaryView(
         UUID currentQuestionId,
         UUID hostIdentityId,
         UUID publishedQuizVersionId,
+        String quizTitle,
         int participantCount,
         SessionSettings settings,
         long version,
@@ -28,6 +29,15 @@ public record SessionSummaryView(
 ) {
 
     public static SessionSummaryView of(Session session) {
+        return of(session, null);
+    }
+
+    /**
+     * With the quiz's participant-safe display title. Only the summary
+     * read resolves it — command responses skip the extra quiz load and
+     * carry null; clients learn the title from the read they render from.
+     */
+    public static SessionSummaryView of(Session session, String quizTitle) {
         return new SessionSummaryView(
                 session.getId(),
                 session.getSessionPin().value(),
@@ -36,6 +46,7 @@ public record SessionSummaryView(
                 session.getCurrentQuestionId(),
                 session.getHostIdentity().identityId(),
                 session.getPublishedQuizVersionId(),
+                quizTitle,
                 session.participantCount(),
                 session.getSessionSettings(),
                 session.getVersion(),

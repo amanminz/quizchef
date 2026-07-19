@@ -30,6 +30,8 @@ export type UpdateQuestionRequest = Schemas["UpdateQuestionRequest"];
 export type QuestionResponse = Schemas["QuestionResponse"];
 export type QuestionSummaryResponse = Schemas["QuestionSummaryResponse"];
 export type QuestionPageResponse = Schemas["QuestionPageResponse"];
+export type QuestionUsageResponse = Schemas["QuestionUsageResponse"];
+export type AnswerProgressResponse = Schemas["AnswerProgressResponse"];
 
 export type CreateSessionRequest = Schemas["CreateSessionRequest"];
 export type SessionSummaryResponse = Schemas["SessionSummaryResponse"];
