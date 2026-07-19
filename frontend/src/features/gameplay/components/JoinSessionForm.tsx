@@ -3,16 +3,8 @@ import { z } from "zod";
 import { errorMessage } from "@/api/apiError";
 import { Button } from "@/components/common/Button";
 import { FormField } from "@/components/forms/FormField";
+import { EVENT_LANGUAGES } from "@/features/gameplay/eventLanguages";
 import { displayNameSchema, languageCodeSchema, sessionPinSchema, zodForm } from "@/utils/validation";
-
-const LANGUAGES = [
-  { value: "en", label: "English" },
-  { value: "kn", label: "Kannada" },
-  { value: "hi", label: "Hindi" },
-  { value: "ta", label: "Tamil" },
-  { value: "te", label: "Telugu" },
-  { value: "ml", label: "Malayalam" }
-];
 
 const joinSchema = z.object({
   pin: sessionPinSchema,
@@ -64,7 +56,7 @@ export function JoinSessionForm({ fixedPin, onSubmit, isSubmitting, error }: Joi
 
       <FormField
         label="Your name"
-        placeholder="Aman"
+        placeholder="Type your name"
         error={errors.displayName?.message}
         {...register("displayName")}
       />
@@ -78,7 +70,7 @@ export function JoinSessionForm({ fixedPin, onSubmit, isSubmitting, error }: Joi
           className="h-10 rounded-md border border-input bg-background px-3 text-sm"
           {...register("preferredLanguage")}
         >
-          {LANGUAGES.map((language) => (
+          {EVENT_LANGUAGES.map((language) => (
             <option key={language.value} value={language.value}>
               {language.label}
             </option>
