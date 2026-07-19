@@ -71,8 +71,96 @@ describe("SessionLivePage", () => {
     expect(await screen.findByText(question.localizations![0].prompt!)).toBeInTheDocument();
     expect(screen.getByText("3 participants")).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /submit answer/i })).not.toBeInTheDocument();
-    const trueOption = screen.getByRole("button", { name: "True" });
-    expect(trueOption).toBeDisabled();
+    // The host's projection lists the options — nothing selectable.
+    expect(screen.getByText("True")).toBeInTheDocument();
+    expect(screen.getByText("False")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "True" })).not.toBeInTheDocument();
+  });
+
+  it("shows the backend's answer progress and highlights when everyone answered", async () => {
+    signIn();
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN",
+      participantCount: 3
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/answer-progress`, () =>
+        HttpResponse.json({
+          sessionId: session.sessionId,
+          questionId: question.questionId,
+          answeredCount: 3,
+          eligibleCount: 3
+        })
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText("3 / 3 answered")).toBeInTheDocument();
+    // Everyone's in — the close-early transition is emphasized, never auto-fired.
+    expect(screen.getByRole("button", { name: /close question/i })).toBeInTheDocument();
+  });
+
+  it("renders English and Hindi together for the host when both exist", async () => {
+    signIn();
+    const base = currentQuestionResponse();
+    const question: CurrentQuestionResponse = {
+      ...base,
+      localizations: [
+        ...base.localizations!,
+        {
+          languageCode: "hi",
+          prompt: "योना को एक बड़ी मछली ने निगल लिया था।",
+          optionTexts: [
+            { optionId: base.options![0].optionId!, text: "सही" },
+            { optionId: base.options![1].optionId!, text: "गलत" }
+          ]
+        }
+      ]
+    };
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText(base.localizations![0].prompt!)).toBeInTheDocument();
+    expect(screen.getByText("योना को एक बड़ी मछली ने निगल लिया था।")).toBeInTheDocument();
+    expect(screen.getByText("सही")).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Hindi translation unavailable/i)
+    ).not.toBeInTheDocument();
+  });
+
+  it("notes a missing Hindi translation instead of leaving a gap", async () => {
+    signIn();
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText(question.localizations![0].prompt!)).toBeInTheDocument();
+    expect(
+      screen.getByText("Hindi translation unavailable for this question.")
+    ).toBeInTheDocument();
   });
 
   it("starts the first question from the countdown", async () => {

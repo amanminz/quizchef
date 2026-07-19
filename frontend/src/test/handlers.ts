@@ -85,6 +85,17 @@ export const handlers = [
     HttpResponse.json(emptyQuizPage())
   ),
   http.get("/api/v1/questions", () => HttpResponse.json(emptyQuestionPage())),
+  // The host's live answer-progress read mounts with every open question;
+  // benign-409 by default (as between questions), override to serve counts.
+  http.get("/api/v1/sessions/:sessionId/answer-progress", () =>
+    HttpResponse.json(apiError("session.no-current-question", "No question is in play"), {
+      status: 409
+    })
+  ),
+  // The question detail page frames its delete affordance with usage.
+  http.get("/api/v1/questions/:questionId/usage", ({ params }) =>
+    HttpResponse.json({ questionId: params.questionId, quizCount: 0 })
+  ),
   // Session cards resolve quiz titles by id; tests that care override this.
   // Must stay after /quizzes/mine — MSW matches in order.
   http.get("/api/v1/quizzes/:quizId", () =>

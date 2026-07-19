@@ -1,5 +1,7 @@
 import { useCallback, useState } from "react";
+import { isApiClientError } from "@/api/apiError";
 import { sessionApi } from "@/api/sessionApi";
+import { useAnswerProgress } from "@/features/gameplay/hooks/useAnswerProgress";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
 import { useResults } from "@/features/gameplay/hooks/useResults";
 
@@ -24,6 +26,7 @@ import { useResults } from "@/features/gameplay/hooks/useResults";
 export function useGameHost(sessionId: string | undefined) {
   const gameplay = useGameplay(sessionId);
   const resultsQuery = useResults(sessionId, gameplay.phase);
+  const progressQuery = useAnswerProgress(sessionId, gameplay.phase);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [nextStepError, setNextStepError] = useState<unknown>(null);
 
@@ -37,6 +40,8 @@ export function useGameHost(sessionId: string | undefined) {
     switch (phase) {
       case "COUNTDOWN":
         return "Start Question";
+      case "QUESTION_OPEN":
+        return "Close Question";
       case "WAITING":
         return "Reveal Answer";
       case "ANSWER_REVEALED":
@@ -50,6 +55,10 @@ export function useGameHost(sessionId: string | undefined) {
 
   const canAdvance =
     phase === "COUNTDOWN" ||
+    // While the question is open the host may close it early — the timer
+    // would otherwise; the server's FSM guarantees exactly one of the two
+    // transitions wins (the loser's 409 is benign, see nextStep).
+    phase === "QUESTION_OPEN" ||
     // WAITING also covers "the question read hasn't landed yet" — only a
     // confirmed QUESTION_CLOSED is revealable (the server would 409 anyway;
     // this just keeps the button honest).
@@ -58,7 +67,7 @@ export function useGameHost(sessionId: string | undefined) {
     phase === "LEADERBOARD";
 
   const nextStep = useCallback(async () => {
-    if (!sessionId || !canAdvance) {
+    if (!sessionId || !canAdvance || isAdvancing) {
       return;
     }
     setIsAdvancing(true);
@@ -66,6 +75,17 @@ export function useGameHost(sessionId: string | undefined) {
     try {
       if (phase === "COUNTDOWN") {
         await sessionApi.startQuestion(sessionId);
+      } else if (phase === "QUESTION_OPEN") {
+        try {
+          await sessionApi.closeQuestion(sessionId);
+        } catch (error) {
+          // The timer (or a double-fired command) closed the question
+          // first — the one transition already happened; converge on the
+          // server's state instead of reporting a fault.
+          if (!(isApiClientError(error) && error.code === "session.invalid-transition")) {
+            throw error;
+          }
+        }
       } else if (phase === "WAITING") {
         await sessionApi.revealAnswer(sessionId);
       } else if (phase === "ANSWER_REVEALED") {
@@ -79,7 +99,14 @@ export function useGameHost(sessionId: string | undefined) {
     } finally {
       setIsAdvancing(false);
     }
-  }, [sessionId, canAdvance, phase, refetchSession, refetchQuestion]);
+  }, [sessionId, canAdvance, isAdvancing, phase, refetchSession, refetchQuestion]);
+
+  const answerProgress =
+    phase === "QUESTION_OPEN" || phase === "WAITING" ? progressQuery.data : undefined;
+  const allAnswered =
+    answerProgress !== undefined &&
+    (answerProgress.eligibleCount ?? 0) > 0 &&
+    answerProgress.answeredCount === answerProgress.eligibleCount;
 
   return {
     ...gameplay,
@@ -87,6 +114,13 @@ export function useGameHost(sessionId: string | undefined) {
     isLoadingResults: resultsQuery.isPending && resultsQuery.fetchStatus !== "idle",
     resultsError: resultsQuery.error,
     refetchResults: resultsQuery.refetch,
+    /** The backend's answered/eligible counts while a question is in play. */
+    answerProgress,
+    /**
+     * Everyone eligible has answered — emphasize (never auto-fire) the
+     * host's next transition. Guarded against zero eligible participants.
+     */
+    allAnswered,
     nextStepLabel,
     canAdvance,
     nextStep,

@@ -6,20 +6,20 @@ import { ErrorPanel } from "@/components/common/ErrorPanel";
 import { PageContainer } from "@/components/common/PageContainer";
 import { Spinner } from "@/components/common/Spinner";
 import { WorkflowHeader } from "@/components/common/WorkflowHeader";
-import { AnswerGrid } from "@/features/gameplay/components/AnswerGrid";
-import { AnswerRevealCard } from "@/features/gameplay/components/AnswerRevealCard";
+import { AnswerProgressBadge } from "@/features/gameplay/components/AnswerProgressBadge";
 import { CompletionBanner } from "@/features/gameplay/components/CompletionBanner";
 import { CountdownOverlay } from "@/features/gameplay/components/CountdownOverlay";
 import { FinalStatistics } from "@/features/gameplay/components/FinalStatistics";
 import { GameConnectionBanner } from "@/features/gameplay/components/GameConnectionBanner";
+import { HostBilingualQuestion } from "@/features/gameplay/components/HostBilingualQuestion";
 import { LeaderboardTable } from "@/features/gameplay/components/LeaderboardTable";
 import { PlayAgainCard } from "@/features/gameplay/components/PlayAgainCard";
 import { PodiumReveal } from "@/features/gameplay/components/PodiumReveal";
-import { QuestionCard } from "@/features/gameplay/components/QuestionCard";
 import { QuestionSkeleton } from "@/features/gameplay/components/QuestionSkeleton";
 import { QuestionTransition } from "@/features/gameplay/components/QuestionTransition";
 import { SessionSummaryCard } from "@/features/gameplay/components/SessionSummaryCard";
 import { useGameHost } from "@/features/gameplay/hooks/useGameHost";
+import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { PresentationToggle } from "@/features/sessions/components/PresentationToggle";
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
 import { usePresentationMode } from "@/features/sessions/hooks/usePresentationMode";
@@ -36,11 +36,26 @@ import { useQuizTitle } from "@/features/sessions/hooks/useQuizTitle";
 export function SessionLivePage() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const host = useGameHost(sessionId);
-  const quizTitle = useQuizTitle(host.session?.publishedQuizVersionId);
+  const fallbackTitle = useQuizTitle(host.session?.publishedQuizVersionId);
+  const quizTitle = host.session?.quizTitle ?? fallbackTitle;
   const presentation = usePresentationMode();
+  useDocumentTitle(quizTitle);
+
+  // Early-reveal emphasis: when everyone eligible has answered, the next
+  // valid transition (Close Question → Reveal Answer) pulses. Never
+  // auto-fired — the host stays in control, and the server's FSM still
+  // guarantees exactly one transition.
+  const emphasizeAdvance =
+    host.allAnswered && (host.phase === "QUESTION_OPEN" || host.phase === "WAITING");
 
   const advanceAction = host.canAdvance ? (
-    <Button onClick={() => void host.nextStep()} isLoading={host.isAdvancing}>
+    <Button
+      onClick={() => void host.nextStep()}
+      isLoading={host.isAdvancing}
+      className={
+        emphasizeAdvance ? "animate-pulse ring-2 ring-success ring-offset-2" : undefined
+      }
+    >
       {host.nextStepLabel}
     </Button>
   ) : undefined;
@@ -139,9 +154,12 @@ function HostGameplayBody({
         <div className="flex flex-col gap-4">
           <ParticipantCount count={host.session?.participantCount ?? 0} />
           <QuestionTransition transitionKey={host.question.questionId ?? ""}>
-            <QuestionCard question={host.question}>
-              <AnswerGrid question={host.question} onSubmit={() => undefined} readOnly />
-            </QuestionCard>
+            <HostBilingualQuestion
+              question={host.question}
+              headerExtra={
+                <AnswerProgressBadge progress={host.answerProgress} emphasized={host.allAnswered} />
+              }
+            />
           </QuestionTransition>
         </div>
       );
@@ -152,9 +170,7 @@ function HostGameplayBody({
       return (
         <div className="flex flex-col gap-4">
           <ParticipantCount count={host.session?.participantCount ?? 0} />
-          <QuestionCard question={host.question}>
-            <AnswerRevealCard question={host.question} />
-          </QuestionCard>
+          <HostBilingualQuestion question={host.question} revealed />
         </div>
       );
     case "LEADERBOARD":

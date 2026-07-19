@@ -10,6 +10,9 @@ export const gameplayKeys = {
   currentQuestion: (sessionId: string) => [...gameplayKeys.currentQuestions(), sessionId] as const,
   allResults: () => [...gameplayKeys.all, "results"] as const,
   results: (sessionId: string) => [...gameplayKeys.allResults(), sessionId] as const,
+  /** Host-only: the current question's answered/eligible counts. */
+  answerProgress: (sessionId: string) =>
+    [...gameplayKeys.all, "answer-progress", sessionId] as const,
   /**
    * The participant's own result — deliberately a separate key from the
    * host's full standings: role-specific contracts, role-specific caches

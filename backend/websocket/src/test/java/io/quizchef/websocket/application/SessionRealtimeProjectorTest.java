@@ -121,10 +121,26 @@ class SessionRealtimeProjectorTest {
         projector.on(new io.quizchef.session.domain.event.AnswerSubmittedEvent(
                 sessionId, participantId, questionId, NOW));
 
-        assertThat(publisher.broadcasts).isEmpty();
         assertThat(publisher.participantMessages).containsOnlyKeys(participantId);
         assertThat(publisher.participantMessages.get(participantId).type())
                 .isEqualTo(ProtocolMessageType.ANSWER_ACCEPTED);
+    }
+
+    @Test
+    void broadcastsAnswerProgressWithoutNamingTheParticipant() {
+        // The session-wide companion of an accepted answer is a pure
+        // "counts moved" notification: the authoritative numbers live in
+        // the host-only progress read, and the broadcast reaches every
+        // participant device — so it must not say who answered.
+        UUID questionId = UUID.randomUUID();
+        projector.on(new io.quizchef.session.domain.event.AnswerSubmittedEvent(
+                sessionId, participantId, questionId, NOW));
+
+        assertThat(publisher.broadcasts).hasSize(1);
+        ProtocolMessage broadcast = publisher.broadcasts.getFirst();
+        assertThat(broadcast.type()).isEqualTo(ProtocolMessageType.ANSWER_PROGRESS);
+        assertThat(broadcast.payload())
+                .isEqualTo(new io.quizchef.websocket.api.event.QuestionPayload(questionId));
     }
 
     private static final class CapturingPublisher implements RealtimePublisher {

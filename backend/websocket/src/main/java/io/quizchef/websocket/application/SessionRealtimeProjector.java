@@ -90,11 +90,14 @@ public class SessionRealtimeProjector {
     /**
      * The answer acknowledgement is private — it goes to the submitting
      * participant only, never the whole session (ADR-006: no score leaks, and
-     * an opponent learns nothing from your submission).
+     * an opponent learns nothing from your submission). The session-wide
+     * companion is a bare answer.progress notification so the host can
+     * re-read the authoritative counts; it names no participant.
      */
     @EventListener
     void on(AnswerSubmittedEvent event) {
         realtimePublisher.publishToParticipant(
                 event.participantId(), SessionProtocolMapper.toMessage(event));
+        realtimePublisher.publish(SessionProtocolMapper.toProgressMessage(event));
     }
 }
