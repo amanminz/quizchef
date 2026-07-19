@@ -12,6 +12,14 @@ import { languageCodeSchema, titleSchema } from "@/utils/validation";
  * Mirrors the backend's structural rules (RFC-003) for faster feedback —
  * the server remains the authority: a draft must already be a structurally
  * valid question (option rules of its type), only publishing freezes it.
+ *
+ * One logical question carries every language: structure (type, difficulty,
+ * correctness, option identity and order, tags, title) is shared, while
+ * prompt, option texts, and explanation are per-language. The editor
+ * offers exactly one translation language alongside the default (Hindi,
+ * or English when the default is Hindi); a translation is all or nothing —
+ * if any translated field is filled, the prompt and every option text
+ * must be complete before saving.
  */
 
 export const QUESTION_TYPES: { value: QuestionType; label: string }[] = [
@@ -24,6 +32,8 @@ const optionSchema = z.object({
   /** Present when editing — options keep their ids so translations survive. */
   id: z.string().optional(),
   text: z.string().trim().min(1, "Option text is required").max(500, "Option text is too long"),
+  /** The same option's text in the translation language; empty unless translating. */
+  translatedText: z.string().trim().max(500, "Option text is too long").optional(),
   correct: z.boolean()
 });
 
@@ -35,6 +45,8 @@ export const questionEditorSchema = z
     title: titleSchema,
     prompt: z.string().trim().min(1, "Prompt is required").max(2000, "Prompt is too long"),
     explanation: z.string().trim().max(2000, "Explanation is too long").optional(),
+    translatedPrompt: z.string().trim().max(2000, "Prompt is too long").optional(),
+    translatedExplanation: z.string().trim().max(2000, "Explanation is too long").optional(),
     /** Comma-separated in the form; parsed into the API's tag-name list. */
     tags: z.string().trim().optional(),
     options: z.array(optionSchema).min(2, "At least two options are required").max(20)
@@ -76,6 +88,24 @@ export const questionEditorSchema = z
         }
         break;
     }
+    if (translationIncluded(values)) {
+      if (!values.translatedPrompt?.trim()) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["translatedPrompt"],
+          message: "A translation needs its prompt — or clear every translated field"
+        });
+      }
+      values.options.forEach((option, index) => {
+        if (!option.translatedText?.trim()) {
+          context.addIssue({
+            code: z.ZodIssueCode.custom,
+            path: ["options", index, "translatedText"],
+            message: "Translate every option, or clear the translation"
+          });
+        }
+      });
+    }
     for (const name of parseTags(values.tags)) {
       if (name.length > 30) {
         context.addIssue({
@@ -90,6 +120,26 @@ export const questionEditorSchema = z
 
 export type QuestionEditorValues = z.infer<typeof questionEditorSchema>;
 
+/** The one translation language the editor offers next to the default. */
+export function translationLanguageFor(defaultLanguage: string): string {
+  return defaultLanguage === "hi" ? "en" : "hi";
+}
+
+/**
+ * A translation exists once any translated field is filled — and then the
+ * schema requires it to be whole (prompt plus every option text), so a
+ * partially translated question can never be saved.
+ */
+export function translationIncluded(
+  values: Pick<QuestionEditorValues, "translatedPrompt" | "translatedExplanation" | "options">
+): boolean {
+  return Boolean(
+    values.translatedPrompt?.trim() ||
+      values.translatedExplanation?.trim() ||
+      values.options.some((option) => option.translatedText?.trim())
+  );
+}
+
 export function emptyEditorValues(): QuestionEditorValues {
   return {
     questionType: "SINGLE_CHOICE",
@@ -98,10 +148,12 @@ export function emptyEditorValues(): QuestionEditorValues {
     title: "",
     prompt: "",
     explanation: "",
+    translatedPrompt: "",
+    translatedExplanation: "",
     tags: "",
     options: [
-      { text: "", correct: true },
-      { text: "", correct: false }
+      { text: "", translatedText: "", correct: true },
+      { text: "", translatedText: "", correct: false }
     ]
   };
 }
@@ -109,8 +161,8 @@ export function emptyEditorValues(): QuestionEditorValues {
 /** The fixed option pair a TRUE_FALSE question starts from. */
 export function trueFalseOptions(): QuestionEditorValues["options"] {
   return [
-    { text: "True", correct: true },
-    { text: "False", correct: false }
+    { text: "True", translatedText: "", correct: true },
+    { text: "False", translatedText: "", correct: false }
   ];
 }
 
@@ -144,10 +196,11 @@ export function toCreateRequest(values: QuestionEditorValues): CreateQuestionReq
 /**
  * Builds the full-replacement PUT body for a draft. Existing options keep
  * their ids (translations survive), new options get fresh client ids as
- * the contract requires. Only the default language is edited here; other
- * localizations are carried over verbatim when their option texts still
- * cover every option, and dropped when the option change left them
- * incomplete — the same pruning the domain applies.
+ * the contract requires. The editor owns the default language and its one
+ * translation language; localizations in any further language are carried
+ * over verbatim when their option texts still cover every option, and
+ * dropped when the option change left them incomplete — the same pruning
+ * the domain applies.
  */
 export function toUpdateRequest(
   values: QuestionEditorValues,
@@ -159,6 +212,7 @@ export function toUpdateRequest(
     displayOrder: index + 1
   }));
   const optionIds = new Set(options.map((option) => option.id));
+  const translationLanguage = translationLanguageFor(values.defaultLanguage);
 
   const defaultLocalization = {
     languageCode: values.defaultLanguage,
@@ -171,8 +225,29 @@ export function toUpdateRequest(
     }))
   };
 
+  // The translation shares the question's title — title is structural,
+  // only prompt/options/explanation localize.
+  const translatedLocalization = translationIncluded(values)
+    ? [
+        {
+          languageCode: translationLanguage,
+          title: values.title,
+          prompt: values.translatedPrompt ?? "",
+          explanation: values.translatedExplanation || undefined,
+          optionTexts: values.options.map((option, index) => ({
+            optionId: options[index].id,
+            text: option.translatedText ?? ""
+          }))
+        }
+      ]
+    : [];
+
   const carriedLocalizations = (question.localizations ?? [])
-    .filter((localization) => localization.languageCode !== values.defaultLanguage)
+    .filter(
+      (localization) =>
+        localization.languageCode !== values.defaultLanguage &&
+        localization.languageCode !== translationLanguage
+    )
     .map((localization) => ({
       ...localization,
       optionTexts: localization.optionTexts.filter((text) => optionIds.has(text.optionId))
@@ -181,9 +256,11 @@ export function toUpdateRequest(
 
   return {
     version: question.version ?? 0,
+    questionType: values.questionType,
+    defaultLanguage: values.defaultLanguage,
     difficulty: values.difficulty,
     options,
-    localizations: [defaultLocalization, ...carriedLocalizations],
+    localizations: [defaultLocalization, ...translatedLocalization, ...carriedLocalizations],
     bibleReferences: question.bibleReferences ?? [],
     mediaReferences: question.mediaReferences ?? [],
     tags: parseTags(values.tags)
@@ -193,11 +270,18 @@ export function toUpdateRequest(
 /** Rehydrates the form from a loaded draft, in option display order. */
 export function toFormValues(question: QuestionResponse): QuestionEditorValues {
   const defaultLanguage = question.defaultLanguage ?? "en";
+  const translationLanguage = translationLanguageFor(defaultLanguage);
   const localization = question.localizations?.find(
     (candidate) => candidate.languageCode === defaultLanguage
   );
+  const translation = question.localizations?.find(
+    (candidate) => candidate.languageCode === translationLanguage
+  );
   const textByOptionId = new Map(
     (localization?.optionTexts ?? []).map((text) => [text.optionId, text.text ?? ""])
+  );
+  const translatedTextByOptionId = new Map(
+    (translation?.optionTexts ?? []).map((text) => [text.optionId, text.text ?? ""])
   );
   const orderedOptions = [...(question.options ?? [])].sort(
     (a, b) => (a.displayOrder ?? 0) - (b.displayOrder ?? 0)
@@ -210,6 +294,8 @@ export function toFormValues(question: QuestionResponse): QuestionEditorValues {
     title: localization?.title ?? "",
     prompt: localization?.prompt ?? "",
     explanation: localization?.explanation ?? "",
+    translatedPrompt: translation?.prompt ?? "",
+    translatedExplanation: translation?.explanation ?? "",
     tags: (question.tags ?? [])
       .map((tag) => tag.name)
       .filter((name): name is string => Boolean(name))
@@ -217,6 +303,7 @@ export function toFormValues(question: QuestionResponse): QuestionEditorValues {
     options: orderedOptions.map((option) => ({
       id: option.id,
       text: textByOptionId.get(option.id ?? "") ?? "",
+      translatedText: translatedTextByOptionId.get(option.id ?? "") ?? "",
       correct: option.correct ?? false
     }))
   };

@@ -147,7 +147,6 @@ export function EditQuestionPage() {
           <QuestionEditor
             key={question.version}
             initialValues={toFormValues(question)}
-            structureLocked
             onSaveDraft={handleSaveDraft}
             onPublish={handlePublish}
             onCancel={() => navigate(backHref)}
