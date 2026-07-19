@@ -5,7 +5,9 @@ import { currentPath, renderApp } from "@/test/testUtils";
 describe("routing", () => {
   it("renders the home page at /", async () => {
     renderApp("/");
-    expect(await screen.findByRole("heading", { name: "QuizChef" })).toBeInTheDocument();
+    expect(
+      await screen.findByRole("heading", { name: "BELC Family Quiz Platform" })
+    ).toBeInTheDocument();
     expect(screen.getByText(/join a game/i)).toBeInTheDocument();
   });
 

@@ -27,7 +27,7 @@ export function DashboardPage() {
 
   return (
     <PageContainer>
-      <SectionHeader title="Dashboard" description="Your QuizChef home." />
+      <SectionHeader title="Dashboard" description="Your BELC Quiz Platform home." />
       {isPending && (
         <div className="flex justify-center py-16">
           <Spinner size="lg" className="text-primary" />
