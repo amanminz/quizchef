@@ -95,6 +95,7 @@ lobby.opened              participant.joined          question.started
 session.started           participant.disconnected    question.closed
 session.finished          participant.reconnected     answer.revealed
                                                        leaderboard.updated
+                                                       answer.progress
 participant.answer.accepted   (private ack, to the submitter only)
 session.snapshot              (reconnection replay)
 ```
@@ -113,6 +114,7 @@ QuestionClosedEvent    → question.closed    { questionId }
 AnswerRevealedEvent    → answer.revealed    { questionId, correctOptionIds }
 LeaderboardUpdatedEvent→ leaderboard.updated{ entries: [] }  (pure notification since the Live Event UX privacy split — standings are role-scoped READS: host GET /results, participant GET .../participants/{id}/result; the payload shape is unchanged, its rows are always empty)
 AnswerSubmittedEvent   → participant.answer.accepted  { questionId }
+AnswerSubmittedEvent   → answer.progress    { questionId }  (session-wide companion, added for the live answer counter — a pure "counts moved" notification: no participant id, no counts; the authoritative numbers are the host-only GET /sessions/{id}/answer-progress read, exactly the leaderboard.updated pattern)
 SessionFinishedEvent   → session.finished
 ```
 

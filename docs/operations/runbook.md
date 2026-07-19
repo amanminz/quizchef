@@ -95,8 +95,8 @@ Before a projected event (RFC-004 role-scoped results, Live Event UX):
 
 1. Open the lobby on the host laptop; check the readiness panel: `Realtime connected`, `Quiz ready`, question count, players joined.
 2. `Enter Presentation Mode` (button, host lobby/live screens) — chrome hides and the browser requests fullscreen; if the browser refuses, the layout still applies and a hint suggests the browser's own fullscreen shortcut. A screen wake lock keeps the projector awake where supported.
-3. Share the code via `Copy code` or `Copy join message` (includes the participant URL).
-4. Join at least two phones; confirm names appear on the participant wall and the count updates live.
+3. Share the code via `Copy code` or `Copy Join Details` (quiz title, code, and the participant URL).
+4. Join at least two phones; confirm names appear on the participant wall and the count updates live. Participants pick English or हिन्दी at join — each phone receives its language (default-language fallback when a translation is missing), and every participant screen names the quiz.
 5. `Start session` asks for confirmation and shows the late-join setting — read it before confirming.
-6. During play: participants see only their own rank (never the leaderboard); the host screen shows full standings. If the realtime banner appears, gameplay is unaffected; wait for `Connection restored.`
+6. During play: participants see only their own rank (never the leaderboard); the host screen shows full standings, both languages of the question when authored, and the live `answered / eligible` counter. When everyone has answered, `Close Question` pulses — it's an invitation, not an automation; the timer still closes the question if you wait. If the realtime banner appears, gameplay is unaffected; wait for `Connection restored.`
 7. At the finish, the podium reveals 3rd → 2nd → 1st (Skip available; Replay is display-only). A refresh renders the completed results from the backend — it never replays commands.
