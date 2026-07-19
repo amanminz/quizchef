@@ -84,7 +84,7 @@ export function LoginPage() {
               Sign in
             </Button>
             <p className="text-center text-sm text-muted-foreground">
-              New to QuizChef?{" "}
+              New to BELC Quiz Platform?{" "}
               <Link to="/register" className="font-medium text-primary hover:underline">
                 Create an account
               </Link>

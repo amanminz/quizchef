@@ -65,7 +65,7 @@ export function DashboardLayout() {
             className="mb-6 block text-lg font-bold tracking-tight"
             onClick={() => setSidebarOpen(false)}
           >
-            QuizChef
+            BELC Quiz Platform
           </Link>
           <AppNav orientation="vertical" links={navLinks} />
         </aside>
