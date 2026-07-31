@@ -92,18 +92,52 @@ class AnswerDistributionQueryServiceTest {
         assertThat(view.answeredCount()).isEqualTo(2);
         assertThat(view.eligibleParticipantCount()).isEqualTo(3);
         assertThat(view.noAnswerCount()).isEqualTo(1);
+        // Percentages are a share of answeredCount (2), never of the
+        // eligible count (3) — a non-answering eligible participant must
+        // not dilute every option's share.
         assertThat(view.options()).extracting(
                         AnswerDistributionView.OptionCount::optionId,
                         AnswerDistributionView.OptionCount::count,
                         AnswerDistributionView.OptionCount::percentage)
                 .containsExactlyInAnyOrder(
-                        org.assertj.core.groups.Tuple.tuple(optionA, 1, 33),
-                        org.assertj.core.groups.Tuple.tuple(optionB, 1, 33),
+                        org.assertj.core.groups.Tuple.tuple(optionA, 1, 50),
+                        org.assertj.core.groups.Tuple.tuple(optionB, 1, 50),
                         org.assertj.core.groups.Tuple.tuple(optionC, 0, 0));
+        // Single-choice: every accepted answer picks exactly one option,
+        // so the percentages sum to (approximately) 100.
+        int totalPercentage = view.options().stream()
+                .mapToInt(AnswerDistributionView.OptionCount::percentage).sum();
+        assertThat(totalPercentage).isEqualTo(100);
     }
 
     @Test
-    void aMultipleAnswerQuestionsSelectionsCanExceedTheAnsweredCount() {
+    void aNonAnsweringEligibleParticipantDoesNotDiluteEveryOptionsPercentage() {
+        Session session = revealedSession();
+        // Ten eligible, but only two actually answered — every eligible
+        // participant chose A, so A must read 100%, not 20%.
+        Participant answered = connectedParticipant(session);
+        answered.recordAnswer(answerSelecting(questionId, optionA));
+        List<Participant> nonAnswerers = java.util.stream.IntStream.range(0, 8)
+                .mapToObj(index -> connectedParticipant(session))
+                .toList();
+        List<Participant> all = new java.util.ArrayList<>();
+        all.add(answered);
+        all.addAll(nonAnswerers);
+        when(participantRepository.findBySessionId(session.getId())).thenReturn(all);
+
+        AnswerDistributionView view = service.distribution(hostUser, session.getId());
+
+        assertThat(view.answeredCount()).isEqualTo(1);
+        assertThat(view.eligibleParticipantCount()).isEqualTo(9);
+        assertThat(view.noAnswerCount()).isEqualTo(8);
+        assertThat(view.options())
+                .filteredOn(option -> option.optionId().equals(optionA))
+                .extracting(AnswerDistributionView.OptionCount::percentage)
+                .containsExactly(100);
+    }
+
+    @Test
+    void aMultipleAnswerQuestionsSelectionsAndPercentagesCanExceedTheAnsweredCount() {
         Session session = revealedSession();
         Participant answered = connectedParticipant(session);
         answered.recordAnswer(answerSelecting(questionId, optionA, optionB));
@@ -115,6 +149,9 @@ class AnswerDistributionQueryServiceTest {
         int totalSelections = view.options().stream()
                 .mapToInt(AnswerDistributionView.OptionCount::count).sum();
         assertThat(totalSelections).isEqualTo(2);
+        int totalPercentage = view.options().stream()
+                .mapToInt(AnswerDistributionView.OptionCount::percentage).sum();
+        assertThat(totalPercentage).isEqualTo(200);
     }
 
     @Test

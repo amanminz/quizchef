@@ -705,6 +705,74 @@ describe("SessionLivePage", () => {
     sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
   });
 
+  it("reveals a solo finisher without waiting for four more places", async () => {
+    signIn();
+    const session = sessionSummary({ state: "FINISHED" });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, undefined);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: session.sessionId,
+            state: "FINISHED",
+            currentPhase: undefined,
+            participantCount: 1,
+            entries: [leaderboardEntry({ displayName: "Ann", score: 900, rank: 1 })]
+          })
+        )
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText(/and the winners are/i)).toBeInTheDocument();
+    expect(await screen.findByText("Ann", undefined, { timeout: 4_000 })).toBeInTheDocument();
+    const podium = await screen.findByLabelText("Podium", undefined, { timeout: 4_000 });
+    expect(within(podium).getAllByRole("listitem")).toHaveLength(1);
+    expect(screen.queryByText("Remaining standings")).not.toBeInTheDocument();
+    sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
+  }, 15_000);
+
+  it("renders tied scores at their own distinct backend ranks, never merged", async () => {
+    signIn();
+    const session = sessionSummary({ state: "FINISHED" });
+    sessionStorage.setItem(`quizchef.podium-played.${session.sessionId}`, "played");
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, undefined);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: session.sessionId,
+            state: "FINISHED",
+            currentPhase: undefined,
+            participantCount: 3,
+            entries: [
+              // Ann and Ben are tied on score — the backend still assigns
+              // them distinct, sequential ranks (LeaderboardService fully
+              // tie-breaks); the ceremony must render exactly that order,
+              // never re-detect or merge the tie itself.
+              leaderboardEntry({ displayName: "Ann", score: 900, rank: 1 }),
+              leaderboardEntry({ displayName: "Ben", score: 900, rank: 2 }),
+              leaderboardEntry({ displayName: "Cara", score: 500, rank: 3 })
+            ]
+          })
+        )
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    const podium = await screen.findByLabelText("Podium");
+    // Both tied entries render, at their own backend-assigned places —
+    // the equal score is not collapsed into one row or one label.
+    expect(within(podium).getByText("1st")).toBeInTheDocument();
+    expect(within(podium).getByText("2nd")).toBeInTheDocument();
+    expect(within(podium).getAllByText("900")).toHaveLength(2);
+    sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
+  });
+
   it("renders a two-player finish without empty podium placeholders", async () => {
     signIn();
     const session = sessionSummary({ state: "FINISHED" });

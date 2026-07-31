@@ -95,16 +95,27 @@ public class AnswerDistributionQueryService {
             }
         }
 
-        int finalEligible = eligible;
+        int finalAnswered = answered;
         List<AnswerDistributionView.OptionCount> options = counts.entrySet().stream()
                 .map(entry -> new AnswerDistributionView.OptionCount(
-                        entry.getKey(), entry.getValue(), percentage(entry.getValue(), finalEligible)))
+                        entry.getKey(), entry.getValue(), percentage(entry.getValue(), finalAnswered)))
                 .toList();
 
         return new AnswerDistributionView(sessionId, questionId, answered, eligible, eligible - answered, options);
     }
 
-    private static int percentage(int count, int eligible) {
-        return eligible == 0 ? 0 : (int) Math.round(count * 100.0 / eligible);
+    /**
+     * Percentage of <em>accepted answers</em>, not eligible participants —
+     * "60%" means 60% of those who actually answered picked this option,
+     * the same framing every live-quiz product uses. For a single/true-false
+     * question this makes {@code sum(options[].percentage) ≈ 100}; for a
+     * multiple-answer question the sum may legitimately exceed 100, since
+     * one participant can contribute to several options (see
+     * {@link AnswerDistributionView}). Never divides by eligible or
+     * no-answer counts — those would understate every option's share for
+     * no product reason.
+     */
+    private static int percentage(int count, int answered) {
+        return answered == 0 ? 0 : (int) Math.round(count * 100.0 / answered);
     }
 }
