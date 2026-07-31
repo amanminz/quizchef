@@ -4,10 +4,17 @@ import { sessionApi } from "@/api/sessionApi";
 import { gameplayKeys } from "@/features/gameplay/queryKeys";
 import type { GameplayPhase } from "@/features/gameplay/types";
 
-/** The phases in which the server will answer a results read. */
+/**
+ * The phases in which the server will answer the HOST's full-standings
+ * read. Includes `FINAL_RESULTS_PENDING` deliberately: the host's own
+ * standings are never gated by the release flag (unlike the participant's
+ * `personalResult`, see `PERSONAL_RESULT_PHASES`) — the host needs them
+ * immediately at finish to run the winner ceremony *before* releasing.
+ */
 export const RESULTS_PHASES: readonly GameplayPhase[] = [
   "ANSWER_REVEALED",
   "LEADERBOARD",
+  "FINAL_RESULTS_PENDING",
   "FINISHED"
 ];
 

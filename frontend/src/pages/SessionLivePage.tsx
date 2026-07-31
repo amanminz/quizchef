@@ -17,6 +17,7 @@ import { PlayAgainCard } from "@/features/gameplay/components/PlayAgainCard";
 import { PodiumReveal } from "@/features/gameplay/components/PodiumReveal";
 import { QuestionSkeleton } from "@/features/gameplay/components/QuestionSkeleton";
 import { QuestionTransition } from "@/features/gameplay/components/QuestionTransition";
+import { ReleaseResultsButton } from "@/features/gameplay/components/ReleaseResultsButton";
 import { SessionSummaryCard } from "@/features/gameplay/components/SessionSummaryCard";
 import { useGameHost } from "@/features/gameplay/hooks/useGameHost";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
@@ -107,7 +108,7 @@ export function SessionLivePage() {
       )}
 
       {!host.isLoadingSession && host.sessionError == null && (
-        <HostGameplayBody host={host} quizTitle={quizTitle} />
+        <HostGameplayBody host={host} quizTitle={quizTitle} presentation={presentation} />
       )}
     </PageContainer>
   );
@@ -124,10 +125,12 @@ function ParticipantCount({ count }: { count: number }) {
 
 function HostGameplayBody({
   host,
-  quizTitle
+  quizTitle,
+  presentation
 }: {
   host: ReturnType<typeof useGameHost>;
   quizTitle: string | undefined;
+  presentation: ReturnType<typeof usePresentationMode>;
 }) {
   switch (host.phase) {
     case "LOBBY":
@@ -156,6 +159,7 @@ function HostGameplayBody({
           <QuestionTransition transitionKey={host.question.questionId ?? ""}>
             <HostBilingualQuestion
               question={host.question}
+              presentationActive={presentation.active}
               headerExtra={
                 <AnswerProgressBadge progress={host.answerProgress} emphasized={host.allAnswered} />
               }
@@ -170,7 +174,12 @@ function HostGameplayBody({
       return (
         <div className="flex flex-col gap-4">
           <ParticipantCount count={host.session?.participantCount ?? 0} />
-          <HostBilingualQuestion question={host.question} revealed />
+          <HostBilingualQuestion
+            question={host.question}
+            revealed
+            distribution={host.answerDistribution}
+            presentationActive={presentation.active}
+          />
         </div>
       );
     case "LEADERBOARD":
@@ -196,6 +205,7 @@ function HostGameplayBody({
           <LeaderboardTable entries={host.results.entries ?? []} caption="Current standings" />
         </div>
       );
+    case "FINAL_RESULTS_PENDING":
     case "FINISHED":
       if (host.resultsError != null) {
         return (
@@ -221,6 +231,12 @@ function HostGameplayBody({
             entries={host.results.entries ?? []}
             footer={
               <div className="flex flex-col gap-6">
+                <ReleaseResultsButton
+                  released={host.finalResultsReleased}
+                  isReleasing={host.isReleasingFinalResults}
+                  error={host.releaseFinalResultsError}
+                  onRelease={() => void host.releaseFinalResults()}
+                />
                 <FinalStatistics results={host.results} />
                 <SessionSummaryCard
                   quizTitle={quizTitle}

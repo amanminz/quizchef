@@ -19,5 +19,11 @@ export const gameplayKeys = {
    * (live-event privacy). A participant device never mounts `results`.
    */
   personalResult: (sessionId: string, participantId: string) =>
-    [...gameplayKeys.all, "personal-result", sessionId, participantId] as const
+    [...gameplayKeys.all, "personal-result", sessionId, participantId] as const,
+  /** Host-only: per-option accepted-answer counts once the question is revealed. */
+  answerDistribution: (sessionId: string) =>
+    [...gameplayKeys.all, "answer-distribution", sessionId] as const,
+  /** A participant's own rank plus immediate neighbours — never the full leaderboard. */
+  rankContext: (sessionId: string, participantId: string) =>
+    [...gameplayKeys.all, "rank-context", sessionId, participantId] as const
 };

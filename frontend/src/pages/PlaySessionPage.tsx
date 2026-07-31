@@ -8,8 +8,10 @@ import { AnswerGrid } from "@/features/gameplay/components/AnswerGrid";
 import { AnswerRevealCard } from "@/features/gameplay/components/AnswerRevealCard";
 import { CompletionBanner } from "@/features/gameplay/components/CompletionBanner";
 import { CountdownOverlay } from "@/features/gameplay/components/CountdownOverlay";
+import { FinalResultsPendingScreen } from "@/features/gameplay/components/FinalResultsPendingScreen";
 import { GameConnectionBanner } from "@/features/gameplay/components/GameConnectionBanner";
 import { PersonalRankCard } from "@/features/gameplay/components/PersonalRankCard";
+import { RankNeighbours } from "@/features/gameplay/components/RankNeighbours";
 import { PlayAgainCard } from "@/features/gameplay/components/PlayAgainCard";
 import { QuestionResult } from "@/features/gameplay/components/QuestionResult";
 import {
@@ -176,12 +178,17 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
         );
       }
       return (
-        <PersonalRankCard
-          result={player.personalResult}
-          scoreDelta={player.scoreDelta}
-          rankDelta={player.rankDelta}
-        />
+        <div className="flex flex-col gap-4">
+          <PersonalRankCard
+            result={player.personalResult}
+            scoreDelta={player.scoreDelta}
+            rankDelta={player.rankDelta}
+          />
+          {player.rankContext && <RankNeighbours context={player.rankContext} />}
+        </div>
       );
+    case "FINAL_RESULTS_PENDING":
+      return <FinalResultsPendingScreen />;
     case "FINISHED":
       if (player.personalResultError != null) {
         return (

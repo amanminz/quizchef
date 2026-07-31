@@ -1,4 +1,6 @@
 import type {
+  AnswerDistributionResponse,
+  ParticipantRankContextResponse,
   ParticipantResultResponse,
   CurrentQuestionResponse,
   LeaderboardEntryDto,
@@ -124,6 +126,34 @@ export function participantSessionResponse(
     sessionId: nextId("session"),
     guestParticipantToken: nextId("guest-token"),
     sessionState: "LOBBY",
+    ...overrides
+  };
+}
+
+export function answerDistributionResponse(
+  overrides: Partial<AnswerDistributionResponse> = {}
+): AnswerDistributionResponse {
+  return {
+    sessionId: nextId("session"),
+    questionId: nextId("question"),
+    answeredCount: 2,
+    eligibleParticipantCount: 2,
+    noAnswerCount: 0,
+    options: [],
+    ...overrides
+  };
+}
+
+export function participantRankContextResponse(
+  overrides: Partial<ParticipantRankContextResponse> = {}
+): ParticipantRankContextResponse {
+  return {
+    sessionId: nextId("session"),
+    participantId: "participant-me",
+    displayName: "Aman",
+    rank: 2,
+    score: 320,
+    pointsEarned: 100,
     ...overrides
   };
 }

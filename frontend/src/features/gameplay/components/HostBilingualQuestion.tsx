@@ -2,15 +2,24 @@ import { Lightbulb } from "lucide-react";
 import { Card, CardContent } from "@/components/common/Card";
 import { CorrectAnswerBadge } from "@/features/gameplay/components/CorrectAnswerBadge";
 import { QuestionHeader } from "@/features/gameplay/components/QuestionHeader";
-import type { CurrentQuestionResponse, PlayableLocalizationDto } from "@/types/api";
+import type { AnswerDistributionResponse, CurrentQuestionResponse, PlayableLocalizationDto } from "@/types/api";
 import { cn } from "@/utils/cn";
 
 export interface HostBilingualQuestionProps {
   question: CurrentQuestionResponse;
   /** Reveal view: correct options highlighted, explanations shown. */
   revealed?: boolean;
+  /**
+   * Per-option accepted-answer counts, shown alongside each option once
+   * revealed. Counts are keyed by the stable option id (never translated
+   * text), so English and Hindi rows always show the same number for the
+   * same logical option.
+   */
+  distribution?: AnswerDistributionResponse;
   /** Extra header content (answer progress, participant count). */
   headerExtra?: React.ReactNode;
+  /** Presentation Mode swaps the compact timer for the projector-scale one. */
+  presentationActive?: boolean;
 }
 
 const LANGUAGE_ENGLISH_NAMES: Record<string, string> = {
@@ -28,12 +37,17 @@ function englishName(language: string): string {
  * large type, high contrast, aligned option rows, no non-essential
  * metadata. When the second language is missing, the default renders
  * once with a subtle notice. On reveal, the correct options and both
- * languages' explanations show.
+ * languages' explanations show, alongside each option's accepted-answer
+ * count and percentage when `distribution` is provided (for a
+ * multiple-answer question these are option-*selection* counts, so their
+ * sum may exceed the number of participants who answered).
  */
 export function HostBilingualQuestion({
   question,
   revealed = false,
-  headerExtra
+  distribution,
+  headerExtra,
+  presentationActive = false
 }: HostBilingualQuestionProps) {
   const localizations = question.localizations ?? [];
   const primary =
@@ -51,6 +65,9 @@ export function HostBilingualQuestion({
   const textOf = (localization: PlayableLocalizationDto | undefined, optionId: string) =>
     localization?.optionTexts?.find((entry) => entry.optionId === optionId)?.text;
 
+  const countFor = (optionId: string) =>
+    distribution?.options?.find((entry) => entry.optionId === optionId);
+
   return (
     <Card>
       <CardContent className="flex flex-col gap-6 p-6 sm:p-8">
@@ -58,6 +75,7 @@ export function HostBilingualQuestion({
           number={question.questionNumber ?? 0}
           total={question.totalQuestions ?? 0}
           endsAt={question.phase === "QUESTION_OPEN" ? question.endsAt : null}
+          presentationActive={presentationActive}
         />
         {headerExtra}
 
@@ -106,6 +124,12 @@ export function HostBilingualQuestion({
                     </span>
                   )}
                 </span>
+                {revealed && countFor(id) && (
+                  <span className="mt-1 shrink-0 whitespace-nowrap text-right font-mono text-sm tabular-nums text-muted-foreground sm:text-base">
+                    {countFor(id)?.count ?? 0}
+                    {countFor(id)?.percentage !== undefined && ` · ${countFor(id)?.percentage}%`}
+                  </span>
+                )}
                 {isCorrect && (
                   <span className="mt-1 shrink-0">
                     <CorrectAnswerBadge />
@@ -115,6 +139,12 @@ export function HostBilingualQuestion({
             );
           })}
         </ol>
+
+        {revealed && distribution && (distribution.noAnswerCount ?? 0) > 0 && (
+          <p className="text-sm text-muted-foreground">
+            No answer: {distribution.noAnswerCount}
+          </p>
+        )}
 
         {revealed && (primary?.explanation || secondary?.explanation) && (
           <div className="flex items-start gap-3 rounded-md border border-primary/30 bg-primary/5 px-5 py-4">

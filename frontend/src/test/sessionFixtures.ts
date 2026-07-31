@@ -24,6 +24,10 @@ export function sessionSummary(
       showLiveLeaderboard: true,
       maxParticipants: 100
     },
+    // Defaults to released so existing FINISHED-state fixtures keep showing
+    // the final screen without every call site opting in; tests of the
+    // final-results hold explicitly override this to false.
+    finalResultsReleased: true,
     version: 0,
     createdAt: new Date().toISOString(),
     ...overrides

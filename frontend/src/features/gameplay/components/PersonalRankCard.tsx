@@ -1,4 +1,5 @@
 import { ArrowDown, ArrowUp } from "lucide-react";
+import { finalResultLabel } from "@/features/gameplay/finalResultLabel";
 import { rankOrdinal } from "@/features/gameplay/rankOrdinal";
 import type { ParticipantResultResponse } from "@/types/api";
 
@@ -27,12 +28,16 @@ export function PersonalRankCard({
 }: PersonalRankCardProps) {
   const rank = result.rank ?? 0;
   const isFinal = variant === "final";
+  const label = isFinal ? finalResultLabel(rank) : null;
 
   return (
     <section
       aria-label={isFinal ? "Your final result" : "Your rank"}
       className="flex flex-col items-center gap-2 rounded-lg border bg-card px-6 py-8 text-center"
     >
+      {label && (
+        <p className="text-xs font-bold uppercase tracking-[0.2em] text-primary">{label}</p>
+      )}
       <p className="text-sm font-semibold uppercase tracking-widest text-muted-foreground">
         {isFinal ? "You finished" : "Your rank"}
       </p>

@@ -26,7 +26,7 @@ export function useGameplayState(sessionId: string | undefined) {
       return "LOBBY";
     }
     if (session.state === "FINISHED" || session.state === "ARCHIVED") {
-      return "FINISHED";
+      return session.finalResultsReleased ? "FINISHED" : "FINAL_RESULTS_PENDING";
     }
     if (session.state !== "IN_PROGRESS") {
       return "LOBBY";

@@ -13,7 +13,8 @@ const SESSION_LIFECYCLE_EVENTS = new Set<ProtocolMessage["type"]>([
   "session.finished",
   "participant.joined",
   "participant.disconnected",
-  "participant.reconnected"
+  "participant.reconnected",
+  "final.results.revealed"
 ]);
 
 const QUESTION_PROGRESSION_EVENTS = new Set<ProtocolMessage["type"]>([
@@ -44,6 +45,8 @@ function announcementFor(message: ProtocolMessage): string | null {
       return "The session has started.";
     case "session.finished":
       return "The quiz is complete.";
+    case "final.results.revealed":
+      return "Final results have been released.";
     default:
       return null;
   }

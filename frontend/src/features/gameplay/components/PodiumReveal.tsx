@@ -1,12 +1,16 @@
 import { Crown, RotateCcw, SkipForward } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/common/Button";
+import { finalResultLabel } from "@/features/gameplay/finalResultLabel";
 import { LeaderboardTable } from "@/features/gameplay/components/LeaderboardTable";
 import { Podium } from "@/features/gameplay/components/Podium";
 import { usePrefersReducedMotion } from "@/features/gameplay/hooks/usePrefersReducedMotion";
 import { rankOrdinal } from "@/features/gameplay/rankOrdinal";
 import type { LeaderboardEntryDto } from "@/types/api";
 import { cn } from "@/utils/cn";
+
+/** How many places get their own moment in the staged reveal (5th → 1st). */
+const CEREMONY_PLACES = 5;
 
 /** One reveal step: pause `holdMillis`, then show `revealCount` places. */
 interface RevealStage {
@@ -26,37 +30,37 @@ export interface PodiumRevealProps {
 }
 
 /**
- * The host's staged winner reveal: third, then second, then first — the
- * crown last — then the remaining standings. Purely local display state:
- * Skip and Replay never emit gameplay commands or touch session state,
- * the whole sequence stays under ~7 seconds, and the reveal plays once
- * per session (a refresh re-fetches authoritative results and renders the
- * completed podium, it never re-runs the ceremony uninvited). With
- * reduced motion, the same content appears without movement or confetti.
- * Small fields render honestly: one or two finishers reveal one or two
- * cards — never an empty placeholder.
+ * The host's staged winner reveal: fifth, fourth, third, second, then
+ * first — the crown last — then the podium (top 3) and the remaining
+ * standings (rank 4 onward, in `LeaderboardTable`). Purely local display
+ * state: Skip and Replay never emit gameplay commands or touch session
+ * state, and the reveal plays once per session (a refresh re-fetches
+ * authoritative results and renders the completed podium, it never
+ * re-runs the ceremony uninvited). With reduced motion, the same content
+ * appears without movement or confetti. Small fields render honestly:
+ * fewer than five finishers reveal only what exists — never an empty
+ * placeholder. The caller's `footer` (which should include the host's
+ * release-results action) renders only once the ceremony has completed
+ * or been skipped — never during the countdown.
  */
 export function PodiumReveal({ sessionId, entries, footer }: PodiumRevealProps) {
   const reducedMotion = usePrefersReducedMotion();
   const storageKey = `quizchef.podium-played.${sessionId}`;
-  const topThree = entries.slice(0, 3);
+  const topFive = entries.slice(0, CEREMONY_PLACES);
 
-  // suspense (0 revealed) → …places, worst first… → all revealed.
+  // suspense (0 revealed) → fifth, fourth, third, second, first → all revealed.
   const stages = useMemo<RevealStage[]>(() => {
     const reveal: RevealStage[] = [{ revealCount: 0, holdMillis: 1_300 }];
-    if (topThree.length >= 3) {
-      reveal.push({ revealCount: 1, holdMillis: 1_500 });
+    for (let count = 1; count < topFive.length; count++) {
+      reveal.push({ revealCount: count, holdMillis: 1_500 });
     }
-    if (topThree.length >= 2) {
-      reveal.push({ revealCount: Math.min(2, topThree.length), holdMillis: 1_500 });
-    }
-    reveal.push({ revealCount: topThree.length, holdMillis: 2_200 });
+    reveal.push({ revealCount: topFive.length, holdMillis: 2_200 });
     return reveal;
-  }, [topThree.length]);
+  }, [topFive.length]);
 
   const alreadyPlayed = () => sessionStorage.getItem(storageKey) !== null;
   const [stageIndex, setStageIndex] = useState(() =>
-    reducedMotion || alreadyPlayed() || topThree.length === 0 ? stages.length : 0
+    reducedMotion || alreadyPlayed() || topFive.length === 0 ? stages.length : 0
   );
   const complete = stageIndex >= stages.length;
 
@@ -72,9 +76,9 @@ export function PodiumReveal({ sessionId, entries, footer }: PodiumRevealProps) 
     return () => clearTimeout(timer);
   }, [complete, stageIndex, stages, storageKey]);
 
-  const revealCount = complete ? topThree.length : stages[stageIndex].revealCount;
-  // Third place first: the worst revealed place sits at the front.
-  const revealed = topThree.slice(topThree.length - revealCount).reverse();
+  const revealCount = complete ? topFive.length : stages[stageIndex].revealCount;
+  // Worst place first: fifth appears before fourth, before third, and so on.
+  const revealed = topFive.slice(topFive.length - revealCount).reverse();
 
   if (complete) {
     return (
@@ -107,6 +111,7 @@ export function PodiumReveal({ sessionId, entries, footer }: PodiumRevealProps) 
         <ol aria-label="Winner reveal" className="flex w-full max-w-md flex-col-reverse gap-3">
           {revealed.map((entry) => {
             const isFirst = (entry.rank ?? 0) === 1;
+            const label = finalResultLabel(entry.rank ?? 0);
             return (
               <li
                 key={entry.participantId}
@@ -123,8 +128,13 @@ export function PodiumReveal({ sessionId, entries, footer }: PodiumRevealProps) 
                 >
                   {rankOrdinal(entry.rank ?? 0)}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-xl font-semibold">
-                  {entry.displayName}
+                <span className="flex min-w-0 flex-1 flex-col">
+                  <span className="truncate text-xl font-semibold">{entry.displayName}</span>
+                  {label && (
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      {label}
+                    </span>
+                  )}
                 </span>
                 {isFirst && <Crown aria-hidden className="h-6 w-6 text-primary" />}
                 <span className="font-mono text-lg tabular-nums text-muted-foreground">

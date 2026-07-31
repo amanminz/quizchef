@@ -6,6 +6,7 @@ import { useAuthStore } from "@/auth/authStore";
 import { sessionTopic } from "@/realtime/SessionSubscriptions";
 import { fakeRealtimeClient, protocolMessage } from "@/test/fakeStomp";
 import {
+  answerDistributionResponse,
   currentQuestionResponse,
   leaderboardEntry,
   revealedQuestionResponse,
@@ -504,6 +505,203 @@ describe("SessionLivePage", () => {
     expect(await screen.findByLabelText("Podium")).toBeInTheDocument();
     expect(screen.queryByText(/and the winners are/i)).not.toBeInTheDocument();
     window.matchMedia = originalMatchMedia;
+    sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
+  });
+
+  it("shows per-option counts and percentages once revealed, matching for English and Hindi", async () => {
+    signIn();
+    const base = currentQuestionResponse();
+    const bilingual: CurrentQuestionResponse = {
+      ...base,
+      localizations: [
+        ...base.localizations!,
+        {
+          languageCode: "hi",
+          prompt: "योना को एक बड़ी मछली ने निगल लिया था।",
+          optionTexts: [
+            { optionId: base.options![0].optionId!, text: "सही" },
+            { optionId: base.options![1].optionId!, text: "गलत" }
+          ]
+        }
+      ]
+    };
+    const revealed = revealedQuestionResponse(bilingual);
+    const session = sessionSummary({
+      sessionId: revealed.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: revealed.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, revealed);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({ sessionId: session.sessionId, currentPhase: "ANSWER_REVEALED" })
+        )
+      ),
+      http.get(`/api/v1/sessions/${session.sessionId}/answer-distribution`, () =>
+        HttpResponse.json(
+          answerDistributionResponse({
+            sessionId: session.sessionId,
+            questionId: revealed.questionId,
+            answeredCount: 18,
+            eligibleParticipantCount: 20,
+            noAnswerCount: 2,
+            options: [
+              { optionId: base.options![0].optionId!, count: 12, percentage: 60 },
+              { optionId: base.options![1].optionId!, count: 6, percentage: 30 }
+            ]
+          })
+        )
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText("सही")).toBeInTheDocument();
+    // One count per option row, shared by both language lines — English and
+    // Hindi can never disagree since it is the same rendered node.
+    expect(await screen.findByText("12 · 60%")).toBeInTheDocument();
+    expect(screen.getByText("6 · 30%")).toBeInTheDocument();
+    expect(screen.getByText("No answer: 2")).toBeInTheDocument();
+  });
+
+  it("shows nothing before the reveal and hides the host-only distribution from participants", async () => {
+    signIn();
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    // No override: the default handler answers session.distribution.not-available.
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText(question.localizations![0].prompt!)).toBeInTheDocument();
+    expect(screen.queryByText(/·/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no answer/i)).not.toBeInTheDocument();
+  });
+
+  it("shows the projector-scale timer in Presentation Mode, and the compact one otherwise", async () => {
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = () => Promise.reject(new Error("denied"));
+    signIn();
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText(question.localizations![0].prompt!);
+    expect(screen.queryByText(/time left/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
+
+    expect(await screen.findByText(/time left/i)).toBeInTheDocument();
+    expect(screen.getByRole("timer")).toBeInTheDocument();
+    HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("reveals five places — fifth through first — before the podium and remaining standings", async () => {
+    signIn();
+    const session = sessionSummary({ state: "FINISHED" });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, undefined);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: session.sessionId,
+            state: "FINISHED",
+            currentPhase: undefined,
+            participantCount: 6,
+            entries: [
+              leaderboardEntry({ displayName: "Ann", score: 900, rank: 1 }),
+              leaderboardEntry({ displayName: "Ben", score: 800, rank: 2 }),
+              leaderboardEntry({ displayName: "Cara", score: 700, rank: 3 }),
+              leaderboardEntry({ displayName: "Dan", score: 600, rank: 4 }),
+              leaderboardEntry({ displayName: "Eve", score: 500, rank: 5 }),
+              leaderboardEntry({ displayName: "Fay", score: 100, rank: 6 })
+            ]
+          })
+        )
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText(/and the winners are/i)).toBeInTheDocument();
+    expect(screen.queryByText("Eve")).not.toBeInTheDocument();
+
+    // Fifth and fourth enter — labeled Runner-up — before third, second, first.
+    expect(await screen.findByText("Eve", undefined, { timeout: 3_000 })).toBeInTheDocument();
+    expect(screen.getAllByText("Runner-up").length).toBeGreaterThan(0);
+    expect(screen.queryByText("Ann")).not.toBeInTheDocument();
+    expect(await screen.findByText("Ann", undefined, { timeout: 7_000 })).toBeInTheDocument();
+    expect(screen.getAllByText("Winner").length).toBeGreaterThan(0);
+
+    expect(
+      await screen.findByLabelText("Podium", undefined, { timeout: 4_000 })
+    ).toBeInTheDocument();
+    expect(screen.getByText("Remaining standings")).toBeInTheDocument();
+    expect(screen.getByText("Fay")).toBeInTheDocument();
+    sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
+  }, 20_000);
+
+  it("releases final results to participants, idempotently, only after the host acts", async () => {
+    signIn();
+    const session = sessionSummary({ state: "FINISHED", finalResultsReleased: false });
+    sessionStorage.setItem(`quizchef.podium-played.${session.sessionId}`, "played");
+    serveQuiz(session.publishedQuizVersionId!);
+    let releaseCalls = 0;
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
+      http.get(`/api/v1/sessions/${session.sessionId}/questions/current`, () =>
+        HttpResponse.json(apiError("session.no-current-question", "No question is in play"), {
+          status: 409
+        })
+      ),
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: session.sessionId,
+            state: "FINISHED",
+            currentPhase: undefined
+          })
+        )
+      ),
+      http.post(`/api/v1/sessions/${session.sessionId}/results/release`, () => {
+        releaseCalls += 1;
+        session.finalResultsReleased = true;
+        return HttpResponse.json(session);
+      })
+    );
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    expect(await screen.findByLabelText("Podium")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: /reveal results to participants/i })
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /reveal results to participants/i }));
+
+    expect(await screen.findByText(/results released to participants/i)).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /reveal results to participants/i })
+    ).not.toBeInTheDocument();
+    expect(releaseCalls).toBe(1);
     sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
   });
 

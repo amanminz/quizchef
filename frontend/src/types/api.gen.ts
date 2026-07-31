@@ -156,6 +156,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/results/release": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Release final standings to participants
+         * @description Host only. Lifts the final-results hold so every participant may read their own final rank — the one authoritative action following the host's winner ceremony. Idempotent: releasing an already-released session is harmless.
+         */
+        post: operations["releaseResults"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/questions/start": {
         parameters: {
             query?: never;
@@ -640,6 +660,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/participants/{participantId}/rank-context": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read one participant's ranking neighbours
+         * @description The participant's own rank, score, and points just earned, plus whoever is immediately ahead and behind in the standings — never the full leaderboard. Open like the personal-result endpoint (the unguessable session and participant ids gate it). Available only for a non-final question whose answer has been revealed — the quiz's last question never exposes neighbours, since final standings are held for the host's winner ceremony.
+         */
+        get: operations["rankContext"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/answer-progress": {
         parameters: {
             query?: never;
@@ -652,6 +692,26 @@ export interface paths {
          * @description How many participants have an accepted answer for the question in play, out of how many are eligible to answer right now — the authoritative counts behind the host's "5 / 10 answered". Counts only, never who; participants see only their own acknowledgement. Refreshed by the host on each answer.progress broadcast.
          */
         get: operations["answerProgress"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{id}/answer-distribution": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the current question's answer distribution (host only)
+         * @description How the accepted answers split across each option, plus how many gave no answer at all — the authoritative counts behind the host's post-reveal "who picked what". Never names who; participants see only their own submission. Available only once the answer has been revealed.
+         */
+        get: operations["answerDistribution"];
         put?: never;
         post?: never;
         delete?: never;
@@ -992,6 +1052,8 @@ export interface components {
             /** Format: int32 */
             participantCount?: number;
             settings?: components["schemas"]["SessionSettingsDto"];
+            /** @description Whether the host has released final standings to participants (always false before the session finishes; only meaningful once FINISHED) */
+            finalResultsReleased?: boolean;
             /** Format: int64 */
             version?: number;
             /** Format: date-time */
@@ -1321,6 +1383,34 @@ export interface components {
             /** Format: int32 */
             score?: number;
         };
+        Neighbour: {
+            displayName?: string;
+            /** Format: int32 */
+            rank?: number;
+            /** Format: int32 */
+            scoreDifference?: number;
+        };
+        ParticipantRankContextResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            participantId?: string;
+            displayName?: string;
+            /** Format: int32 */
+            rank?: number;
+            /** Format: int32 */
+            score?: number;
+            /** Format: int32 */
+            pointsEarned?: number;
+            ahead?: components["schemas"]["Neighbour"];
+            behind?: components["schemas"]["Neighbour"];
+            tiedWith?: components["schemas"]["TiedWith"];
+        };
+        TiedWith: {
+            displayName?: string;
+            /** Format: int32 */
+            rank?: number;
+        };
         AnswerProgressResponse: {
             /** Format: uuid */
             sessionId?: string;
@@ -1336,6 +1426,42 @@ export interface components {
              * @example 10
              */
             eligibleCount?: number;
+        };
+        AnswerDistributionResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            questionId?: string;
+            /**
+             * Format: int32
+             * @example 20
+             */
+            answeredCount?: number;
+            /**
+             * Format: int32
+             * @example 20
+             */
+            eligibleParticipantCount?: number;
+            /**
+             * Format: int32
+             * @example 0
+             */
+            noAnswerCount?: number;
+            options?: components["schemas"]["OptionCount"][];
+        };
+        OptionCount: {
+            /** Format: uuid */
+            optionId?: string;
+            /**
+             * Format: int32
+             * @example 12
+             */
+            count?: number;
+            /**
+             * Format: int32
+             * @example 60
+             */
+            percentage?: number;
         };
         Pageable: {
             /** Format: int32 */
@@ -1986,6 +2112,64 @@ export interface operations {
                 };
             };
             /** @description Not in LOBBY (session.invalid-transition) or empty (session.not-startable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    releaseResults: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, with finalResultsReleased=true */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The session has not finished yet (session.invalid-transition) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3303,6 +3487,47 @@ export interface operations {
             };
         };
     };
+    rankContext: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                participantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The participant's rank context */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ParticipantRankContextResponse"];
+                };
+            };
+            /** @description Unknown session, or no such participant in it (session.participant.not-found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Not available right now (session.rank-context.not-available) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     answerProgress: {
         parameters: {
             query?: never;
@@ -3351,6 +3576,64 @@ export interface operations {
                 };
             };
             /** @description No question is in play (session.no-current-question) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    answerDistribution: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The current distribution */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["AnswerDistributionResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No question is in play (session.no-current-question) or not revealed yet (session.distribution.not-available) */
             409: {
                 headers: {
                     [name: string]: unknown;

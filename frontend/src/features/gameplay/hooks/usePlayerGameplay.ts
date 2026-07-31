@@ -6,6 +6,8 @@ import { useAnswerSubmission } from "@/features/gameplay/hooks/useAnswerSubmissi
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
 import { useJoinSession } from "@/features/gameplay/hooks/useJoinSession";
 import { useParticipantResult } from "@/features/gameplay/hooks/useParticipantResult";
+import { useRankContext } from "@/features/gameplay/hooks/useRankContext";
+import { isLastQuestion } from "@/features/gameplay/isLastQuestion";
 import { usePlayerSessionStore } from "@/features/gameplay/playerSessionStore";
 import type { JoinSessionRequest } from "@/types/api";
 
@@ -84,6 +86,17 @@ export function usePlayerGameplay(pin: string) {
     stored?.participantId,
     gameplay.phase
   );
+
+  // Ranking neighbours: shown after every question except the quiz's
+  // last, where final standings are held for the host's winner ceremony
+  // instead (the query itself refuses on the last question either way —
+  // this just avoids firing a request that would always 409).
+  const rankContextQuery = useRankContext(
+    stored?.sessionId,
+    stored?.participantId,
+    gameplay.phase,
+    isLastQuestion(gameplay.question)
+  );
   // Movement is a display diff of two consecutive server snapshots (the
   // PR #5 delta pattern, personal edition) — absent after a refresh. The
   // pair advances on data identity, not per render, so the delta survives
@@ -133,6 +146,9 @@ export function usePlayerGameplay(pin: string) {
     scoreDelta,
     /** Positive = moved up since the previous personal snapshot. */
     rankDelta,
+    /** Own rank plus immediate neighbours — absent on the quiz's last question. */
+    rankContext: rankContextQuery.data,
+    rankContextError: rankContextQuery.error,
     ...gameplay,
     ...answerSubmission
   };
