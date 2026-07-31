@@ -1,9 +1,12 @@
 import { useCallback, useState } from "react";
 import { isApiClientError } from "@/api/apiError";
 import { sessionApi } from "@/api/sessionApi";
+import { useAnswerDistribution } from "@/features/gameplay/hooks/useAnswerDistribution";
 import { useAnswerProgress } from "@/features/gameplay/hooks/useAnswerProgress";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
+import { useReleaseFinalResults } from "@/features/gameplay/hooks/useReleaseFinalResults";
 import { useResults } from "@/features/gameplay/hooks/useResults";
+import { isLastQuestion as computeIsLastQuestion } from "@/features/gameplay/isLastQuestion";
 
 /**
  * Host-only gameplay orchestration. The host never answers questions and
@@ -27,14 +30,13 @@ export function useGameHost(sessionId: string | undefined) {
   const gameplay = useGameplay(sessionId);
   const resultsQuery = useResults(sessionId, gameplay.phase);
   const progressQuery = useAnswerProgress(sessionId, gameplay.phase);
+  const distributionQuery = useAnswerDistribution(sessionId, gameplay.phase);
+  const releaseMutation = useReleaseFinalResults(sessionId);
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [nextStepError, setNextStepError] = useState<unknown>(null);
 
   const { phase, question, refetchSession, refetchQuestion } = gameplay;
-  const isLastQuestion =
-    question?.questionNumber != null &&
-    question.totalQuestions != null &&
-    question.questionNumber >= question.totalQuestions;
+  const isLastQuestion = computeIsLastQuestion(question);
 
   const nextStepLabel = (() => {
     switch (phase) {
@@ -121,6 +123,15 @@ export function useGameHost(sessionId: string | undefined) {
      * host's next transition. Guarded against zero eligible participants.
      */
     allAnswered,
+    /** Per-option accepted-answer counts, available once the answer is revealed. */
+    answerDistribution: distributionQuery.data,
+    answerDistributionError: distributionQuery.error,
+    isLastQuestion,
+    /** Whether the host has released final standings to participants. */
+    finalResultsReleased: gameplay.session?.finalResultsReleased ?? false,
+    releaseFinalResults: () => releaseMutation.mutateAsync(),
+    isReleasingFinalResults: releaseMutation.isPending,
+    releaseFinalResultsError: releaseMutation.error,
     nextStepLabel,
     canAdvance,
     nextStep,

@@ -264,7 +264,10 @@ class GameplayIntegrationTest {
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.code").value("session.participant.not-found"));
 
-        // Finish the game: both reads stay readable forever after.
+        // Finish the game: the host's full standings stay readable forever
+        // after (the ceremony reads them immediately); the participant's own
+        // final rank is now held until the host explicitly releases it (see
+        // finalResultsAreHeldUntilTheHostExplicitlyReleasesThem).
         leaderboard(hostToken, sessionId);
         advanceToNext(hostToken, sessionId);
         close(hostToken, sessionId);
@@ -280,9 +283,154 @@ class GameplayIntegrationTest {
                 .andExpect(jsonPath("$.currentPhase").doesNotExist())
                 .andExpect(jsonPath("$.entries[0].displayName").value("Ann"));
         mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.results.not-available"));
+
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/results/release")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("FINISHED"))
                 .andExpect(jsonPath("$.rank").value(1));
+    }
+
+    @Test
+    void finalResultsAreHeldUntilTheHostExplicitlyReleasesThem() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
+        answer(sessionId, guestB, q1, quiz.questions().get(0).wrongOptionId());
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+        leaderboard(hostToken, sessionId);
+        String q2 = advanceToNext(hostToken, sessionId);
+        answer(sessionId, guestA, q2, quiz.questions().get(1).correctOptionId());
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+        leaderboard(hostToken, sessionId);
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FINISHED"))
+                .andExpect(jsonPath("$.finalResultsReleased").value(false));
+
+        // The host runs the ceremony off the full standings immediately —
+        // unaffected by the hold.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("FINISHED"))
+                .andExpect(jsonPath("$.entries[0].displayName").value("Ann"));
+
+        // Participants see nothing about their final rank while pending.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.results.not-available"));
+
+        // Only the host may release, and only once the session has finished.
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/results/release"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/results/release")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.finalResultsReleased").value(true));
+
+        // Now every participant may read their own final rank.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rank").value(1));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rank").value(2));
+
+        // A duplicate release is harmless.
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/results/release")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.finalResultsReleased").value(true));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rank").value(1));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ProtocolMessage.class);
+        verify(messagingTemplate, atLeastOnce())
+                .convertAndSend(startsWith("/topic/session/"), captor.capture());
+        assertThat(captor.getAllValues()).extracting(ProtocolMessage::type)
+                .contains(ProtocolMessageType.FINAL_RESULTS_REVEALED);
+    }
+
+    @Test
+    void answerDistributionCountsAcceptedAnswersAndIsHostOnly() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
+        answer(sessionId, guestB, q1, quiz.questions().get(0).wrongOptionId());
+
+        // Unavailable before the reveal.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/answer-distribution")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.distribution.not-available"));
+
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+
+        // Host-only.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/answer-distribution"))
+                .andExpect(status().isUnauthorized());
+
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/answer-distribution")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answeredCount").value(2))
+                .andExpect(jsonPath("$.eligibleParticipantCount").value(2))
+                .andExpect(jsonPath("$.noAnswerCount").value(0))
+                .andExpect(jsonPath("$.options[?(@.optionId=='"
+                        + quiz.questions().get(0).correctOptionId() + "')].count").value(1))
+                .andExpect(jsonPath("$.options[?(@.optionId=='"
+                        + quiz.questions().get(0).wrongOptionId() + "')].count").value(1));
+    }
+
+    @Test
+    void rankContextShowsNeighboursExceptOnTheFinalQuestion() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        // Question 1 is not the quiz's last question: neighbours are shown.
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
+        answer(sessionId, guestB, q1, quiz.questions().get(0).wrongOptionId());
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/rank-context"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.rank").value(2))
+                .andExpect(jsonPath("$.ahead.displayName").value("Ann"))
+                .andExpect(jsonPath("$.behind").doesNotExist());
+
+        // Question 2 is the quiz's last: neighbours are never disclosed,
+        // even once its own answer is revealed.
+        leaderboard(hostToken, sessionId);
+        String q2 = advanceToNext(hostToken, sessionId);
+        answer(sessionId, guestA, q2, quiz.questions().get(1).correctOptionId());
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/rank-context"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.rank-context.not-available"));
     }
 
     @Test

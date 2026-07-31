@@ -2,6 +2,7 @@ package io.quizchef.websocket.application;
 
 import io.quizchef.session.domain.event.AnswerRevealedEvent;
 import io.quizchef.session.domain.event.AnswerSubmittedEvent;
+import io.quizchef.session.domain.event.FinalResultsReleasedEvent;
 import io.quizchef.session.domain.event.LeaderboardUpdatedEvent;
 import io.quizchef.session.domain.event.LobbyOpenedEvent;
 import io.quizchef.session.domain.event.ParticipantDisconnectedEvent;
@@ -45,6 +46,11 @@ final class SessionProtocolMapper {
 
     static ProtocolMessage toMessage(SessionFinishedEvent event) {
         return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.SESSION_FINISHED, event.occurredAt());
+    }
+
+    static ProtocolMessage toMessage(FinalResultsReleasedEvent event) {
+        return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.FINAL_RESULTS_REVEALED,
+                event.occurredAt());
     }
 
     static ProtocolMessage toMessage(ParticipantJoinedEvent event) {

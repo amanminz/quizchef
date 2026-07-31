@@ -68,6 +68,16 @@ public class Session extends AuditableEntity {
     private SessionState state;
 
     /**
+     * Whether the host has released final standings to participants. Set
+     * false whenever the session finishes and flipped true only by
+     * {@link #releaseFinalResults()} — the one gate between "quiz complete"
+     * and a participant learning their final rank, so the host's winner
+     * ceremony always runs before anyone sees where they placed.
+     */
+    @Column(name = "final_results_released", nullable = false)
+    private boolean finalResultsReleased;
+
+    /**
      * The exact question currently in play — a content id, never a
      * positional index, so the session does not depend on quiz ordering.
      * Null until progression begins (a later PR).
@@ -200,11 +210,27 @@ public class Session extends AuditableEntity {
         this.currentPhase = null;
         this.currentQuestionId = null;
         this.currentQuestionTimer = null;
+        this.finalResultsReleased = false;
     }
 
     public void archive() {
         requireState(SessionState.FINISHED, "archive");
         this.state = SessionState.ARCHIVED;
+    }
+
+    /**
+     * Releases final standings to participants — the host's explicit "reveal
+     * results" command, issued once the winner ceremony has run. Requires
+     * the session to have finished; idempotent once released, so a
+     * duplicate host click or a concurrent retry is harmless rather than a
+     * conflict.
+     */
+    public void releaseFinalResults() {
+        if (finalResultsReleased) {
+            return;
+        }
+        requireState(SessionState.FINISHED, "release final results for");
+        this.finalResultsReleased = true;
     }
 
     /**

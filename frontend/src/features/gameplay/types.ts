@@ -23,8 +23,14 @@ import type { SessionPhase as BackendQuestionPhase } from "@/types/api";
  * - `ANSWER_REVEALED` — correctness (and the author's explanation) are on
  *   the wire; the reveal screen renders.
  * - `LEADERBOARD` — the standings screen renders.
- * - `FINISHED` — the session has ended (FINISHED or ARCHIVED); final
- *   results and the session summary render.
+ * - `FINAL_RESULTS_PENDING` — the session has ended (FINISHED or ARCHIVED)
+ *   but the host has not yet released final standings: the backend
+ *   refuses a participant's own result outright (`session.results.not-available`)
+ *   until release, so this is a distinct phase from `FINISHED`, not a
+ *   loading state of it — participants see only the waiting-for-ceremony
+ *   screen, never a rank or neighbour.
+ * - `FINISHED` — the session has ended *and* final results are released;
+ *   final results and the session summary render.
  */
 export type GameplayPhase =
   | "LOBBY"
@@ -33,6 +39,7 @@ export type GameplayPhase =
   | "WAITING"
   | "ANSWER_REVEALED"
   | "LEADERBOARD"
+  | "FINAL_RESULTS_PENDING"
   | "FINISHED";
 
 export type { BackendQuestionPhase };

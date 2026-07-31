@@ -92,6 +92,22 @@ export const handlers = [
       status: 409
     })
   ),
+  // Host-only per-option counts; benign-409 by default (as before a
+  // reveal), override to serve a distribution.
+  http.get("/api/v1/sessions/:sessionId/answer-distribution", () =>
+    HttpResponse.json(
+      apiError("session.distribution.not-available", "Answer distribution is not available"),
+      { status: 409 }
+    )
+  ),
+  // A participant's ranking neighbours; benign-409 by default (as on the
+  // quiz's last question, or before a reveal), override to serve context.
+  http.get("/api/v1/sessions/:sessionId/participants/:participantId/rank-context", () =>
+    HttpResponse.json(
+      apiError("session.rank-context.not-available", "Ranking neighbours are not available"),
+      { status: 409 }
+    )
+  ),
   // The question detail page frames its delete affordance with usage.
   http.get("/api/v1/questions/:questionId/usage", ({ params }) =>
     HttpResponse.json({ questionId: params.questionId, quizCount: 0 })

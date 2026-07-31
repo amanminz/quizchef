@@ -24,6 +24,7 @@ public record SessionSummaryView(
         String quizTitle,
         int participantCount,
         SessionSettings settings,
+        boolean finalResultsReleased,
         long version,
         Instant createdAt
 ) {
@@ -49,6 +50,7 @@ public record SessionSummaryView(
                 quizTitle,
                 session.participantCount(),
                 session.getSessionSettings(),
+                session.isFinalResultsReleased(),
                 session.getVersion(),
                 session.getCreatedAt());
     }

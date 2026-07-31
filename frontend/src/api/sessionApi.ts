@@ -1,11 +1,13 @@
 import { apiClient } from "@/api/axios";
 import type {
   AnswerAcceptedResponse,
+  AnswerDistributionResponse,
   AnswerProgressResponse,
   CreateSessionRequest,
   CurrentQuestionResponse,
   JoinSessionRequest,
   LeaderboardResponse,
+  ParticipantRankContextResponse,
   ParticipantResultResponse,
   ParticipantSessionResponse,
   ReconnectRequest,
@@ -174,6 +176,50 @@ export const sessionApi = {
   async participants(sessionId: string): Promise<SessionParticipantsResponse> {
     const { data } = await apiClient.get<SessionParticipantsResponse>(
       `/api/v1/sessions/${sessionId}/participants`
+    );
+    return data;
+  },
+
+  /**
+   * How the current question's answers split across each option — HOST
+   * ONLY, counts and percentages never names. Available only once the
+   * answer is revealed; throws `session.distribution.not-available` (409)
+   * before that.
+   */
+  async answerDistribution(sessionId: string): Promise<AnswerDistributionResponse> {
+    const { data } = await apiClient.get<AnswerDistributionResponse>(
+      `/api/v1/sessions/${sessionId}/answer-distribution`
+    );
+    return data;
+  },
+
+  /**
+   * One participant's own rank plus the immediate neighbours ahead/behind
+   * (or tiedWith on an equal score) — never the full leaderboard.
+   * Anonymous-friendly like `participantResult`. Available only for a
+   * non-final question whose answer has been revealed; throws
+   * `session.rank-context.not-available` (409) otherwise, including for
+   * the quiz's last question.
+   */
+  async rankContext(
+    sessionId: string,
+    participantId: string
+  ): Promise<ParticipantRankContextResponse> {
+    const { data } = await apiClient.get<ParticipantRankContextResponse>(
+      `/api/v1/sessions/${sessionId}/participants/${participantId}/rank-context`
+    );
+    return data;
+  },
+
+  /**
+   * Host-only, idempotent: lifts the final-results hold so every
+   * participant may read their own final rank through `participantResult`.
+   * Throws `session.invalid-transition` (409) if the session has not
+   * finished yet.
+   */
+  async releaseFinalResults(sessionId: string): Promise<SessionSummaryResponse> {
+    const { data } = await apiClient.post<SessionSummaryResponse>(
+      `/api/v1/sessions/${sessionId}/results/release`
     );
     return data;
   }

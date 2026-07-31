@@ -22,6 +22,7 @@ export type ProtocolMessageType =
   | "leaderboard.updated"
   | "participant.answer.accepted"
   | "answer.progress"
+  | "final.results.revealed"
   | "session.snapshot";
 
 /** The envelope every realtime message travels in. */

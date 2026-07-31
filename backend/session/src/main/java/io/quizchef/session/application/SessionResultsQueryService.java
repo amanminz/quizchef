@@ -93,7 +93,7 @@ public class SessionResultsQueryService {
     @Transactional(readOnly = true)
     public ParticipantResultView personalResult(UUID sessionId, UUID participantId) {
         Session session = SessionLookup.byId(sessionRepository, sessionId);
-        if (!resultsReadable(session)) {
+        if (!personalResultReadable(session)) {
             throw new ResultsNotAvailableException();
         }
 
@@ -119,6 +119,23 @@ public class SessionResultsQueryService {
         if (session.getState() == SessionState.FINISHED
                 || session.getState() == SessionState.ARCHIVED) {
             return true;
+        }
+        return session.getState() == SessionState.IN_PROGRESS
+                && (session.getCurrentPhase() == SessionPhase.ANSWER_REVEALED
+                        || session.getCurrentPhase() == SessionPhase.LEADERBOARD);
+    }
+
+    /**
+     * Narrower than {@link #resultsReadable}: once the session has finished,
+     * a participant's own final rank stays hidden until the host explicitly
+     * releases it (the winner-ceremony hold) — the host's own full standings
+     * read is unaffected, since the host needs them to run the ceremony
+     * before clicking release.
+     */
+    private static boolean personalResultReadable(Session session) {
+        if (session.getState() == SessionState.FINISHED
+                || session.getState() == SessionState.ARCHIVED) {
+            return session.isFinalResultsReleased();
         }
         return session.getState() == SessionState.IN_PROGRESS
                 && (session.getCurrentPhase() == SessionPhase.ANSWER_REVEALED
