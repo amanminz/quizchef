@@ -22,6 +22,7 @@ Every RFC carries a `Status`. It answers the first question any reader has: **do
 - RFC-012 Performance and Scalability — **Draft** (number reserved for Phase 3 PR #4, planned; not yet written)
 - [RFC-013 Question Authoring and Quiz Composition](RFC-013-question-authoring-and-quiz-composition.md) — **Implemented** (question editor, Question Library page, quiz-launched authoring with auto-attach; frontend-only — the RFC-003 APIs were already complete)
 - [RFC-014 Multilingual Live-Event Polish](RFC-014-multilingual-live-event-polish.md) — **Implemented** (English/Hindi authoring tabs and bilingual host projection, participant language delivery, live answer progress with safe early reveal, question restore/safe-delete/detail page, quiz identity on participant screens; session history deferred to PR #46B)
+- [RFC-015 Live Results UX](RFC-015-live-results-and-presentation-polish.md) — **Implemented** (projector-scale countdown, host per-option answer distribution, participant ranking neighbours, backend-held final results with a five-place host ceremony and explicit release; Question Versioning deferred to PR #47B)
 
 ---
 
