@@ -41,7 +41,12 @@ public final class PublicEndpoints {
             // GET /results is deliberately absent: every name, score, and
             // rank is the host's projection and requires the hosting
             // identity (live-event privacy).
-            "/api/v1/sessions/*/participants/*/result"
+            "/api/v1/sessions/*/participants/*/result",
+            // One participant's own ranking neighbours (ahead/behind) after a
+            // non-final question — phase- and last-question-gated
+            // server-side; same anonymous audience and unguessable-id trust
+            // as the personal result above. Never the full leaderboard.
+            "/api/v1/sessions/*/participants/*/rank-context"
     };
 
     private PublicEndpoints() {

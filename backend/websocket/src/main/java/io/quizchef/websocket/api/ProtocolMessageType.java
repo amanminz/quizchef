@@ -43,6 +43,13 @@ public enum ProtocolMessageType {
      */
     ANSWER_PROGRESS("answer.progress"),
 
+    /**
+     * The host released final standings — participants may now read their
+     * own final rank through the personal-result endpoint. No rank rides
+     * this notification; it is purely "go re-read your result now".
+     */
+    FINAL_RESULTS_REVEALED("final.results.revealed"),
+
     // Reconnection — the replay/sync snapshot delivered to one participant.
     SESSION_SNAPSHOT("session.snapshot");
 

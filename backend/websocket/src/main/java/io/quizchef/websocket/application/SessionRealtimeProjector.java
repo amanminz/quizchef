@@ -2,6 +2,7 @@ package io.quizchef.websocket.application;
 
 import io.quizchef.session.domain.event.AnswerRevealedEvent;
 import io.quizchef.session.domain.event.AnswerSubmittedEvent;
+import io.quizchef.session.domain.event.FinalResultsReleasedEvent;
 import io.quizchef.session.domain.event.LeaderboardUpdatedEvent;
 import io.quizchef.session.domain.event.LobbyOpenedEvent;
 import io.quizchef.session.domain.event.ParticipantDisconnectedEvent;
@@ -49,6 +50,11 @@ public class SessionRealtimeProjector {
 
     @EventListener
     void on(SessionFinishedEvent event) {
+        realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
+    }
+
+    @EventListener
+    void on(FinalResultsReleasedEvent event) {
         realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
     }
 

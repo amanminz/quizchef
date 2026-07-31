@@ -25,6 +25,9 @@ public record SessionSummaryResponse(
         String quizTitle,
         int participantCount,
         SessionSettingsDto settings,
+        @Schema(description = "Whether the host has released final standings to participants "
+                + "(always false before the session finishes; only meaningful once FINISHED)")
+        boolean finalResultsReleased,
         long version,
         Instant createdAt
 ) {
@@ -41,6 +44,7 @@ public record SessionSummaryResponse(
                 view.quizTitle(),
                 view.participantCount(),
                 SessionSettingsDto.from(view.settings()),
+                view.finalResultsReleased(),
                 view.version(),
                 view.createdAt());
     }

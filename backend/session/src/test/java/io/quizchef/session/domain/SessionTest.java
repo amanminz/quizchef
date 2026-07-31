@@ -58,6 +58,28 @@ class SessionTest {
     }
 
     @Test
+    void finalResultsStartUnreleasedAndOnlyReleaseAfterFinishing() {
+        Session session = session();
+        session.openLobby();
+        session.registerParticipant(UUID.randomUUID(), guestKey());
+        session.start();
+        assertThat(session.isFinalResultsReleased()).isFalse();
+
+        assertThatExceptionOfType(InvalidSessionTransitionException.class)
+                .isThrownBy(session::releaseFinalResults);
+
+        session.finish();
+        assertThat(session.isFinalResultsReleased()).isFalse();
+
+        session.releaseFinalResults();
+        assertThat(session.isFinalResultsReleased()).isTrue();
+
+        // Idempotent: a duplicate release is harmless, not a conflict.
+        session.releaseFinalResults();
+        assertThat(session.isFinalResultsReleased()).isTrue();
+    }
+
+    @Test
     void rejectsOutOfOrderTransitions() {
         Session session = session();
 

@@ -2,6 +2,7 @@ package io.quizchef.websocket.application;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
+import io.quizchef.session.domain.event.FinalResultsReleasedEvent;
 import io.quizchef.session.domain.event.LobbyOpenedEvent;
 import io.quizchef.session.domain.event.ParticipantDisconnectedEvent;
 import io.quizchef.session.domain.event.ParticipantJoinedEvent;
@@ -68,6 +69,17 @@ class SessionRealtimeProjectorTest {
         assertThat(publisher.broadcasts).allSatisfy(message ->
                 assertThat(((ParticipantPayload) message.payload()).participantId())
                         .isEqualTo(participantId));
+    }
+
+    @Test
+    void projectsFinalResultsReleasedAsAnEnvelopeOnlyMessage() {
+        projector.on(new FinalResultsReleasedEvent(sessionId, NOW));
+
+        assertThat(publisher.broadcasts).hasSize(1);
+        ProtocolMessage message = publisher.broadcasts.getFirst();
+        assertThat(message.type()).isEqualTo(ProtocolMessageType.FINAL_RESULTS_REVEALED);
+        assertThat(message.sessionId()).isEqualTo(sessionId);
+        assertThat(message.payload()).isNull();
     }
 
     @Test

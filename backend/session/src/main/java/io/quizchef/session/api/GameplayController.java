@@ -3,9 +3,12 @@ package io.quizchef.session.api;
 import io.quizchef.common.api.ApiError;
 import io.quizchef.identity.domain.CurrentUserProvider;
 import io.quizchef.session.application.AdvanceQuestionApplicationService;
+import io.quizchef.session.application.AnswerDistributionQueryService;
 import io.quizchef.session.application.AnswerProgressQueryService;
 import io.quizchef.session.application.CloseQuestionApplicationService;
 import io.quizchef.session.application.CurrentQuestionQueryService;
+import io.quizchef.session.application.ParticipantRankContextQueryService;
+import io.quizchef.session.application.ReleaseFinalResultsApplicationService;
 import io.quizchef.session.application.SessionResultsQueryService;
 import io.quizchef.session.application.RevealAnswerApplicationService;
 import io.quizchef.session.application.ShowLeaderboardApplicationService;
@@ -46,6 +49,9 @@ public class GameplayController {
     private final CurrentQuestionQueryService currentQuestionQueryService;
     private final SessionResultsQueryService sessionResultsQueryService;
     private final AnswerProgressQueryService answerProgressQueryService;
+    private final AnswerDistributionQueryService answerDistributionQueryService;
+    private final ParticipantRankContextQueryService participantRankContextQueryService;
+    private final ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService;
     private final CurrentUserProvider currentUserProvider;
 
     public GameplayController(StartQuestionApplicationService startQuestionApplicationService,
@@ -57,6 +63,9 @@ public class GameplayController {
                              CurrentQuestionQueryService currentQuestionQueryService,
                              SessionResultsQueryService sessionResultsQueryService,
                              AnswerProgressQueryService answerProgressQueryService,
+                             AnswerDistributionQueryService answerDistributionQueryService,
+                             ParticipantRankContextQueryService participantRankContextQueryService,
+                             ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService,
                              CurrentUserProvider currentUserProvider) {
         this.startQuestionApplicationService = startQuestionApplicationService;
         this.closeQuestionApplicationService = closeQuestionApplicationService;
@@ -67,6 +76,9 @@ public class GameplayController {
         this.currentQuestionQueryService = currentQuestionQueryService;
         this.sessionResultsQueryService = sessionResultsQueryService;
         this.answerProgressQueryService = answerProgressQueryService;
+        this.answerDistributionQueryService = answerDistributionQueryService;
+        this.participantRankContextQueryService = participantRankContextQueryService;
+        this.releaseFinalResultsApplicationService = releaseFinalResultsApplicationService;
         this.currentUserProvider = currentUserProvider;
     }
 
@@ -145,6 +157,80 @@ public class GameplayController {
     public AnswerProgressResponse answerProgress(@PathVariable UUID id) {
         return AnswerProgressResponse.from(
                 answerProgressQueryService.progress(currentUserProvider.currentUser(), id));
+    }
+
+    @GetMapping("/{id}/answer-distribution")
+    @Operation(
+            summary = "Read the current question's answer distribution (host only)",
+            description = "How the accepted answers split across each option, plus how many gave no "
+                    + "answer at all — the authoritative counts behind the host's post-reveal \"who "
+                    + "picked what\". Never names who; participants see only their own submission. "
+                    + "Available only once the answer has been revealed.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The current distribution"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "No question is in play "
+                    + "(session.no-current-question) or not revealed yet "
+                    + "(session.distribution.not-available)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public AnswerDistributionResponse answerDistribution(@PathVariable UUID id) {
+        return AnswerDistributionResponse.from(
+                answerDistributionQueryService.distribution(currentUserProvider.currentUser(), id));
+    }
+
+    @GetMapping("/{id}/participants/{participantId}/rank-context")
+    @Operation(
+            summary = "Read one participant's ranking neighbours",
+            description = "The participant's own rank, score, and points just earned, plus whoever is "
+                    + "immediately ahead and behind in the standings — never the full leaderboard. Open "
+                    + "like the personal-result endpoint (the unguessable session and participant ids "
+                    + "gate it). Available only for a non-final question whose answer has been revealed "
+                    + "— the quiz's last question never exposes neighbours, since final standings are "
+                    + "held for the host's winner ceremony.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The participant's rank context"),
+            @ApiResponse(responseCode = "404", description = "Unknown session, or no such participant "
+                    + "in it (session.participant.not-found)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "Not available right now "
+                    + "(session.rank-context.not-available)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public ParticipantRankContextResponse rankContext(@PathVariable UUID id,
+                                                       @PathVariable UUID participantId) {
+        return ParticipantRankContextResponse.from(
+                participantRankContextQueryService.rankContext(id, participantId));
+    }
+
+    @PostMapping("/{id}/results/release")
+    @Operation(
+            summary = "Release final standings to participants",
+            description = "Host only. Lifts the final-results hold so every participant may read their "
+                    + "own final rank — the one authoritative action following the host's winner "
+                    + "ceremony. Idempotent: releasing an already-released session is harmless.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session, with finalResultsReleased=true"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "The session has not finished yet "
+                    + "(session.invalid-transition)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse releaseResults(@PathVariable UUID id) {
+        return SessionSummaryResponse.from(releaseFinalResultsApplicationService.release(
+                currentUserProvider.currentUser(), id));
     }
 
     @GetMapping("/{id}/questions/current")
