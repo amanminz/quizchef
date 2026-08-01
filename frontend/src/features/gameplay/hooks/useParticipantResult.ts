@@ -11,12 +11,20 @@ import type { GameplayPhase } from "@/features/gameplay/types";
  * the host explicitly releases it, so fetching here while pending would
  * only earn a guaranteed 409. Once released, `useGameplayState` reports
  * `FINISHED` instead and this query enables itself.
+ *
+ * `ANSWER_REVEALED`/`LEADERBOARD` are additionally excluded on the quiz's
+ * *last* question — the backend holds the final rank there too, one host
+ * click before the session technically finishes (see `isLastQuestion`
+ * below and `SessionResultsQueryService.personalResultReadable`).
  */
 const PERSONAL_RESULT_PHASES: readonly GameplayPhase[] = [
   "ANSWER_REVEALED",
   "LEADERBOARD",
   "FINISHED"
 ];
+
+/** The phases held back specifically on the quiz's last question. */
+const HELD_ON_LAST_QUESTION: readonly GameplayPhase[] = ["ANSWER_REVEALED", "LEADERBOARD"];
 
 /**
  * The participant's own result — rank, score, framing counts, nothing
@@ -29,7 +37,8 @@ const PERSONAL_RESULT_PHASES: readonly GameplayPhase[] = [
 export function useParticipantResult(
   sessionId: string | undefined,
   participantId: string | undefined,
-  phase: GameplayPhase
+  phase: GameplayPhase,
+  isLastQuestion: boolean
 ) {
   return useQuery({
     queryKey: gameplayKeys.personalResult(sessionId ?? "", participantId ?? ""),
@@ -37,7 +46,8 @@ export function useParticipantResult(
     enabled:
       sessionId !== undefined &&
       participantId !== undefined &&
-      PERSONAL_RESULT_PHASES.includes(phase),
+      PERSONAL_RESULT_PHASES.includes(phase) &&
+      !(isLastQuestion && HELD_ON_LAST_QUESTION.includes(phase)),
     retry: (failureCount, error) => {
       if (isApiClientError(error) && error.code === "session.results.not-available") {
         return false;

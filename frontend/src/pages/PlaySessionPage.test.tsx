@@ -634,6 +634,85 @@ describe("PlaySessionPage", () => {
     expect(fullStandingsCalled).toBe(false);
   });
 
+  it("shows the waiting-for-announcement screen at the final question's leaderboard step, before the session finishes", async () => {
+    // The session is still IN_PROGRESS — the host hasn't clicked "Finish
+    // Quiz" yet — but this is the quiz's last question, so the same hold
+    // that applies once FINISHED-but-not-released must already apply here.
+    const question = currentQuestionResponse({
+      phase: "LEADERBOARD",
+      questionNumber: 2,
+      totalQuestions: 2
+    });
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "LEADERBOARD"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    let personalResultCalled = false;
+    let rankContextCalled = false;
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "LEADERBOARD"
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        () => {
+          personalResultCalled = true;
+          return HttpResponse.json(
+            apiError("session.results.not-available", "Results are not available"),
+            { status: 409 }
+          );
+        }
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/rank-context`,
+        () => {
+          rankContextCalled = true;
+          return HttpResponse.json(
+            apiError("session.rank-context.not-available", "Rank context is not available"),
+            { status: 409 }
+          );
+        }
+      )
+    );
+
+    const firstMount = renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
+    expect(screen.getByText(/winners are being announced/i)).toBeInTheDocument();
+    // No rank, no neighbour, nothing from the previous leaderboard render.
+    expect(screen.queryByText("Your rank")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ahead of you")).not.toBeInTheDocument();
+    expect(screen.queryByText("Behind you")).not.toBeInTheDocument();
+    // Neither gated read is even attempted while the hold applies.
+    expect(personalResultCalled).toBe(false);
+    expect(rankContextCalled).toBe(false);
+
+    // A refresh/reconnect during this exact window still shows no rank.
+    firstMount.unmount();
+    renderApp(`/play/${PIN}`);
+    expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
+    expect(personalResultCalled).toBe(false);
+    expect(rankContextCalled).toBe(false);
+  });
+
   it("shows one participant ahead and one behind after a non-final question", async () => {
     const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
     const session = sessionSummary({

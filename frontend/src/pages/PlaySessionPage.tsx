@@ -26,6 +26,7 @@ import { SubmissionStatus } from "@/features/gameplay/components/SubmissionStatu
 import { WaitingOverlay } from "@/features/gameplay/components/WaitingOverlay";
 import { useCountdown } from "@/features/gameplay/hooks/useCountdown";
 import { usePlayerGameplay } from "@/features/gameplay/hooks/usePlayerGameplay";
+import { isLastQuestion } from "@/features/gameplay/isLastQuestion";
 import { verdictFor } from "@/features/gameplay/verdict";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
@@ -170,6 +171,15 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
         </div>
       );
     case "LEADERBOARD":
+      // The quiz's last question holds its standings for the host's
+      // winner ceremony — same rule as FINAL_RESULTS_PENDING, just before
+      // the session has technically finished. Render the identical
+      // waiting screen without ever touching personalResult/rankContext
+      // (both queries are already disabled for this window; see
+      // usePlayerGameplay) so no stale cached rank can leak through here.
+      if (isLastQuestion(player.question)) {
+        return <FinalResultsPendingScreen />;
+      }
       // Participant privacy: only the player's own rank and score render
       // here — the shared leaderboard belongs to the host's projected
       // screen, and this device never even fetches it.
