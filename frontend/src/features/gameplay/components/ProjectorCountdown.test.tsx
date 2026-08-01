@@ -73,4 +73,30 @@ describe("ProjectorCountdown", () => {
 
     expect(screen.getByText("42").className).toContain("tabular-nums");
   });
+
+  describe("compact", () => {
+    it("renders the same TIME LEFT label and role, at the compact metric's size", () => {
+      render(<ProjectorCountdown endsAt={endsInSeconds(18)} compact />);
+
+      const timer = screen.getByRole("timer");
+      expect(screen.getByText(/time left/i)).toBeInTheDocument();
+      expect(screen.getByText("18")).toBeInTheDocument();
+      // The compact box, not the giant spotlight one — no 13rem clamp.
+      expect(timer.querySelector("span[style]")?.getAttribute("style")).not.toContain("13rem");
+    });
+
+    it("renders nothing while no question is open", () => {
+      const { container } = render(<ProjectorCountdown endsAt={null} compact />);
+
+      expect(container).toBeEmptyDOMElement();
+    });
+
+    it("still escalates urgency without color alone", () => {
+      render(<ProjectorCountdown endsAt={endsInSeconds(3)} compact />);
+
+      const timer = screen.getByRole("timer");
+      expect(timer.className).toContain("destructive");
+      expect(timer.querySelector("svg")).toBeInTheDocument();
+    });
+  });
 });

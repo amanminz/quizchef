@@ -4,6 +4,7 @@ import { CorrectAnswerBadge } from "@/features/gameplay/components/CorrectAnswer
 import { QuestionHeader } from "@/features/gameplay/components/QuestionHeader";
 import type {
   AnswerDistributionResponse,
+  AnswerProgressResponse,
   CurrentQuestionResponse,
   PlayableLocalizationDto
 } from "@/types/api";
@@ -26,10 +27,19 @@ export interface HostBilingualQuestionProps {
    * same logical option.
    */
   distribution?: AnswerDistributionResponse;
-  /** Extra header content (answer progress, participant count). */
+  /**
+   * Extra header content — rendered only outside Presentation Mode; in
+   * Presentation Mode, `answerProgress` renders inline in the compact
+   * status row instead (see `QuestionHeader`), so the same data never
+   * renders twice.
+   */
   headerExtra?: React.ReactNode;
   /** Presentation Mode swaps the compact timer for the projector-scale one. */
   presentationActive?: boolean;
+  /** The backend's answered/eligible counts, for Presentation Mode's compact row. */
+  answerProgress?: AnswerProgressResponse;
+  /** Everyone eligible has answered — the moment worth emphasizing. */
+  emphasized?: boolean;
 }
 
 const LANGUAGE_ENGLISH_NAMES: Record<string, string> = {
@@ -58,7 +68,9 @@ export function HostBilingualQuestion({
   revealed = false,
   distribution,
   headerExtra,
-  presentationActive = false
+  presentationActive = false,
+  answerProgress,
+  emphasized = false
 }: HostBilingualQuestionProps) {
   const localizations = question.localizations ?? [];
   const primary =
@@ -79,9 +91,32 @@ export function HostBilingualQuestion({
   const countFor = (optionId: string) =>
     distribution?.options?.find((entry) => entry.optionId === optionId);
 
+  // Presentation Mode's text sizes are clamp()-driven (viewport-aware,
+  // never fixed), and deliberately smaller steps than the normal layout's
+  // sm:/lg: classes — normal pages are untouched.
+  const promptStyle = presentationActive
+    ? { fontSize: "clamp(1.1rem, 2.6vw, 2.1rem)" }
+    : undefined;
+  const secondaryPromptStyle = presentationActive
+    ? { fontSize: "clamp(1rem, 2.2vw, 1.75rem)" }
+    : undefined;
+  const optionPrimaryStyle = presentationActive
+    ? { fontSize: "clamp(0.95rem, 1.8vw, 1.35rem)" }
+    : undefined;
+  const optionSecondaryStyle = presentationActive
+    ? { fontSize: "clamp(0.85rem, 1.5vw, 1.1rem)" }
+    : undefined;
+
   return (
-    <Card>
-      <CardContent className="flex flex-col gap-6 p-6 sm:p-8">
+    <Card className={presentationActive ? "flex h-full min-h-0 flex-col" : undefined}>
+      <CardContent
+        className={cn(
+          "flex flex-col",
+          presentationActive
+            ? "min-h-0 flex-1 gap-2 overflow-hidden p-3 sm:gap-3 sm:p-4"
+            : "gap-6 p-6 sm:p-8"
+        )}
+      >
         <QuestionHeader
           number={question.questionNumber ?? 0}
           total={question.totalQuestions ?? 0}
@@ -91,17 +126,35 @@ export function HostBilingualQuestion({
               : null
           }
           presentationActive={presentationActive}
+          previewing={previewing}
+          answerProgress={answerProgress}
+          emphasized={emphasized}
         />
-        {headerExtra}
+        {!presentationActive && headerExtra}
 
-        <div className="flex flex-col gap-2">
-          <p className="text-2xl font-bold leading-snug sm:text-3xl lg:text-4xl">
+        <div
+          className={cn(
+            "flex flex-col gap-2",
+            presentationActive && "lg:flex-row lg:items-baseline lg:gap-6"
+          )}
+        >
+          <p
+            className={cn(
+              "font-bold leading-snug",
+              presentationActive ? "lg:flex-1" : "text-2xl sm:text-3xl lg:text-4xl"
+            )}
+            style={promptStyle}
+          >
             {primary?.prompt}
           </p>
           {secondary && (
             <p
               lang={secondaryLanguage}
-              className="text-xl font-semibold leading-snug text-foreground/90 sm:text-2xl lg:text-3xl"
+              className={cn(
+                "font-semibold leading-snug text-foreground/90",
+                presentationActive ? "lg:flex-1" : "text-xl sm:text-2xl lg:text-3xl"
+              )}
+              style={secondaryPromptStyle}
             >
               {secondary.prompt}
             </p>
@@ -114,7 +167,12 @@ export function HostBilingualQuestion({
         </div>
 
         {previewing && (
-          <div className="flex items-center gap-3 rounded-md border border-dashed px-5 py-4 text-muted-foreground">
+          <div
+            className={cn(
+              "flex items-center gap-3 rounded-md border border-dashed text-muted-foreground",
+              presentationActive ? "px-3 py-2" : "px-5 py-4"
+            )}
+          >
             <BookOpen aria-hidden className="h-5 w-5 shrink-0" />
             <p className="text-base font-medium sm:text-lg">
               Read the question — options will appear shortly
@@ -123,7 +181,12 @@ export function HostBilingualQuestion({
         )}
 
         {!previewing && (
-          <ol className="flex flex-col gap-3">
+          <ol
+            className={cn(
+              "flex flex-col",
+              presentationActive ? "min-h-0 gap-1.5 overflow-hidden sm:gap-2" : "gap-3"
+            )}
+          >
             {options.map((option, index) => {
               const id = option.optionId ?? "";
               const isCorrect = revealed && correct.has(id);
@@ -131,25 +194,39 @@ export function HostBilingualQuestion({
                 <li
                   key={id}
                   className={cn(
-                    "flex items-start gap-4 rounded-lg border-2 px-5 py-4",
+                    "flex items-start gap-4 rounded-lg border-2",
+                    presentationActive ? "gap-2 px-3 py-1.5 sm:gap-3 sm:py-2" : "px-5 py-4",
                     isCorrect ? "border-success bg-success/10" : "border-border",
                     revealed && !isCorrect && "opacity-60"
                   )}
                 >
                   <span
                     aria-hidden
-                    className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-bold"
+                    className={cn(
+                      "mt-0.5 flex shrink-0 items-center justify-center rounded-full bg-muted font-bold",
+                      presentationActive ? "h-6 w-6 text-sm sm:h-7 sm:w-7" : "h-9 w-9 text-lg"
+                    )}
                   >
                     {String.fromCharCode(65 + index)}
                   </span>
                   <span className="flex min-w-0 flex-1 flex-col gap-1">
-                    <span className="text-lg font-semibold leading-snug sm:text-xl lg:text-2xl">
+                    <span
+                      className={cn(
+                        "font-semibold leading-snug",
+                        !presentationActive && "text-lg sm:text-xl lg:text-2xl"
+                      )}
+                      style={optionPrimaryStyle}
+                    >
                       {textOf(primary, id)}
                     </span>
                     {secondary && (
                       <span
                         lang={secondaryLanguage}
-                        className="text-base font-medium leading-snug text-foreground/85 sm:text-lg lg:text-xl"
+                        className={cn(
+                          "font-medium leading-snug text-foreground/85",
+                          !presentationActive && "text-base sm:text-lg lg:text-xl"
+                        )}
+                        style={optionSecondaryStyle}
                       >
                         {textOf(secondary, id)}
                       </span>
@@ -177,16 +254,32 @@ export function HostBilingualQuestion({
         )}
 
         {revealed && (primary?.explanation || secondary?.explanation) && (
-          <div className="flex items-start gap-3 rounded-md border border-primary/30 bg-primary/5 px-5 py-4">
+          <div
+            className={cn(
+              "flex items-start gap-3 rounded-md border border-primary/30 bg-primary/5",
+              presentationActive ? "min-h-0 overflow-hidden px-3 py-2" : "px-5 py-4"
+            )}
+          >
             <Lightbulb aria-hidden className="mt-1 h-5 w-5 shrink-0 text-primary" />
-            <div className="flex flex-col gap-2">
+            <div className="flex min-h-0 flex-col gap-2">
               {primary?.explanation && (
-                <p className="text-base leading-relaxed sm:text-lg">{primary.explanation}</p>
+                <p
+                  className={cn("leading-relaxed", !presentationActive && "text-base sm:text-lg")}
+                  style={presentationActive ? { fontSize: "clamp(0.8rem, 1.4vw, 1.05rem)" } : undefined}
+                >
+                  {primary.explanation}
+                </p>
               )}
               {secondary?.explanation && (
                 <p
                   lang={secondaryLanguage}
-                  className="text-base leading-relaxed text-foreground/90 sm:text-lg"
+                  className={cn(
+                    "leading-relaxed text-foreground/90",
+                    !presentationActive && "text-base sm:text-lg"
+                  )}
+                  style={
+                    presentationActive ? { fontSize: "clamp(0.75rem, 1.2vw, 0.95rem)" } : undefined
+                  }
                 >
                   {secondary.explanation}
                 </p>

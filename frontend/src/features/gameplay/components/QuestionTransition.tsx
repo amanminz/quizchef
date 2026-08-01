@@ -9,10 +9,12 @@ import { cn } from "@/utils/cn";
  */
 export function QuestionTransition({
   transitionKey,
-  children
+  children,
+  className
 }: {
   transitionKey: string;
   children: ReactNode;
+  className?: string;
 }) {
   const [visible, setVisible] = useState(false);
 
@@ -23,7 +25,13 @@ export function QuestionTransition({
   }, [transitionKey]);
 
   return (
-    <div className={cn("transition-opacity duration-300", visible ? "opacity-100" : "opacity-0")}>
+    <div
+      className={cn(
+        "transition-opacity duration-300",
+        visible ? "opacity-100" : "opacity-0",
+        className
+      )}
+    >
       {children}
     </div>
   );

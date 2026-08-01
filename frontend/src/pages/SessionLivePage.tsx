@@ -25,6 +25,7 @@ import { PresentationToggle } from "@/features/sessions/components/PresentationT
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
 import { usePresentationMode } from "@/features/sessions/hooks/usePresentationMode";
 import { useQuizTitle } from "@/features/sessions/hooks/useQuizTitle";
+import { cn } from "@/utils/cn";
 
 /**
  * The host's gameplay screen, now spanning the full lifecycle: question →
@@ -62,10 +63,23 @@ export function SessionLivePage() {
   ) : undefined;
 
   return (
-    <PageContainer className={presentation.active ? "max-w-none px-8" : undefined}>
+    <PageContainer
+      className={
+        // Viewport containment (goal: fit a projector screen with no
+        // scrolling): a fixed-height flex column, never taller than the
+        // viewport. `overflow-hidden` is a safety net, not the fitting
+        // mechanism — the actual fit comes from the compact status row,
+        // the dropped progress bar, and clamp()-based text sizing below.
+        presentation.active
+          ? "flex h-dvh max-w-none flex-col overflow-hidden px-6 py-3 sm:px-8"
+          : undefined
+      }
+    >
       {presentation.active ? (
-        <div className="mb-4 flex items-start justify-between gap-4">
-          <h1 className="text-2xl font-bold tracking-tight">{quizTitle ?? "Live session"}</h1>
+        <div className="mb-2 flex shrink-0 items-start justify-between gap-4">
+          <h1 className="text-xl font-bold tracking-tight sm:text-2xl">
+            {quizTitle ?? "Live session"}
+          </h1>
           <div className="flex items-center gap-2">
             {advanceAction}
             <PresentationToggle presentation={presentation} />
@@ -86,7 +100,9 @@ export function SessionLivePage() {
         />
       )}
 
-      <GameConnectionBanner status={host.connectionStatus} />
+      <div className={presentation.active ? "shrink-0" : undefined}>
+        <GameConnectionBanner status={host.connectionStatus} />
+      </div>
       <div aria-live="polite" role="status" className="sr-only">
         {host.announcement}
       </div>
@@ -102,13 +118,15 @@ export function SessionLivePage() {
       )}
 
       {host.nextStepError != null && (
-        <div className="mb-6">
+        <div className={presentation.active ? "mb-2 shrink-0" : "mb-6"}>
           <ErrorPanel title="Could not advance the game" error={host.nextStepError} />
         </div>
       )}
 
       {!host.isLoadingSession && host.sessionError == null && (
-        <HostGameplayBody host={host} quizTitle={quizTitle} presentation={presentation} />
+        <div className={presentation.active ? "min-h-0 flex-1 overflow-hidden" : undefined}>
+          <HostGameplayBody host={host} quizTitle={quizTitle} presentation={presentation} />
+        </div>
       )}
     </PageContainer>
   );
@@ -153,9 +171,19 @@ function HostGameplayBody({
         return <QuestionSkeleton />;
       }
       return (
-        <div className="flex flex-col gap-4">
-          <ParticipantCount count={host.session?.participantCount ?? 0} />
-          <QuestionTransition transitionKey={host.question.questionId ?? ""}>
+        <div
+          className={cn(
+            "flex flex-col gap-4",
+            presentation.active && "h-full min-h-0 gap-2 overflow-hidden"
+          )}
+        >
+          {!presentation.active && (
+            <ParticipantCount count={host.session?.participantCount ?? 0} />
+          )}
+          <QuestionTransition
+            transitionKey={host.question.questionId ?? ""}
+            className={presentation.active ? "flex min-h-0 flex-1 flex-col" : undefined}
+          >
             <HostBilingualQuestion
               question={host.question}
               previewing
@@ -170,12 +198,24 @@ function HostGameplayBody({
         return <QuestionSkeleton />;
       }
       return (
-        <div className="flex flex-col gap-4">
-          <ParticipantCount count={host.session?.participantCount ?? 0} />
-          <QuestionTransition transitionKey={host.question.questionId ?? ""}>
+        <div
+          className={cn(
+            "flex flex-col gap-4",
+            presentation.active && "h-full min-h-0 gap-2 overflow-hidden"
+          )}
+        >
+          {!presentation.active && (
+            <ParticipantCount count={host.session?.participantCount ?? 0} />
+          )}
+          <QuestionTransition
+            transitionKey={host.question.questionId ?? ""}
+            className={presentation.active ? "flex min-h-0 flex-1 flex-col" : undefined}
+          >
             <HostBilingualQuestion
               question={host.question}
               presentationActive={presentation.active}
+              answerProgress={host.answerProgress}
+              emphasized={host.allAnswered}
               headerExtra={
                 <AnswerProgressBadge progress={host.answerProgress} emphasized={host.allAnswered} />
               }
@@ -188,14 +228,23 @@ function HostGameplayBody({
         return <QuestionSkeleton />;
       }
       return (
-        <div className="flex flex-col gap-4">
-          <ParticipantCount count={host.session?.participantCount ?? 0} />
-          <HostBilingualQuestion
-            question={host.question}
-            revealed
-            distribution={host.answerDistribution}
-            presentationActive={presentation.active}
-          />
+        <div
+          className={cn(
+            "flex flex-col gap-4",
+            presentation.active && "h-full min-h-0 gap-2 overflow-hidden"
+          )}
+        >
+          {!presentation.active && (
+            <ParticipantCount count={host.session?.participantCount ?? 0} />
+          )}
+          <div className={presentation.active ? "min-h-0 flex-1 overflow-hidden" : undefined}>
+            <HostBilingualQuestion
+              question={host.question}
+              revealed
+              distribution={host.answerDistribution}
+              presentationActive={presentation.active}
+            />
+          </div>
         </div>
       );
     case "LEADERBOARD":
