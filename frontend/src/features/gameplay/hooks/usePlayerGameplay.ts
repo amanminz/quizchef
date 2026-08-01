@@ -78,13 +78,19 @@ export function usePlayerGameplay(pin: string) {
     reconnectMutation.data
   );
 
+  // Held back on the quiz's last question — the backend's final-rank hold
+  // applies one host click before the session technically finishes, not
+  // only once it's FINISHED-but-not-released (see useParticipantResult).
+  const onLastQuestion = isLastQuestion(gameplay.question);
+
   // The participant's own result only — never the full standings; the
   // rank and score are the server's verdicts (ADR-006), and other
   // players' rows never reach this device (live-event privacy).
   const resultQuery = useParticipantResult(
     stored?.sessionId,
     stored?.participantId,
-    gameplay.phase
+    gameplay.phase,
+    onLastQuestion
   );
 
   // Ranking neighbours: shown after every question except the quiz's
@@ -95,7 +101,7 @@ export function usePlayerGameplay(pin: string) {
     stored?.sessionId,
     stored?.participantId,
     gameplay.phase,
-    isLastQuestion(gameplay.question)
+    onLastQuestion
   );
   // Movement is a display diff of two consecutive server snapshots (the
   // PR #5 delta pattern, personal edition) — absent after a refresh. The

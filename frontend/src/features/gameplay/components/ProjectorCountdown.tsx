@@ -1,10 +1,17 @@
 import { AlertTriangle } from "lucide-react";
+import { PresentationMetric } from "@/features/gameplay/components/PresentationMetric";
 import { useCountdown } from "@/features/gameplay/hooks/useCountdown";
 import { cn } from "@/utils/cn";
 
 export interface ProjectorCountdownProps {
   /** The server's close time; renders nothing while the question isn't open. */
   endsAt: string | null | undefined;
+  /**
+   * Renders through the shared `PresentationMetric` box instead of the
+   * giant spotlight markup — same urgency logic and aria-label, sized to
+   * match the compact status row's other metrics (e.g. "Answered").
+   */
+  compact?: boolean;
 }
 
 /**
@@ -22,7 +29,7 @@ export interface ProjectorCountdownProps {
  * respects `prefers-reduced-motion` at the CSS level — no extra branch
  * needed). No sound.
  */
-export function ProjectorCountdown({ endsAt }: ProjectorCountdownProps) {
+export function ProjectorCountdown({ endsAt, compact = false }: ProjectorCountdownProps) {
   const { remainingMillis } = useCountdown(endsAt);
   if (!endsAt) {
     return null;
@@ -32,6 +39,21 @@ export function ProjectorCountdown({ endsAt }: ProjectorCountdownProps) {
   const expired = totalSeconds <= 0;
   const critical = !expired && totalSeconds <= 5;
   const warning = !expired && !critical && totalSeconds <= 10;
+
+  if (compact) {
+    return (
+      <PresentationMetric
+        role="timer"
+        aria-label={`${totalSeconds} seconds remaining`}
+        label="Time left"
+        value={totalSeconds}
+        tone={critical ? "critical" : warning ? "warning" : "default"}
+        icon={
+          (warning || critical) && <AlertTriangle aria-hidden className="h-3.5 w-3.5 shrink-0" />
+        }
+      />
+    );
+  }
 
   return (
     <div

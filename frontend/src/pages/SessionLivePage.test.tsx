@@ -3,6 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
 import { useAuthStore } from "@/auth/authStore";
+import { usePresentationStore } from "@/features/sessions/presentationStore";
 import { sessionTopic } from "@/realtime/SessionSubscriptions";
 import { fakeRealtimeClient, protocolMessage } from "@/test/fakeStomp";
 import {
@@ -714,6 +715,154 @@ describe("SessionLivePage", () => {
 
     expect(await screen.findByText(/time left/i)).toBeInTheDocument();
     expect(screen.getByRole("timer")).toBeInTheDocument();
+    HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("drops the progress bar in Presentation Mode but keeps it otherwise", async () => {
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = () => Promise.reject(new Error("denied"));
+    usePresentationStore.setState({ active: false });
+    signIn();
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText(question.localizations![0].prompt!);
+    // Non-essential in Presentation Mode's reduction order, but present
+    // in the normal layout — unchanged.
+    expect(screen.getByRole("progressbar")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
+
+    await screen.findByText(/time left/i);
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
+    HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("shows Answered and Time left together in one compact row in Presentation Mode", async () => {
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = () => Promise.reject(new Error("denied"));
+    usePresentationStore.setState({ active: false });
+    signIn();
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN",
+      participantCount: 10
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/answer-progress`, () =>
+        HttpResponse.json({
+          sessionId: session.sessionId,
+          questionId: question.questionId,
+          answeredCount: 7,
+          eligibleCount: 10
+        })
+      )
+    );
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText(question.localizations![0].prompt!);
+
+    await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
+
+    const answered = await screen.findByText("7 / 10");
+    const timeLeft = screen.getByRole("timer");
+    // Same box primitive (PresentationMetric), same visual weight — and
+    // sharing an immediate parent confirms they render as one compact row,
+    // not a separate giant block below the header.
+    expect(answered.closest('[role="status"]')?.parentElement).toBe(timeLeft.parentElement);
+    const timeLeftValue = timeLeft.querySelector("span.tabular-nums");
+    expect(answered.getAttribute("style")).toBe(timeLeftValue?.getAttribute("style"));
+    HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("shows an Answered placeholder during the reading period, not a disappearing row, then real counts once open", async () => {
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = () => Promise.reject(new Error("denied"));
+    usePresentationStore.setState({ active: false });
+    signIn();
+    const base = currentQuestionResponse();
+    const preview = previewQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: base.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: base.questionId,
+      currentPhase: "QUESTION_PREVIEW"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, preview);
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText(preview.localizations![0].prompt!);
+
+    await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
+
+    // The Answered box is present with a placeholder — never absent — so
+    // the row's width/height stays stable across the preview→open jump.
+    const answeredDuringPreview = await screen.findByText("–");
+    expect(answeredDuringPreview).toBeInTheDocument();
+    expect(screen.getByRole("timer")).toBeInTheDocument();
+    HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("keeps per-option reveal counts fitting inline in Presentation Mode", async () => {
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = () => Promise.reject(new Error("denied"));
+    usePresentationStore.setState({ active: false });
+    signIn();
+    const base = currentQuestionResponse();
+    const revealed = revealedQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: base.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: base.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, revealed);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({ sessionId: session.sessionId, currentPhase: "ANSWER_REVEALED" })
+        )
+      ),
+      http.get(`/api/v1/sessions/${session.sessionId}/answer-distribution`, () =>
+        HttpResponse.json(
+          answerDistributionResponse({
+            sessionId: session.sessionId,
+            questionId: revealed.questionId,
+            answeredCount: 10,
+            eligibleParticipantCount: 10,
+            options: [{ optionId: base.options![0].optionId!, count: 7, percentage: 70 }]
+          })
+        )
+      )
+    );
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText(revealed.localizations![0].prompt!);
+
+    await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
+
+    expect(await screen.findByText("7 · 70%")).toBeInTheDocument();
+    // No progress bar or Presentation Mode timer clutters the reveal view.
+    expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
   });
 
