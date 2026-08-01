@@ -1,13 +1,12 @@
 package io.quizchef.session.application;
 
-import io.quizchef.session.domain.LeaderboardService;
 import io.quizchef.session.domain.Participant;
 import io.quizchef.session.domain.ParticipantAnswer;
 import io.quizchef.session.domain.Session;
 import io.quizchef.session.domain.SessionPhase;
-import io.quizchef.session.infrastructure.persistence.ParticipantRepository;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
@@ -16,21 +15,25 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Builds the reconnection snapshot from the live aggregates — the server's
  * authoritative view of where a returning participant left off. Time
- * remaining comes from the shared {@link Clock} (ADR-006), and the
- * leaderboard is projected fresh, never read from storage.
+ * remaining comes from the shared {@link Clock} (ADR-006).
+ *
+ * <p>{@code leaderboard} is always empty. It carried the full ranked roster
+ * (every participant's name, score, and rank) unconditionally until this was
+ * caught as a live-event privacy leak: a participant reconnecting at any
+ * point in the game — including before the host's final-results release —
+ * received standings no participant-facing read is supposed to expose (see
+ * {@link SessionResultsQueryService#personalResult}). The frontend never
+ * read the field, so nothing downstream needed it. The field itself stays
+ * (a breaking API shape change is out of scope for this fix) but is never
+ * populated — the same "notification, not a data source" pattern already
+ * used for {@code LeaderboardUpdatedEvent}'s broadcast payload.
  */
 @Component
 public class SessionSnapshotAssembler {
 
-    private final ParticipantRepository participantRepository;
-    private final LeaderboardService leaderboardService;
     private final Clock clock;
 
-    public SessionSnapshotAssembler(ParticipantRepository participantRepository,
-                                    LeaderboardService leaderboardService,
-                                    Clock clock) {
-        this.participantRepository = participantRepository;
-        this.leaderboardService = leaderboardService;
+    public SessionSnapshotAssembler(Clock clock) {
         this.clock = clock;
     }
 
@@ -45,8 +48,7 @@ public class SessionSnapshotAssembler {
                 remainingMillis(session),
                 participant.getTotalScore(),
                 submittedOptionIds(session, participant),
-                leaderboardService.rank(
-                        participantRepository.findBySessionId(session.getId()), session.roster()));
+                List.of());
     }
 
     private long remainingMillis(Session session) {

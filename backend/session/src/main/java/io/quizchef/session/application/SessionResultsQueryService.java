@@ -4,6 +4,7 @@ import io.quizchef.identity.application.AuthorizationService;
 import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
 import io.quizchef.quiz.application.GameplayQuizQuery;
+import io.quizchef.quiz.application.PlayableQuizView;
 import io.quizchef.session.domain.LeaderboardEntry;
 import io.quizchef.session.domain.LeaderboardService;
 import io.quizchef.session.domain.Session;
@@ -37,8 +38,11 @@ import org.springframework.transaction.annotation.Transactional;
  * audience includes anonymous guests). Both reads are phase-gated for the
  * same ADR-006 reason correctness is: standings during an open or merely
  * closed question would leak who answered correctly before the reveal.
- * Readable from the moment the answer is revealed, through the
- * leaderboard, and forever after FINISHED.
+ * Readable from the moment the answer is revealed, through the leaderboard,
+ * and forever after FINISHED — except {@code personalResult} on the quiz's
+ * last question, which stays hidden until the host's final-results release
+ * regardless of whether the session has technically finished yet (see
+ * {@link #personalResultReadable}).
  */
 @Service
 public class SessionResultsQueryService {
@@ -96,6 +100,10 @@ public class SessionResultsQueryService {
         if (!personalResultReadable(session)) {
             throw new ResultsNotAvailableException();
         }
+        PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
+        if (session.getState() == SessionState.IN_PROGRESS && isLastQuestion(session, quiz)) {
+            throw new ResultsNotAvailableException();
+        }
 
         List<LeaderboardEntry> entries = leaderboardService.rank(
                 participantRepository.findBySessionId(sessionId), session.roster());
@@ -103,14 +111,12 @@ public class SessionResultsQueryService {
                 .filter(entry -> entry.participantId().equals(participantId))
                 .findFirst()
                 .orElseThrow(ParticipantNotFoundException::new);
-        int totalQuestions = gameplayQuizQuery.load(session.getPublishedQuizVersionId())
-                .questions().size();
 
         return new ParticipantResultView(
                 session.getId(),
                 session.getState(),
                 session.getCurrentPhase(),
-                totalQuestions,
+                quiz.questions().size(),
                 session.participantCount(),
                 own);
     }
@@ -130,7 +136,13 @@ public class SessionResultsQueryService {
      * a participant's own final rank stays hidden until the host explicitly
      * releases it (the winner-ceremony hold) — the host's own full standings
      * read is unaffected, since the host needs them to run the ceremony
-     * before clicking release.
+     * before clicking release. While still {@code IN_PROGRESS}, the caller
+     * additionally checks {@link #isLastQuestion}: the quiz's last question
+     * holds its standings for that same ceremony, so a participant must not
+     * learn their final rank just because the session hasn't flipped to
+     * {@code FINISHED} yet — the identical rule
+     * {@link ParticipantRankContextQueryService} already applies to ranking
+     * neighbours.
      */
     private static boolean personalResultReadable(Session session) {
         if (session.getState() == SessionState.FINISHED
@@ -140,5 +152,9 @@ public class SessionResultsQueryService {
         return session.getState() == SessionState.IN_PROGRESS
                 && (session.getCurrentPhase() == SessionPhase.ANSWER_REVEALED
                         || session.getCurrentPhase() == SessionPhase.LEADERBOARD);
+    }
+
+    private static boolean isLastQuestion(Session session, PlayableQuizView quiz) {
+        return QuestionProgression.nextAfter(quiz, session.getCurrentQuestionId()).isEmpty();
     }
 }

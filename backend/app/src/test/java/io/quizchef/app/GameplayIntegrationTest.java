@@ -378,6 +378,17 @@ class GameplayIntegrationTest {
         close(hostToken, sessionId);
         reveal(hostToken, sessionId);
         leaderboard(hostToken, sessionId);
+
+        // Still IN_PROGRESS — the host hasn't clicked "Finish Quiz" yet —
+        // but q2 is the quiz's last question, so the hold must already
+        // apply here, one host click before the session technically
+        // finishes. This is the exact window the projector-layout hotfix
+        // closed: a participant must never see their real final rank just
+        // because the session state hasn't flipped yet.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.results.not-available"));
+
         mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FINISHED"))

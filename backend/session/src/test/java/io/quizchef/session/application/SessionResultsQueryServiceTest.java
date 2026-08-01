@@ -157,9 +157,48 @@ class SessionResultsQueryServiceTest {
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
         when(leaderboardService.rank(anyList(), any())).thenReturn(List.of(
                 new LeaderboardEntry(UUID.randomUUID(), "Ann", 750, 1)));
+        when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(quizWithQuestions(2));
 
         assertThatExceptionOfType(ParticipantNotFoundException.class)
                 .isThrownBy(() -> service.personalResult(session.getId(), UUID.randomUUID()));
+    }
+
+    @Test
+    void personalResultHoldsTheFinalRankUntilTheSessionActuallyFinishes() {
+        // QUESTION is the quiz's *last* question: LEADERBOARD is showing, but
+        // the session is still IN_PROGRESS (the host hasn't advanced past it
+        // yet) — the same hold that applies once FINISHED-but-not-released
+        // must already apply here, or a participant learns their final rank
+        // one host click before the podium even starts.
+        Session session = inProgressSession(hostUser);
+        session.closeQuestion();
+        session.revealAnswer();
+        session.showLeaderboard();
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(quizOfOneQuestion(QUESTION));
+
+        assertThatExceptionOfType(ResultsNotAvailableException.class)
+                .isThrownBy(() -> service.personalResult(session.getId(), UUID.randomUUID()));
+    }
+
+    @Test
+    void personalResultStaysAvailableOnANonFinalQuestionsLeaderboard() {
+        // Same LEADERBOARD phase, but QUESTION is not the quiz's last
+        // question — the interim-standings read every non-final question
+        // relies on must keep working exactly as before.
+        Session session = inProgressSession(hostUser);
+        session.closeQuestion();
+        session.revealAnswer();
+        session.showLeaderboard();
+        UUID me = UUID.randomUUID();
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(leaderboardService.rank(anyList(), any())).thenReturn(List.of(
+                new LeaderboardEntry(me, "Me", 750, 1)));
+        when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(quizWithQuestions(2));
+
+        ParticipantResultView view = service.personalResult(session.getId(), me);
+
+        assertThat(view.entry().participantId()).isEqualTo(me);
     }
 
     private static Session inProgressSession(CurrentUser host) {
@@ -173,13 +212,28 @@ class SessionResultsQueryServiceTest {
         return session;
     }
 
+    /**
+     * {@code count} questions, the first of which is always {@code QUESTION}
+     * (the id every fixture session is currently playing) — so it is never
+     * the quiz's last question as long as {@code count >= 2}, and the
+     * {@code isLastQuestion} check in {@link SessionResultsQueryService}
+     * correctly reads these as "a non-final question in play."
+     */
     private static PlayableQuizView quizWithQuestions(int count) {
-        List<PlayableQuizView.PlayableQuestion> questions = java.util.stream.IntStream
-                .range(0, count)
-                .mapToObj(index -> new PlayableQuizView.PlayableQuestion(
-                        UUID.randomUUID(), Difficulty.EASY, Set.of(UUID.randomUUID()),
-                        Set.of(UUID.randomUUID())))
-                .toList();
+        List<PlayableQuizView.PlayableQuestion> questions = new java.util.ArrayList<>();
+        questions.add(new PlayableQuizView.PlayableQuestion(
+                QUESTION, Difficulty.EASY, Set.of(UUID.randomUUID()), Set.of(UUID.randomUUID())));
+        for (int index = 1; index < count; index++) {
+            questions.add(new PlayableQuizView.PlayableQuestion(
+                    UUID.randomUUID(), Difficulty.EASY, Set.of(UUID.randomUUID()),
+                    Set.of(UUID.randomUUID())));
+        }
         return new PlayableQuizView(30, questions);
+    }
+
+    /** A one-question quiz whose sole question is the quiz's last by definition. */
+    private static PlayableQuizView quizOfOneQuestion(UUID questionId) {
+        return new PlayableQuizView(30, List.of(new PlayableQuizView.PlayableQuestion(
+                questionId, Difficulty.EASY, Set.of(UUID.randomUUID()), Set.of(UUID.randomUUID()))));
     }
 }

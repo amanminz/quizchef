@@ -38,8 +38,7 @@ class ReconnectParticipantApplicationServiceTest {
     private final ParticipantRepository participantRepository = mock(ParticipantRepository.class);
     private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
     private final Clock clock = Clock.fixed(NOW, ZoneOffset.UTC);
-    private final SessionSnapshotAssembler snapshotAssembler = new SessionSnapshotAssembler(
-            participantRepository, new io.quizchef.session.domain.LeaderboardService(), clock);
+    private final SessionSnapshotAssembler snapshotAssembler = new SessionSnapshotAssembler(clock);
     private final ReconnectParticipantApplicationService service =
             new ReconnectParticipantApplicationService(sessionRepository, participantRepository,
                     snapshotAssembler, eventPublisher, clock);
@@ -69,6 +68,9 @@ class ReconnectParticipantApplicationServiceTest {
         assertThat(snapshot.participantId()).isEqualTo(guest.getId());
         assertThat(snapshot.sessionState()).isEqualTo("LOBBY");
         assertThat(snapshot.participantScore()).isZero();
+        // A reconnect must never carry the ranked roster — another
+        // participant's name, score, or rank is never this device's to see.
+        assertThat(snapshot.leaderboard()).isEmpty();
 
         var event = org.mockito.ArgumentCaptor.forClass(ParticipantReconnectedEvent.class);
         verify(eventPublisher).publish(event.capture());
