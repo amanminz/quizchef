@@ -15,6 +15,11 @@ import type { SessionPhase as BackendQuestionPhase } from "@/types/api";
  *   question yet. No server countdown duration exists (RFC-004 has no
  *   such setting) — this is an honest "get ready" state, not a client
  *   timer.
+ * - `QUESTION_PREVIEW` — the question is current and its prompt is visible,
+ *   but options are withheld and no answer is accepted (the backend's
+ *   QUESTION_PREVIEW) — a short, server-timed reading period before
+ *   `QUESTION_OPEN`. The response genuinely carries no option data during
+ *   this phase; there is nothing to hide client-side.
  * - `QUESTION_OPEN` — a question is open for answers.
  * - `WAITING` — the question closed but the answer is not yet revealed
  *   (the backend's QUESTION_CLOSED). PR #4 collapsed everything after the
@@ -35,6 +40,7 @@ import type { SessionPhase as BackendQuestionPhase } from "@/types/api";
 export type GameplayPhase =
   | "LOBBY"
   | "COUNTDOWN"
+  | "QUESTION_PREVIEW"
   | "QUESTION_OPEN"
   | "WAITING"
   | "ANSWER_REVEALED"

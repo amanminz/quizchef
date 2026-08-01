@@ -1,12 +1,22 @@
-import { Lightbulb } from "lucide-react";
+import { BookOpen, Lightbulb } from "lucide-react";
 import { Card, CardContent } from "@/components/common/Card";
 import { CorrectAnswerBadge } from "@/features/gameplay/components/CorrectAnswerBadge";
 import { QuestionHeader } from "@/features/gameplay/components/QuestionHeader";
-import type { AnswerDistributionResponse, CurrentQuestionResponse, PlayableLocalizationDto } from "@/types/api";
+import type {
+  AnswerDistributionResponse,
+  CurrentQuestionResponse,
+  PlayableLocalizationDto
+} from "@/types/api";
 import { cn } from "@/utils/cn";
 
 export interface HostBilingualQuestionProps {
   question: CurrentQuestionResponse;
+  /**
+   * The reading period: the prompt renders, options never do — the
+   * response genuinely carries none during `QUESTION_PREVIEW`, so this
+   * isn't hiding anything, just not rendering an options block at all.
+   */
+  previewing?: boolean;
   /** Reveal view: correct options highlighted, explanations shown. */
   revealed?: boolean;
   /**
@@ -44,6 +54,7 @@ function englishName(language: string): string {
  */
 export function HostBilingualQuestion({
   question,
+  previewing = false,
   revealed = false,
   distribution,
   headerExtra,
@@ -74,7 +85,11 @@ export function HostBilingualQuestion({
         <QuestionHeader
           number={question.questionNumber ?? 0}
           total={question.totalQuestions ?? 0}
-          endsAt={question.phase === "QUESTION_OPEN" ? question.endsAt : null}
+          endsAt={
+            question.phase === "QUESTION_OPEN" || question.phase === "QUESTION_PREVIEW"
+              ? question.endsAt
+              : null
+          }
           presentationActive={presentationActive}
         />
         {headerExtra}
@@ -84,7 +99,10 @@ export function HostBilingualQuestion({
             {primary?.prompt}
           </p>
           {secondary && (
-            <p lang={secondaryLanguage} className="text-xl font-semibold leading-snug text-foreground/90 sm:text-2xl lg:text-3xl">
+            <p
+              lang={secondaryLanguage}
+              className="text-xl font-semibold leading-snug text-foreground/90 sm:text-2xl lg:text-3xl"
+            >
               {secondary.prompt}
             </p>
           )}
@@ -95,55 +113,67 @@ export function HostBilingualQuestion({
           )}
         </div>
 
-        <ol className="flex flex-col gap-3">
-          {options.map((option, index) => {
-            const id = option.optionId ?? "";
-            const isCorrect = revealed && correct.has(id);
-            return (
-              <li
-                key={id}
-                className={cn(
-                  "flex items-start gap-4 rounded-lg border-2 px-5 py-4",
-                  isCorrect ? "border-success bg-success/10" : "border-border",
-                  revealed && !isCorrect && "opacity-60"
-                )}
-              >
-                <span
-                  aria-hidden
-                  className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-bold"
+        {previewing && (
+          <div className="flex items-center gap-3 rounded-md border border-dashed px-5 py-4 text-muted-foreground">
+            <BookOpen aria-hidden className="h-5 w-5 shrink-0" />
+            <p className="text-base font-medium sm:text-lg">
+              Read the question — options will appear shortly
+            </p>
+          </div>
+        )}
+
+        {!previewing && (
+          <ol className="flex flex-col gap-3">
+            {options.map((option, index) => {
+              const id = option.optionId ?? "";
+              const isCorrect = revealed && correct.has(id);
+              return (
+                <li
+                  key={id}
+                  className={cn(
+                    "flex items-start gap-4 rounded-lg border-2 px-5 py-4",
+                    isCorrect ? "border-success bg-success/10" : "border-border",
+                    revealed && !isCorrect && "opacity-60"
+                  )}
                 >
-                  {String.fromCharCode(65 + index)}
-                </span>
-                <span className="flex min-w-0 flex-1 flex-col gap-1">
-                  <span className="text-lg font-semibold leading-snug sm:text-xl lg:text-2xl">
-                    {textOf(primary, id)}
+                  <span
+                    aria-hidden
+                    className="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-muted text-lg font-bold"
+                  >
+                    {String.fromCharCode(65 + index)}
                   </span>
-                  {secondary && (
-                    <span lang={secondaryLanguage} className="text-base font-medium leading-snug text-foreground/85 sm:text-lg lg:text-xl">
-                      {textOf(secondary, id)}
+                  <span className="flex min-w-0 flex-1 flex-col gap-1">
+                    <span className="text-lg font-semibold leading-snug sm:text-xl lg:text-2xl">
+                      {textOf(primary, id)}
+                    </span>
+                    {secondary && (
+                      <span
+                        lang={secondaryLanguage}
+                        className="text-base font-medium leading-snug text-foreground/85 sm:text-lg lg:text-xl"
+                      >
+                        {textOf(secondary, id)}
+                      </span>
+                    )}
+                  </span>
+                  {revealed && countFor(id) && (
+                    <span className="mt-1 shrink-0 whitespace-nowrap text-right font-mono text-sm tabular-nums text-muted-foreground sm:text-base">
+                      {countFor(id)?.count ?? 0}
+                      {countFor(id)?.percentage !== undefined && ` · ${countFor(id)?.percentage}%`}
                     </span>
                   )}
-                </span>
-                {revealed && countFor(id) && (
-                  <span className="mt-1 shrink-0 whitespace-nowrap text-right font-mono text-sm tabular-nums text-muted-foreground sm:text-base">
-                    {countFor(id)?.count ?? 0}
-                    {countFor(id)?.percentage !== undefined && ` · ${countFor(id)?.percentage}%`}
-                  </span>
-                )}
-                {isCorrect && (
-                  <span className="mt-1 shrink-0">
-                    <CorrectAnswerBadge />
-                  </span>
-                )}
-              </li>
-            );
-          })}
-        </ol>
+                  {isCorrect && (
+                    <span className="mt-1 shrink-0">
+                      <CorrectAnswerBadge />
+                    </span>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+        )}
 
         {revealed && distribution && (distribution.noAnswerCount ?? 0) > 0 && (
-          <p className="text-sm text-muted-foreground">
-            No answer: {distribution.noAnswerCount}
-          </p>
+          <p className="text-sm text-muted-foreground">No answer: {distribution.noAnswerCount}</p>
         )}
 
         {revealed && (primary?.explanation || secondary?.explanation) && (
@@ -154,7 +184,10 @@ export function HostBilingualQuestion({
                 <p className="text-base leading-relaxed sm:text-lg">{primary.explanation}</p>
               )}
               {secondary?.explanation && (
-                <p lang={secondaryLanguage} className="text-base leading-relaxed text-foreground/90 sm:text-lg">
+                <p
+                  lang={secondaryLanguage}
+                  className="text-base leading-relaxed text-foreground/90 sm:text-lg"
+                >
                   {secondary.explanation}
                 </p>
               )}

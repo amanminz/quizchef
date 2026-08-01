@@ -16,6 +16,7 @@ export type ProtocolMessageType =
   | "participant.joined"
   | "participant.disconnected"
   | "participant.reconnected"
+  | "question.preview.started"
   | "question.started"
   | "question.closed"
   | "answer.revealed"

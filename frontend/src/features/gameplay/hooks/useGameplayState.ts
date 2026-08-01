@@ -34,6 +34,9 @@ export function useGameplayState(sessionId: string | undefined) {
     if (!session.currentQuestionId) {
       return "COUNTDOWN";
     }
+    if (question?.phase === "QUESTION_PREVIEW") {
+      return "QUESTION_PREVIEW";
+    }
     if (question?.phase === "QUESTION_OPEN") {
       return "QUESTION_OPEN";
     }

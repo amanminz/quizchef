@@ -51,6 +51,29 @@ export function currentQuestionResponse(
 }
 
 /**
+ * The same question during its reading period: the backend genuinely
+ * strips options and option texts (never merely hides them), so the
+ * fixture mirrors that — an empty `options` array and an empty
+ * `optionTexts` per localization, prompt untouched.
+ */
+export function previewQuestionResponse(
+  base: CurrentQuestionResponse,
+  overrides: Partial<CurrentQuestionResponse> = {}
+): CurrentQuestionResponse {
+  return {
+    ...base,
+    phase: "QUESTION_PREVIEW",
+    options: [],
+    correctOptionIds: undefined,
+    localizations: base.localizations?.map((localization) => ({
+      ...localization,
+      optionTexts: []
+    })),
+    ...overrides
+  };
+}
+
+/**
  * The same question after the reveal: correctness and the explanation are
  * on the wire, exactly as the phase-gated endpoint serves them.
  */

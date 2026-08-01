@@ -9,6 +9,7 @@ import {
   answerDistributionResponse,
   currentQuestionResponse,
   leaderboardEntry,
+  previewQuestionResponse,
   revealedQuestionResponse,
   sessionResultsResponse
 } from "@/test/gameplayFixtures";
@@ -162,6 +163,109 @@ describe("SessionLivePage", () => {
     expect(
       screen.getByText("Hindi translation unavailable for this question.")
     ).toBeInTheDocument();
+  });
+
+  it("shows the reading period with the prompt and no options, and no answer-progress badge", async () => {
+    signIn();
+    const base = currentQuestionResponse();
+    const previewing = previewQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: previewing.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: previewing.questionId,
+      currentPhase: "QUESTION_PREVIEW"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, previewing);
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText(base.localizations![0].prompt!)).toBeInTheDocument();
+    expect(screen.getByText(/read the question/i)).toBeInTheDocument();
+    expect(screen.queryByText("True")).not.toBeInTheDocument();
+    expect(screen.queryByText("False")).not.toBeInTheDocument();
+    expect(screen.queryByText(/answered/i)).not.toBeInTheDocument();
+  });
+
+  it("shows both language prompts during a bilingual reading period, with no options in either", async () => {
+    signIn();
+    const base = currentQuestionResponse();
+    const bilingual: CurrentQuestionResponse = {
+      ...base,
+      localizations: [
+        ...base.localizations!,
+        {
+          languageCode: "hi",
+          prompt: "योना को एक बड़ी मछली ने निगल लिया था।",
+          optionTexts: [
+            { optionId: base.options![0].optionId!, text: "सही" },
+            { optionId: base.options![1].optionId!, text: "गलत" }
+          ]
+        }
+      ]
+    };
+    const previewing = previewQuestionResponse(bilingual);
+    const session = sessionSummary({
+      sessionId: previewing.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: previewing.questionId,
+      currentPhase: "QUESTION_PREVIEW"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, previewing);
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText(base.localizations![0].prompt!)).toBeInTheDocument();
+    expect(screen.getByText("योना को एक बड़ी मछली ने निगल लिया था।")).toBeInTheDocument();
+    expect(screen.queryByText("सही")).not.toBeInTheDocument();
+    expect(screen.queryByText("गलत")).not.toBeInTheDocument();
+  });
+
+  it("moves from the reading period to open options on the question.started event, never sooner", async () => {
+    signIn();
+    const openQuestion = currentQuestionResponse({ phase: "QUESTION_OPEN" });
+    const holder = {
+      session: sessionSummary({
+        sessionId: openQuestion.sessionId,
+        state: "IN_PROGRESS",
+        currentQuestionId: openQuestion.questionId,
+        currentPhase: "QUESTION_PREVIEW" as const
+      }),
+      question: previewQuestionResponse(openQuestion)
+    };
+    serveQuiz(holder.session.publishedQuizVersionId!);
+    server.use(
+      http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
+        HttpResponse.json(holder.session)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
+        HttpResponse.json(holder.question)
+      )
+    );
+    const { client, fake } = fakeRealtimeClient();
+
+    renderApp(`/sessions/${holder.session.sessionId}/play`, { realtimeClient: client });
+    await screen.findByText(/read the question/i);
+    act(() => fake.simulateConnect());
+
+    // No host command exists to skip ahead — only the server's own
+    // question.started broadcast moves the client past the reading period.
+    holder.session = { ...holder.session, currentPhase: "QUESTION_OPEN" };
+    holder.question = openQuestion;
+    act(() => {
+      fake.deliver(
+        sessionTopic(holder.session.sessionId!),
+        protocolMessage("question.started", holder.session.sessionId!, {
+          questionId: openQuestion.questionId,
+          endsAt: openQuestion.endsAt,
+          durationSeconds: openQuestion.durationSeconds
+        })
+      );
+    });
+
+    expect(await screen.findByText("True")).toBeInTheDocument();
+    expect(screen.queryByText(/read the question/i)).not.toBeInTheDocument();
   });
 
   it("starts the first question from the countdown", async () => {

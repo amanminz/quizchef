@@ -1037,7 +1037,7 @@ export interface components {
              * @description The gameplay phase while IN_PROGRESS; null otherwise
              * @enum {string}
              */
-            currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            currentPhase?: "QUESTION_PREVIEW" | "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
             /** Format: uuid */
             currentQuestionId?: string;
             /** Format: uuid */
@@ -1285,7 +1285,7 @@ export interface components {
              * @description The gameplay phase while IN_PROGRESS; null once FINISHED
              * @enum {string}
              */
-            currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            currentPhase?: "QUESTION_PREVIEW" | "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
             /** Format: int32 */
             totalQuestions?: number;
             /** Format: int32 */
@@ -1298,7 +1298,7 @@ export interface components {
             /** Format: uuid */
             questionId?: string;
             /** @enum {string} */
-            phase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            phase?: "QUESTION_PREVIEW" | "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
             /**
              * Format: int32
              * @description 1-based position of this question in the quiz
@@ -1315,15 +1315,17 @@ export interface components {
             durationSeconds?: number;
             /**
              * Format: date-time
-             * @description The server's close time; null unless the question is open
+             * @description The current phase's server clock: the reading-period end during QUESTION_PREVIEW, the answer close time during QUESTION_OPEN; null otherwise
              */
             endsAt?: string;
             /**
              * Format: int64
-             * @description Milliseconds still on the clock; 0 unless the question is open
+             * @description Milliseconds still on that clock; 0 when there is none
              */
             remainingMillis?: number;
+            /** @description Empty during QUESTION_PREVIEW — options are reading-period material, genuinely absent from the response, never merely hidden by the client */
             options?: components["schemas"]["PlayableOptionDto"][];
+            /** @description optionTexts is empty per localization during QUESTION_PREVIEW; prompt is always present */
             localizations?: components["schemas"]["PlayableLocalizationDto"][];
             /** @description Null until the answer has been revealed */
             correctOptionIds?: string[];
@@ -1370,7 +1372,7 @@ export interface components {
              * @description The gameplay phase while IN_PROGRESS; null once FINISHED
              * @enum {string}
              */
-            currentPhase?: "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
+            currentPhase?: "QUESTION_PREVIEW" | "QUESTION_OPEN" | "QUESTION_CLOSED" | "ANSWER_REVEALED" | "LEADERBOARD";
             /** Format: int32 */
             totalQuestions?: number;
             /** Format: int32 */
@@ -1459,6 +1461,7 @@ export interface components {
             count?: number;
             /**
              * Format: int32
+             * @description Percentage of answeredCount, never of eligibleParticipantCount
              * @example 60
              */
             percentage?: number;
