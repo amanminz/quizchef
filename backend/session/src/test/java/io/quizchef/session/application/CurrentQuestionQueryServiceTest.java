@@ -56,6 +56,27 @@ class CurrentQuestionQueryServiceTest {
     }
 
     @Test
+    void servesThePromptDuringPreviewWithNoOptionsAndTheReadingCountdown() {
+        Session session = inPreviewOfQuestion1();
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(twoQuestionQuiz());
+        when(contentQuery.content(QUESTION_1)).thenReturn(contentOf(QUESTION_1));
+
+        CurrentQuestionView view = service.currentQuestion(session.getId());
+
+        assertThat(view.phase()).isEqualTo(SessionPhase.QUESTION_PREVIEW);
+        // The prompt is present — the reading period is meant to be read.
+        assertThat(view.content().localizations().getFirst().prompt()).isEqualTo("Prompt 1");
+        // Options are genuinely absent, not merely unpopulated by the fixture.
+        assertThat(view.content().options()).isEmpty();
+        assertThat(view.content().localizations().getFirst().optionTexts()).isEmpty();
+        assertThat(view.correctOptionIds()).isNull();
+        // 2 of the 5 preview seconds elapsed on the fixed clock.
+        assertThat(view.remainingMillis()).isEqualTo(3_000L);
+        assertThat(view.endsAt()).isEqualTo(NOW.plusSeconds(3));
+    }
+
+    @Test
     void servesTheOpenQuestionWithTimeButWithoutCorrectness() {
         Session session = inProgressWithOpenQuestion();
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
@@ -96,14 +117,19 @@ class CurrentQuestionQueryServiceTest {
     }
 
     private static Session inProgressWithOpenQuestion() {
+        Session session = inPreviewOfQuestion1();
+        // Opened 10 seconds ago with a 30-second limit.
+        session.openQuestion(QuestionTimer.startingAt(NOW.minusSeconds(10), Duration.ofSeconds(30)));
+        return session;
+    }
+
+    private static Session inPreviewOfQuestion1() {
         Session session = sessionHostedBy(host(), "424242");
         session.openLobby();
         session.registerParticipant(UUID.randomUUID(),
                 ParticipantKey.forGuest(GuestParticipantToken.generate()));
         session.start();
-        // Opened 10 seconds ago with a 30-second limit.
-        session.openQuestion(QUESTION_1,
-                QuestionTimer.startingAt(NOW.minusSeconds(10), Duration.ofSeconds(30)));
+        session.previewQuestion(QUESTION_1, QuestionTimer.startingAt(NOW.minusSeconds(2), Duration.ofSeconds(5)));
         return session;
     }
 

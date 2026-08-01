@@ -62,7 +62,8 @@ class SubmitAnswerApplicationServiceTest {
         session.registerParticipant(UUID.randomUUID(),
                 io.quizchef.session.domain.ParticipantKey.forGuest(GuestParticipantToken.generate()));
         session.start();
-        session.openQuestion(questionId, QuestionTimer.startingAt(START, Duration.ofSeconds(30)));
+        session.previewQuestion(questionId, QuestionTimer.startingAt(START, Duration.ofSeconds(5)));
+        session.openQuestion(QuestionTimer.startingAt(START, Duration.ofSeconds(30)));
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
         return session;
     }
@@ -122,6 +123,23 @@ class SubmitAnswerApplicationServiceTest {
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
         Participant participant = connectedParticipant(session.getId());
 
+        assertThatExceptionOfType(AnswerNotAcceptedException.class).isThrownBy(() ->
+                service.submit(new SubmitAnswerCommand(participant.getId(), questionId, Set.of(correctOption))));
+        verifyNoInteractions(eventPublisher);
+    }
+
+    @Test
+    void rejectsAnAnswerDuringTheReadingPeriod() {
+        Session session = sessionHostedBy(host(), "500003");
+        session.openLobby();
+        session.registerParticipant(UUID.randomUUID(),
+                io.quizchef.session.domain.ParticipantKey.forGuest(GuestParticipantToken.generate()));
+        session.start();
+        session.previewQuestion(questionId, QuestionTimer.startingAt(START, Duration.ofSeconds(5)));
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        Participant participant = connectedParticipant(session.getId());
+
+        // The question is current — visible — but not yet open for answers.
         assertThatExceptionOfType(AnswerNotAcceptedException.class).isThrownBy(() ->
                 service.submit(new SubmitAnswerCommand(participant.getId(), questionId, Set.of(correctOption))));
         verifyNoInteractions(eventPublisher);

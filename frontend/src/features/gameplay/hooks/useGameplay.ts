@@ -18,6 +18,7 @@ const SESSION_LIFECYCLE_EVENTS = new Set<ProtocolMessage["type"]>([
 ]);
 
 const QUESTION_PROGRESSION_EVENTS = new Set<ProtocolMessage["type"]>([
+  "question.preview.started",
   "question.started",
   "question.closed",
   "answer.revealed",
@@ -33,8 +34,10 @@ const RESULTS_EVENTS = new Set<ProtocolMessage["type"]>([
 
 function announcementFor(message: ProtocolMessage): string | null {
   switch (message.type) {
+    case "question.preview.started":
+      return "A new question is about to begin. Get ready to read it.";
     case "question.started":
-      return "A new question has started.";
+      return "The answer options are now available.";
     case "question.closed":
       return "The question has closed.";
     case "answer.revealed":

@@ -10,6 +10,7 @@ import {
   participantRankContextResponse,
   participantResultResponse,
   participantSessionResponse,
+  previewQuestionResponse,
   revealedQuestionResponse,
   sessionSnapshotResponse
 } from "@/test/gameplayFixtures";
@@ -196,6 +197,147 @@ describe("PlaySessionPage", () => {
 
     expect(await screen.findByRole("button", { name: "True" })).toBeDisabled();
     expect(screen.getByRole("button", { name: /submit answer/i })).toBeDisabled();
+  });
+
+  it("shows the prompt with no options during the reading period, and cannot submit", async () => {
+    const base = currentQuestionResponse();
+    const previewing = previewQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: previewing.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: previewing.questionId,
+      currentPhase: "QUESTION_PREVIEW"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-1",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, previewing);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: previewing.questionId,
+            currentPhase: "QUESTION_PREVIEW",
+            submittedOptionIds: []
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText(base.localizations![0].prompt!)).toBeInTheDocument();
+    expect(screen.getByText(/get ready/i)).toBeInTheDocument();
+    // The response genuinely carries no option data — there is nothing to
+    // render or to disable.
+    expect(screen.queryByText("True")).not.toBeInTheDocument();
+    expect(screen.queryByText("False")).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /submit answer/i })).not.toBeInTheDocument();
+  });
+
+  it("shows options only once the authoritative phase transitions to open", async () => {
+    const openQuestion = currentQuestionResponse({ phase: "QUESTION_OPEN" });
+    const holder = {
+      session: sessionSummary({
+        sessionId: openQuestion.sessionId,
+        state: "IN_PROGRESS",
+        currentQuestionId: openQuestion.questionId,
+        currentPhase: "QUESTION_PREVIEW" as const
+      }),
+      question: previewQuestionResponse(openQuestion)
+    };
+    const record = {
+      sessionId: holder.session.sessionId!,
+      participantId: "participant-1",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    server.use(
+      http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
+        HttpResponse.json(holder.session)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
+        HttpResponse.json(holder.question)
+      ),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: holder.session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: openQuestion.questionId,
+            currentPhase: "QUESTION_PREVIEW",
+            submittedOptionIds: []
+          })
+        )
+      )
+    );
+    const { client, fake } = fakeRealtimeClient();
+
+    renderApp(`/play/${PIN}`, { realtimeClient: client });
+    await screen.findByText(/get ready/i);
+    act(() => fake.simulateConnect());
+
+    holder.session = { ...holder.session, currentPhase: "QUESTION_OPEN" };
+    holder.question = openQuestion;
+    act(() => {
+      fake.deliver(
+        sessionTopic(holder.session.sessionId!),
+        protocolMessage("question.started", holder.session.sessionId!, {
+          questionId: openQuestion.questionId,
+          endsAt: openQuestion.endsAt,
+          durationSeconds: openQuestion.durationSeconds
+        })
+      );
+    });
+
+    expect(await screen.findByRole("button", { name: "True" })).toBeInTheDocument();
+    expect(screen.queryByText(/get ready/i)).not.toBeInTheDocument();
+  });
+
+  it("reconnecting straight into an open question never replays the reading period", async () => {
+    const openQuestion = currentQuestionResponse({ phase: "QUESTION_OPEN" });
+    const session = sessionSummary({
+      sessionId: openQuestion.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: openQuestion.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-1",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, openQuestion);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: openQuestion.questionId,
+            currentPhase: "QUESTION_OPEN",
+            submittedOptionIds: []
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByRole("button", { name: "True" })).toBeInTheDocument();
+    expect(screen.queryByText(/get ready/i)).not.toBeInTheDocument();
   });
 
   it("shows the waiting overlay after the question closes remotely, then the next question", async () => {

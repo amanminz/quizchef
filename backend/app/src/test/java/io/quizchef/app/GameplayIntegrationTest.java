@@ -47,12 +47,19 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
  * The complete server-authoritative game end to end: create → lobby → join →
- * connect → start → answer → close → reveal → leaderboard → advance → …
- * → finish. Verifies that the server computes every score, the leaderboard
- * ranks correctly, reconnection restores active gameplay, and every step
- * projects onto the realtime protocol (broker template mocked).
+ * connect → start → preview → open → answer → close → reveal → leaderboard →
+ * advance → … → finish. Verifies that the server computes every score, the
+ * leaderboard ranks correctly, reconnection restores active gameplay, and
+ * every step projects onto the realtime protocol (broker template mocked).
+ *
+ * <p>The reading period is overridden to 1 second for this class — the
+ * {@code openQuestion}/{@code advanceToNext} helpers wait for the real,
+ * server-scheduled preview-to-open transition to fire (never a fake clock:
+ * this is exactly the production scheduling path, just given a short fuse)
+ * so every existing test in this file reaches {@code QUESTION_OPEN} exactly
+ * as before without needing to know the preview step happened.
  */
-@SpringBootTest
+@SpringBootTest(properties = "quizchef.gameplay.question-preview-seconds=1")
 @AutoConfigureMockMvc
 @ActiveProfiles("test")
 @Testcontainers
@@ -142,11 +149,69 @@ class GameplayIntegrationTest {
         verify(messagingTemplate, atLeastOnce())
                 .convertAndSend(startsWith("/topic/session/"), captor.capture());
         assertThat(captor.getAllValues()).extracting(ProtocolMessage::type)
-                .contains(ProtocolMessageType.QUESTION_STARTED, ProtocolMessageType.QUESTION_CLOSED,
-                        ProtocolMessageType.ANSWER_REVEALED, ProtocolMessageType.LEADERBOARD_UPDATED,
-                        ProtocolMessageType.SESSION_FINISHED);
+                .contains(ProtocolMessageType.QUESTION_PREVIEW_STARTED, ProtocolMessageType.QUESTION_STARTED,
+                        ProtocolMessageType.QUESTION_CLOSED, ProtocolMessageType.ANSWER_REVEALED,
+                        ProtocolMessageType.LEADERBOARD_UPDATED, ProtocolMessageType.SESSION_FINISHED);
         verify(messagingTemplate, atLeastOnce())
                 .convertAndSend(startsWith("/topic/participant/"), any(ProtocolMessage.class));
+    }
+
+    @Test
+    void questionPreviewShowsThePromptWithoutOptionsThenOpensAutomatically() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        String questionId = readJson(mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/start")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentPhase").value("QUESTION_PREVIEW"))
+                .andReturn().getResponse().getContentAsString()).get("currentQuestionId").asText();
+
+        // The prompt is visible — options are genuinely absent, not merely
+        // unrendered by a client — and a submission is rejected outright.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phase").value("QUESTION_PREVIEW"))
+                .andExpect(jsonPath("$.localizations[0].prompt").value("Prompt 1"))
+                .andExpect(jsonPath("$.options").isEmpty())
+                .andExpect(jsonPath("$.localizations[0].optionTexts").isEmpty())
+                .andExpect(jsonPath("$.endsAt").exists())
+                .andExpect(jsonPath("$.remainingMillis").value(org.hamcrest.Matchers.greaterThan(0)));
+
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/answers")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"participantId": "%s", "questionId": "%s", "selectedOptionIds": ["%s"]}
+                                """.formatted(guestA, questionId, quiz.questions().get(0).correctOptionId())))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.answer.not-accepted"));
+
+        // The host cannot skip ahead during preview either — every other
+        // command still requires the phase it always required.
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/close")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.invalid-transition"));
+
+        // No host action ends the preview — only the server's own timer.
+        awaitQuestionOpen(sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.phase").value("QUESTION_OPEN"))
+                .andExpect(jsonPath("$.options[0].optionId").exists())
+                .andExpect(jsonPath("$.localizations[0].optionTexts[0].text").value("True"))
+                // The full 30-second answer duration — never shortened by the
+                // 1-second preview that already elapsed.
+                .andExpect(jsonPath("$.remainingMillis")
+                        .value(org.hamcrest.Matchers.greaterThan(25_000)));
+
+        var captor = org.mockito.ArgumentCaptor.forClass(ProtocolMessage.class);
+        verify(messagingTemplate, atLeastOnce())
+                .convertAndSend(startsWith("/topic/session/"), captor.capture());
+        assertThat(captor.getAllValues()).extracting(ProtocolMessage::type)
+                .contains(ProtocolMessageType.QUESTION_PREVIEW_STARTED, ProtocolMessageType.QUESTION_STARTED);
     }
 
     @Test
@@ -524,18 +589,42 @@ class GameplayIntegrationTest {
                 .andExpect(status().isOk());
     }
 
+    /**
+     * Starts the next question and waits out its (1-second, this class)
+     * reading period the same way a real client would — polling the
+     * authoritative session read for the server's own scheduled
+     * preview-to-open transition — so every test that just wants "a question
+     * is open" can keep treating this as a single step.
+     */
     private String openQuestion(String hostToken, String sessionId) throws Exception {
-        return readJson(mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/start")
+        String questionId = readJson(mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/start")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.currentPhase").value("QUESTION_OPEN"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.currentPhase").value("QUESTION_PREVIEW"))
                 .andReturn().getResponse().getContentAsString()).get("currentQuestionId").asText();
+        awaitQuestionOpen(sessionId);
+        return questionId;
     }
 
     private String advanceToNext(String hostToken, String sessionId) throws Exception {
-        return readJson(mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
+        String questionId = readJson(mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
-                .andExpect(status().isOk()).andExpect(jsonPath("$.currentPhase").value("QUESTION_OPEN"))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.currentPhase").value("QUESTION_PREVIEW"))
                 .andReturn().getResponse().getContentAsString()).get("currentQuestionId").asText();
+        awaitQuestionOpen(sessionId);
+        return questionId;
+    }
+
+    /** Polls the public session read until the server's own timer opens the question. */
+    private void awaitQuestionOpen(String sessionId) throws Exception {
+        for (int attempt = 0; attempt < 50; attempt++) {
+            JsonNode session = readJson(mockMvc.perform(get("/api/v1/sessions/" + sessionId))
+                    .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
+            if ("QUESTION_OPEN".equals(session.get("currentPhase").asText())) {
+                return;
+            }
+            Thread.sleep(100);
+        }
+        throw new AssertionError("Question in session " + sessionId + " never opened after its reading period");
     }
 
     private void answer(String sessionId, String participantId, String questionId, UUID optionId)

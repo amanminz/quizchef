@@ -19,7 +19,11 @@ export function QuestionCard({ question, preferredLanguage, children }: Question
         <QuestionHeader
           number={question.questionNumber ?? 0}
           total={question.totalQuestions ?? 0}
-          endsAt={question.phase === "QUESTION_OPEN" ? question.endsAt : null}
+          endsAt={
+            question.phase === "QUESTION_OPEN" || question.phase === "QUESTION_PREVIEW"
+              ? question.endsAt
+              : null
+          }
         />
         <QuestionBody question={question} preferredLanguage={preferredLanguage} />
         {children}

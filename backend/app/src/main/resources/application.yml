@@ -59,6 +59,11 @@ springdoc:
     path: /swagger-ui.html
 
 quizchef:
+  gameplay:
+    # How long a question's reading period lasts before options appear and
+    # the answer timer starts. A global constant today (see GameplayProperties);
+    # the natural seam to make per-quiz if a future milestone demands it.
+    question-preview-seconds: 5
   security:
     jwt:
       issuer: quizchef

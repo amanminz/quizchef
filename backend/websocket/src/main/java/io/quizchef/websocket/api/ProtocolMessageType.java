@@ -30,6 +30,7 @@ public enum ProtocolMessageType {
     PARTICIPANT_RECONNECTED("participant.reconnected"),
 
     // Gameplay.
+    QUESTION_PREVIEW_STARTED("question.preview.started"),
     QUESTION_STARTED("question.started"),
     QUESTION_CLOSED("question.closed"),
     ANSWER_REVEALED("answer.revealed"),

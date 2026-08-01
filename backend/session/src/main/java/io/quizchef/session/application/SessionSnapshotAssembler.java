@@ -50,8 +50,10 @@ public class SessionSnapshotAssembler {
     }
 
     private long remainingMillis(Session session) {
-        if (session.getCurrentPhase() != SessionPhase.QUESTION_OPEN
-                || session.getCurrentQuestionTimer() == null) {
+        boolean countingDown = (session.getCurrentPhase() == SessionPhase.QUESTION_OPEN
+                || session.getCurrentPhase() == SessionPhase.QUESTION_PREVIEW)
+                && session.getCurrentQuestionTimer() != null;
+        if (!countingDown) {
             return 0L;
         }
         long remaining = Duration.between(clock.instant(),

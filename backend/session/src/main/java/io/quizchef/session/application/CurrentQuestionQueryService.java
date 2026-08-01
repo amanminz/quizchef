@@ -23,11 +23,15 @@ import org.springframework.transaction.annotation.Transactional;
  * reached by its unguessable id, and the players it serves are anonymous
  * guests by nature. What the response admits is phase-gated here, in one
  * place: content only while a question is actually in play (never during
- * the lobby, never by probing a PIN'd session before start), correct
- * option ids and the author's explanation only once revealed — both are
- * reveal-time material; an explanation routinely gives the answer away.
- * Time remaining comes from the shared {@link Clock} (ADR-006) — the
- * client renders it, never decides it.
+ * the lobby, never by probing a PIN'd session before start), options
+ * (structure and text) only once the reading period ends — {@code
+ * QUESTION_PREVIEW} shows the prompt alone — and correct option ids and the
+ * author's explanation only once revealed; both are reveal-time material,
+ * an explanation routinely gives the answer away. {@code endsAt}/{@code
+ * remainingMillis} describe whichever countdown the current phase is
+ * running (the reading-period clock during {@code QUESTION_PREVIEW}, the
+ * answer clock during {@code QUESTION_OPEN}), both from the shared
+ * {@link Clock} (ADR-006) — the client renders it, never decides it.
  */
 @Service
 public class CurrentQuestionQueryService {
@@ -58,10 +62,20 @@ public class CurrentQuestionQueryService {
         PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
         PlayableQuestionContentView content = contentQuery.content(questionId);
 
+        boolean previewing = session.getCurrentPhase() == SessionPhase.QUESTION_PREVIEW;
         boolean revealed = session.getCurrentPhase() == SessionPhase.ANSWER_REVEALED
                 || session.getCurrentPhase() == SessionPhase.LEADERBOARD;
         boolean open = session.getCurrentPhase() == SessionPhase.QUESTION_OPEN
                 && session.getCurrentQuestionTimer() != null;
+        // The reused countdown (Session.currentQuestionTimer, ADR-004's single
+        // "current phase's clock" field) is active during either open answering
+        // or the reading period — never both, and null otherwise.
+        boolean countingDown = (open || previewing) && session.getCurrentQuestionTimer() != null;
+
+        PlayableQuestionContentView displayedContent = revealed ? content : withoutExplanations(content);
+        if (previewing) {
+            displayedContent = withoutOptions(displayedContent);
+        }
 
         return new CurrentQuestionView(
                 session.getId(),
@@ -69,9 +83,9 @@ public class CurrentQuestionQueryService {
                 questionNumber(quiz, questionId),
                 quiz.questions().size(),
                 quiz.questionTimeLimitSeconds(),
-                open ? session.getCurrentQuestionTimer().endsAt() : null,
-                open ? remainingMillis(session) : 0L,
-                revealed ? content : withoutExplanations(content),
+                countingDown ? session.getCurrentQuestionTimer().endsAt() : null,
+                countingDown ? remainingMillis(session) : 0L,
+                displayedContent,
                 revealed ? correctOptionIds(quiz, questionId) : null);
     }
 
@@ -84,6 +98,25 @@ public class CurrentQuestionQueryService {
                 content.options(),
                 content.localizations().stream()
                         .map(PlayableQuestionContentView.PlayableLocalizationView::withoutExplanation)
+                        .toList());
+    }
+
+    /**
+     * Options are reading-period material — the question is current and its
+     * prompt is visible, but no option (structure or text, in any language)
+     * crosses the wire until the reading period ends. Not merely hidden by
+     * the client: the field is genuinely absent from the response.
+     */
+    private static PlayableQuestionContentView withoutOptions(PlayableQuestionContentView content) {
+        return new PlayableQuestionContentView(
+                content.questionId(),
+                content.questionType(),
+                content.defaultLanguage(),
+                List.of(),
+                content.localizations().stream()
+                        .map(localization -> new PlayableQuestionContentView.PlayableLocalizationView(
+                                localization.languageCode(), localization.prompt(),
+                                localization.explanation(), List.of()))
                         .toList());
     }
 

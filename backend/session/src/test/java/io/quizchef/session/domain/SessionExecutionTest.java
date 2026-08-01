@@ -12,9 +12,9 @@ import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /**
- * The gameplay phase machine: QUESTION_OPEN → QUESTION_CLOSED →
- * ANSWER_REVEALED → LEADERBOARD, and back to a new question. Every
- * transition is guarded (ADR-006).
+ * The gameplay phase machine: QUESTION_PREVIEW → QUESTION_OPEN →
+ * QUESTION_CLOSED → ANSWER_REVEALED → LEADERBOARD, and back to a new
+ * question's preview. Every transition is guarded (ADR-006).
  */
 class SessionExecutionTest {
 
@@ -32,8 +32,18 @@ class SessionExecutionTest {
         return session;
     }
 
-    private static QuestionTimer timer() {
+    private static QuestionTimer previewTimer() {
+        return QuestionTimer.startingAt(NOW, Duration.ofSeconds(5));
+    }
+
+    private static QuestionTimer answerTimer() {
         return QuestionTimer.startingAt(NOW, Duration.ofSeconds(30));
+    }
+
+    /** Previews, then opens, a question — the two-step entry every test needs. */
+    private static void previewThenOpen(Session session, UUID questionId) {
+        session.previewQuestion(questionId, previewTimer());
+        session.openQuestion(answerTimer());
     }
 
     @Test
@@ -41,7 +51,12 @@ class SessionExecutionTest {
         Session session = runningSession();
         UUID questionId = UUID.randomUUID();
 
-        session.openQuestion(questionId, timer());
+        session.previewQuestion(questionId, previewTimer());
+        assertThat(session.getCurrentPhase()).isEqualTo(SessionPhase.QUESTION_PREVIEW);
+        assertThat(session.getCurrentQuestionId()).isEqualTo(questionId);
+        assertThat(session.acceptsAnswersFor(questionId)).isFalse();
+
+        session.openQuestion(answerTimer());
         assertThat(session.getCurrentPhase()).isEqualTo(SessionPhase.QUESTION_OPEN);
         assertThat(session.getCurrentQuestionId()).isEqualTo(questionId);
         assertThat(session.acceptsAnswersFor(questionId)).isTrue();
@@ -57,9 +72,56 @@ class SessionExecutionTest {
         assertThat(session.getCurrentPhase()).isEqualTo(SessionPhase.LEADERBOARD);
 
         UUID second = UUID.randomUUID();
-        session.openQuestion(second, timer());
+        previewThenOpen(session, second);
         assertThat(session.getCurrentPhase()).isEqualTo(SessionPhase.QUESTION_OPEN);
         assertThat(session.getCurrentQuestionId()).isEqualTo(second);
+    }
+
+    @Test
+    void previewNeverAcceptsAnswers() {
+        Session session = runningSession();
+        UUID questionId = UUID.randomUUID();
+        session.previewQuestion(questionId, previewTimer());
+
+        assertThat(session.acceptsAnswersFor(questionId)).isFalse();
+    }
+
+    @Test
+    void openingReplacesThePreviewTimerWithTheAnswerTimerButKeepsTheQuestion() {
+        Session session = runningSession();
+        UUID questionId = UUID.randomUUID();
+        QuestionTimer preview = previewTimer();
+        QuestionTimer answer = answerTimer();
+        session.previewQuestion(questionId, preview);
+        assertThat(session.getCurrentQuestionTimer()).isEqualTo(preview);
+
+        session.openQuestion(answer);
+
+        assertThat(session.getCurrentQuestionId()).isEqualTo(questionId);
+        assertThat(session.getCurrentQuestionTimer()).isEqualTo(answer);
+    }
+
+    @Test
+    void cannotOpenAQuestionWithoutFirstPreviewingIt() {
+        Session session = runningSession();
+
+        assertThatExceptionOfType(InvalidSessionTransitionException.class)
+                .isThrownBy(() -> session.openQuestion(answerTimer()));
+
+        session.previewQuestion(UUID.randomUUID(), previewTimer());
+        session.openQuestion(answerTimer());
+        // Already open — opening again (skipping a fresh preview) is rejected.
+        assertThatExceptionOfType(InvalidSessionTransitionException.class)
+                .isThrownBy(() -> session.openQuestion(answerTimer()));
+    }
+
+    @Test
+    void cannotPreviewTwiceInARow() {
+        Session session = runningSession();
+        session.previewQuestion(UUID.randomUUID(), previewTimer());
+
+        assertThatExceptionOfType(InvalidSessionTransitionException.class)
+                .isThrownBy(() -> session.previewQuestion(UUID.randomUUID(), previewTimer()));
     }
 
     @Test
@@ -70,42 +132,49 @@ class SessionExecutionTest {
         assertThatExceptionOfType(InvalidSessionTransitionException.class).isThrownBy(session::revealAnswer);
         assertThatExceptionOfType(InvalidSessionTransitionException.class).isThrownBy(session::showLeaderboard);
 
-        session.openQuestion(UUID.randomUUID(), timer());
+        UUID questionId = UUID.randomUUID();
+        previewThenOpen(session, questionId);
         assertThatExceptionOfType(InvalidSessionTransitionException.class).isThrownBy(session::revealAnswer);
         assertThatExceptionOfType(InvalidSessionTransitionException.class).isThrownBy(session::showLeaderboard);
-        // cannot open another question while one is open
+        // cannot preview another question while one is open
         assertThatExceptionOfType(InvalidSessionTransitionException.class)
-                .isThrownBy(() -> session.openQuestion(UUID.randomUUID(), timer()));
+                .isThrownBy(() -> session.previewQuestion(UUID.randomUUID(), previewTimer()));
     }
 
     @Test
-    void cannotOpenAQuestionBeforeStarting() {
+    void cannotPreviewAQuestionBeforeStarting() {
         Session session = Session.create(SessionPin.of("222222"), UUID.randomUUID(), HOST,
                 SessionSettings.defaults());
         session.openLobby();
 
         assertThatExceptionOfType(InvalidSessionTransitionException.class)
-                .isThrownBy(() -> session.openQuestion(UUID.randomUUID(), timer()));
+                .isThrownBy(() -> session.previewQuestion(UUID.randomUUID(), previewTimer()));
     }
 
     @Test
-    void finishingClearsTheExecutionPointers() {
-        Session session = runningSession();
-        session.openQuestion(UUID.randomUUID(), timer());
+    void finishingClearsTheExecutionPointersRegardlessOfSubPhase() {
+        Session previewing = runningSession();
+        previewing.previewQuestion(UUID.randomUUID(), previewTimer());
+        previewing.finish();
+        assertThat(previewing.isFinished()).isTrue();
+        assertThat(previewing.getCurrentPhase()).isNull();
+        assertThat(previewing.getCurrentQuestionId()).isNull();
+        assertThat(previewing.getCurrentQuestionTimer()).isNull();
 
-        session.finish();
-
-        assertThat(session.isFinished()).isTrue();
-        assertThat(session.getCurrentPhase()).isNull();
-        assertThat(session.getCurrentQuestionId()).isNull();
-        assertThat(session.getCurrentQuestionTimer()).isNull();
+        Session opened = runningSession();
+        previewThenOpen(opened, UUID.randomUUID());
+        opened.finish();
+        assertThat(opened.isFinished()).isTrue();
+        assertThat(opened.getCurrentPhase()).isNull();
+        assertThat(opened.getCurrentQuestionId()).isNull();
+        assertThat(opened.getCurrentQuestionTimer()).isNull();
     }
 
     @Test
     void acceptsAnswersOnlyForTheOpenQuestion() {
         Session session = runningSession();
         UUID questionId = UUID.randomUUID();
-        session.openQuestion(questionId, timer());
+        previewThenOpen(session, questionId);
 
         assertThat(session.acceptsAnswersFor(questionId)).isTrue();
         assertThat(session.acceptsAnswersFor(UUID.randomUUID())).isFalse();

@@ -6,6 +6,7 @@ import io.quizchef.session.domain.ScoringPolicy;
 import io.quizchef.session.domain.ScoringService;
 import java.util.UUID;
 import org.slf4j.MDC;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.core.task.TaskDecorator;
@@ -14,10 +15,12 @@ import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
  * Wires the framework-independent gameplay domain services as beans and
- * provides the scheduler that closes expired questions. The domain classes
- * stay Spring-free; this configuration is where they become injectable.
+ * provides the scheduler that closes expired questions and opens previewed
+ * ones. The domain classes stay Spring-free; this configuration is where
+ * they become injectable.
  */
 @Configuration
+@EnableConfigurationProperties(GameplayProperties.class)
 public class SessionGameplayConfiguration {
 
     @Bean

@@ -65,7 +65,7 @@ public class AdvanceQuestionApplicationService {
         Optional<PlayableQuestion> next =
                 QuestionProgression.nextAfter(quiz, session.getCurrentQuestionId());
         if (next.isPresent()) {
-            questionOpener.open(session, next.get(), quiz.questionTimeLimitSeconds());
+            questionOpener.startPreview(session, next.get(), quiz.questionTimeLimitSeconds());
         } else {
             session.finish();
             eventPublisher.publish(new SessionFinishedEvent(sessionId, clock.instant()));

@@ -9,6 +9,7 @@ import io.quizchef.session.domain.event.ParticipantDisconnectedEvent;
 import io.quizchef.session.domain.event.ParticipantJoinedEvent;
 import io.quizchef.session.domain.event.ParticipantReconnectedEvent;
 import io.quizchef.session.domain.event.QuestionClosedEvent;
+import io.quizchef.session.domain.event.QuestionPreviewStartedEvent;
 import io.quizchef.session.domain.event.QuestionStartedEvent;
 import io.quizchef.session.domain.event.SessionFinishedEvent;
 import io.quizchef.session.domain.event.SessionStartedEvent;
@@ -66,6 +67,13 @@ final class SessionProtocolMapper {
     static ProtocolMessage toMessage(ParticipantReconnectedEvent event) {
         return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.PARTICIPANT_RECONNECTED,
                 event.occurredAt(), new ParticipantPayload(event.participantId()));
+    }
+
+    static ProtocolMessage toMessage(QuestionPreviewStartedEvent event) {
+        return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.QUESTION_PREVIEW_STARTED,
+                event.occurredAt(),
+                new QuestionStartedPayload(
+                        event.questionId(), event.previewEndsAt(), event.previewDurationSeconds()));
     }
 
     static ProtocolMessage toMessage(QuestionStartedEvent event) {

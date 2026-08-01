@@ -45,7 +45,8 @@ class AnswerProgressQueryServiceTest {
         session.openLobby();
         Participant seed = connectedParticipant(session);
         session.start();
-        session.openQuestion(questionId, QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
+        session.previewQuestion(questionId, QuestionTimer.startingAt(NOW, Duration.ofSeconds(5)));
+        session.openQuestion(QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
         when(participantRepository.findBySessionId(session.getId()))
                 .thenReturn(List.of(seed));
@@ -129,5 +130,20 @@ class AnswerProgressQueryServiceTest {
 
         assertThatExceptionOfType(NotSessionHostException.class)
                 .isThrownBy(() -> service.progress(host(), session.getId()));
+    }
+
+    @Test
+    void refusesDuringTheReadingPeriod() {
+        Session session = sessionHostedBy(hostUser, "042318");
+        session.openLobby();
+        connectedParticipant(session);
+        session.start();
+        session.previewQuestion(questionId, QuestionTimer.startingAt(NOW, Duration.ofSeconds(5)));
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+
+        // A question is current but not yet answerable — "0 / N" would be
+        // a meaningless read, not a real progress signal.
+        assertThatExceptionOfType(NoCurrentQuestionException.class)
+                .isThrownBy(() -> service.progress(hostUser, session.getId()));
     }
 }

@@ -19,6 +19,7 @@ import {
   type JoinSessionFormValues
 } from "@/features/gameplay/components/JoinSessionForm";
 import { QuestionCard } from "@/features/gameplay/components/QuestionCard";
+import { QuestionPreviewNotice } from "@/features/gameplay/components/QuestionPreviewNotice";
 import { QuestionSkeleton } from "@/features/gameplay/components/QuestionSkeleton";
 import { QuestionTransition } from "@/features/gameplay/components/QuestionTransition";
 import { SubmissionStatus } from "@/features/gameplay/components/SubmissionStatus";
@@ -116,6 +117,17 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       );
     case "COUNTDOWN":
       return <CountdownOverlay />;
+    case "QUESTION_PREVIEW":
+      if (!player.question) {
+        return <QuestionSkeleton />;
+      }
+      return (
+        <QuestionTransition transitionKey={player.question.questionId ?? ""}>
+          <QuestionCard question={player.question} preferredLanguage={player.preferredLanguage}>
+            <QuestionPreviewNotice />
+          </QuestionCard>
+        </QuestionTransition>
+      );
     case "QUESTION_OPEN":
       if (!player.question) {
         return <QuestionSkeleton />;

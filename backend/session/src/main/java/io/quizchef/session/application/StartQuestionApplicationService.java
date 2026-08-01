@@ -15,8 +15,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Opens the first question of a started session. Host only. The engine — not
- * the host — chooses the question: the first in the quiz's authored order.
+ * Starts the reading period for the first question of a started session.
+ * Host only. The engine — not the host — chooses the question: the first
+ * in the quiz's authored order. The question opens for answers
+ * automatically once the reading period ends ({@link
+ * OpenQuestionApplicationService}) — this command never opens it directly.
  */
 @Service
 public class StartQuestionApplicationService {
@@ -47,7 +50,7 @@ public class StartQuestionApplicationService {
         PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
         var first = QuestionProgression.nextAfter(quiz, session.getCurrentQuestionId())
                 .orElseThrow(() -> new SessionNotStartableException("This quiz has no questions to start"));
-        questionOpener.open(session, first, quiz.questionTimeLimitSeconds());
+        questionOpener.startPreview(session, first, quiz.questionTimeLimitSeconds());
         sessionRepository.saveAndFlush(session);
 
         log.info("Session {} opened first question {}", session.getId(), first.questionId());

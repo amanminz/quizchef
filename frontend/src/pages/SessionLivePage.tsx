@@ -148,6 +148,22 @@ function HostGameplayBody({
       );
     case "COUNTDOWN":
       return <CountdownOverlay />;
+    case "QUESTION_PREVIEW":
+      if (!host.question) {
+        return <QuestionSkeleton />;
+      }
+      return (
+        <div className="flex flex-col gap-4">
+          <ParticipantCount count={host.session?.participantCount ?? 0} />
+          <QuestionTransition transitionKey={host.question.questionId ?? ""}>
+            <HostBilingualQuestion
+              question={host.question}
+              previewing
+              presentationActive={presentation.active}
+            />
+          </QuestionTransition>
+        </div>
+      );
     case "QUESTION_OPEN":
     case "WAITING":
       if (!host.question) {

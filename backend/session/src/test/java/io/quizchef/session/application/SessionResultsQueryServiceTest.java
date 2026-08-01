@@ -168,7 +168,8 @@ class SessionResultsQueryServiceTest {
         session.registerParticipant(UUID.randomUUID(),
                 ParticipantKey.forGuest(GuestParticipantToken.generate()));
         session.start();
-        session.openQuestion(QUESTION, QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
+        session.previewQuestion(QUESTION, QuestionTimer.startingAt(NOW, Duration.ofSeconds(5)));
+        session.openQuestion(QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
         return session;
     }
 
