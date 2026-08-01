@@ -65,7 +65,8 @@ class ParticipantRankContextQueryServiceTest {
         session.registerParticipant(UUID.randomUUID(),
                 ParticipantKey.forGuest(GuestParticipantToken.generate()));
         session.start();
-        session.openQuestion(currentQuestionId, QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
+        session.previewQuestion(currentQuestionId, QuestionTimer.startingAt(NOW, Duration.ofSeconds(5)));
+        session.openQuestion(QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
         session.closeQuestion();
         session.revealAnswer();
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
@@ -196,9 +197,13 @@ class ParticipantRankContextQueryServiceTest {
         session.registerParticipant(participantId,
                 ParticipantKey.forGuest(GuestParticipantToken.generate()));
         session.start();
-        session.openQuestion(questionId, QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
+        session.previewQuestion(questionId, QuestionTimer.startingAt(NOW, Duration.ofSeconds(5)));
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
 
+        assertThatExceptionOfType(RankContextNotAvailableException.class)
+                .isThrownBy(() -> service.rankContext(session.getId(), participantId));
+
+        session.openQuestion(QuestionTimer.startingAt(NOW, Duration.ofSeconds(30)));
         assertThatExceptionOfType(RankContextNotAvailableException.class)
                 .isThrownBy(() -> service.rankContext(session.getId(), participantId));
     }

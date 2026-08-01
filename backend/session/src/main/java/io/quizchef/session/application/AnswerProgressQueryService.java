@@ -5,6 +5,7 @@ import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
 import io.quizchef.session.domain.Participant;
 import io.quizchef.session.domain.Session;
+import io.quizchef.session.domain.SessionPhase;
 import io.quizchef.session.domain.SessionState;
 import io.quizchef.session.domain.exception.NoCurrentQuestionException;
 import io.quizchef.session.infrastructure.persistence.ParticipantRepository;
@@ -27,6 +28,11 @@ import org.springframework.transaction.annotation.Transactional;
  * participant, plus anyone whose answer is already in even if they have
  * since dropped — so the answered count can never exceed the eligible
  * count, and a late joiner grows the denominator the moment they connect.
+ *
+ * <p>Refuses during {@code QUESTION_PREVIEW} — a question is current but
+ * not yet answerable, so "0 / N answered" would be a meaningless read, not
+ * a real progress signal. Readable in every other in-play phase exactly as
+ * before.
  */
 @Service
 public class AnswerProgressQueryService {
@@ -50,7 +56,8 @@ public class AnswerProgressQueryService {
         SessionHostPolicy.requireHost(currentUser, session);
 
         UUID questionId = session.getCurrentQuestionId();
-        if (session.getState() != SessionState.IN_PROGRESS || questionId == null) {
+        if (session.getState() != SessionState.IN_PROGRESS || questionId == null
+                || session.getCurrentPhase() == SessionPhase.QUESTION_PREVIEW) {
             throw new NoCurrentQuestionException(session.getState());
         }
 

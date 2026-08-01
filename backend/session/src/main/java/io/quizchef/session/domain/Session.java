@@ -160,19 +160,35 @@ public class Session extends AuditableEntity {
     }
 
     /**
-     * Opens a question for answering. Allowed at the start of play (no phase
-     * yet) and between questions (from LEADERBOARD). The server owns the
-     * timer (ADR-006) — the caller supplies one built from the server clock.
+     * Makes a question current and starts its reading period. Allowed at the
+     * start of play (no phase yet) and between questions (from LEADERBOARD).
+     * The question is visible but not yet answerable — {@link
+     * #acceptsAnswersFor} stays false until {@link #openQuestion(QuestionTimer)}
+     * follows. The server owns the timer (ADR-006) — the caller supplies one
+     * built from the server clock.
      */
-    public void openQuestion(UUID questionId, QuestionTimer timer) {
-        requireState(SessionState.IN_PROGRESS, "open a question in");
+    public void previewQuestion(UUID questionId, QuestionTimer previewTimer) {
+        requireState(SessionState.IN_PROGRESS, "preview a question in");
         if (currentPhase != null && currentPhase != SessionPhase.LEADERBOARD) {
-            throw new InvalidSessionTransitionException(state, "open a question during " + currentPhase);
+            throw new InvalidSessionTransitionException(state, "preview a question during " + currentPhase);
         }
         Objects.requireNonNull(questionId, "questionId must not be null");
-        Objects.requireNonNull(timer, "timer must not be null");
+        Objects.requireNonNull(previewTimer, "previewTimer must not be null");
         this.currentQuestionId = questionId;
-        this.currentQuestionTimer = timer;
+        this.currentQuestionTimer = previewTimer;
+        this.currentPhase = SessionPhase.QUESTION_PREVIEW;
+    }
+
+    /**
+     * Ends the reading period and opens the current question for answering.
+     * The question stays the one {@link #previewQuestion} set — this only
+     * replaces the timer (the preview clock is done; the answer clock
+     * starts now) and flips the phase. The server owns the timer (ADR-006).
+     */
+    public void openQuestion(QuestionTimer answerTimer) {
+        requirePhase(SessionPhase.QUESTION_PREVIEW, "open the question");
+        Objects.requireNonNull(answerTimer, "answerTimer must not be null");
+        this.currentQuestionTimer = answerTimer;
         this.currentPhase = SessionPhase.QUESTION_OPEN;
     }
 

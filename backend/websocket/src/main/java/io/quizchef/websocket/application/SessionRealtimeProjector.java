@@ -9,6 +9,7 @@ import io.quizchef.session.domain.event.ParticipantDisconnectedEvent;
 import io.quizchef.session.domain.event.ParticipantJoinedEvent;
 import io.quizchef.session.domain.event.ParticipantReconnectedEvent;
 import io.quizchef.session.domain.event.QuestionClosedEvent;
+import io.quizchef.session.domain.event.QuestionPreviewStartedEvent;
 import io.quizchef.session.domain.event.QuestionStartedEvent;
 import io.quizchef.session.domain.event.SessionFinishedEvent;
 import io.quizchef.session.domain.event.SessionStartedEvent;
@@ -70,6 +71,11 @@ public class SessionRealtimeProjector {
 
     @EventListener
     void on(ParticipantReconnectedEvent event) {
+        realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
+    }
+
+    @EventListener
+    void on(QuestionPreviewStartedEvent event) {
         realtimePublisher.publish(SessionProtocolMapper.toMessage(event));
     }
 

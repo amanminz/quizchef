@@ -20,9 +20,13 @@ public record CurrentQuestionView(
         int questionNumber,
         int totalQuestions,
         int durationSeconds,
-        /** The server's close time; null unless the question is open. */
+        /**
+         * The current phase's server clock — the reading-period end during
+         * {@code QUESTION_PREVIEW}, the answer close time during {@code
+         * QUESTION_OPEN}; null otherwise.
+         */
         Instant endsAt,
-        /** Milliseconds still on the clock; 0 unless the question is open. */
+        /** Milliseconds still on that clock; 0 when there is none. */
         long remainingMillis,
         PlayableQuestionContentView content,
         /** Null until the phase is ANSWER_REVEALED or LEADERBOARD. */
