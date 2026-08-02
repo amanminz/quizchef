@@ -15,7 +15,8 @@ import type {
   SessionResultsResponse,
   SessionSnapshotResponse,
   SessionSummaryResponse,
-  SubmitAnswerRequest
+  SubmitAnswerRequest,
+  TopFiveLeaderboardTransitionResponse
 } from "@/types/api";
 
 /**
@@ -189,6 +190,21 @@ export const sessionApi = {
   async answerDistribution(sessionId: string): Promise<AnswerDistributionResponse> {
     const { data } = await apiClient.get<AnswerDistributionResponse>(
       `/api/v1/sessions/${sessionId}/answer-distribution`
+    );
+    return data;
+  },
+
+  /**
+   * The two authoritative boards the host's projected Top 5 animates
+   * between — the standings before this question, and after it — HOST
+   * ONLY: five rows at most, and ranks 6 onward never reach a participant
+   * device before the podium. Throws `session.top-five.not-available`
+   * (409) before the reveal and, always, for the quiz's last question:
+   * that question has no interim leaderboard at all.
+   */
+  async topFiveTransition(sessionId: string): Promise<TopFiveLeaderboardTransitionResponse> {
+    const { data } = await apiClient.get<TopFiveLeaderboardTransitionResponse>(
+      `/api/v1/sessions/${sessionId}/leaderboard/top-five`
     );
     return data;
   },

@@ -127,6 +127,13 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
           });
         } else {
           void queryClient.invalidateQueries({ queryKey: gameplayKeys.results(sessionId) });
+          // The projected Top 5 rides the same signal. Invalidated by
+          // session prefix, not by question: the reveal that matters is
+          // the one that just happened, and the stale entries under it
+          // belong to questions already played.
+          void queryClient.invalidateQueries({
+            queryKey: gameplayKeys.topFiveTransitions(sessionId)
+          });
         }
       }
     },

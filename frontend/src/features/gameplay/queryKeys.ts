@@ -25,5 +25,15 @@ export const gameplayKeys = {
     [...gameplayKeys.all, "answer-distribution", sessionId] as const,
   /** A participant's own rank plus immediate neighbours — never the full leaderboard. */
   rankContext: (sessionId: string, participantId: string) =>
-    [...gameplayKeys.all, "rank-context", sessionId, participantId] as const
+    [...gameplayKeys.all, "rank-context", sessionId, participantId] as const,
+  /**
+   * Host-only: the before/after Top 5 the projected leaderboard animates
+   * between. Keyed by question as well as session — the transition *is*
+   * one question's, so the next question can never render against the
+   * previous one's cached boards (the stale-animation failure mode).
+   */
+  topFiveTransitions: (sessionId: string) =>
+    [...gameplayKeys.all, "top-five", sessionId] as const,
+  topFiveTransition: (sessionId: string, questionId: string) =>
+    [...gameplayKeys.topFiveTransitions(sessionId), questionId] as const
 };

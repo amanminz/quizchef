@@ -14,6 +14,7 @@ import io.quizchef.session.application.RevealAnswerApplicationService;
 import io.quizchef.session.application.ShowLeaderboardApplicationService;
 import io.quizchef.session.application.StartQuestionApplicationService;
 import io.quizchef.session.application.SubmitAnswerApplicationService;
+import io.quizchef.session.application.TopFiveLeaderboardQueryService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.media.Content;
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -51,6 +52,7 @@ public class GameplayController {
     private final AnswerProgressQueryService answerProgressQueryService;
     private final AnswerDistributionQueryService answerDistributionQueryService;
     private final ParticipantRankContextQueryService participantRankContextQueryService;
+    private final TopFiveLeaderboardQueryService topFiveLeaderboardQueryService;
     private final ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService;
     private final CurrentUserProvider currentUserProvider;
 
@@ -65,6 +67,7 @@ public class GameplayController {
                              AnswerProgressQueryService answerProgressQueryService,
                              AnswerDistributionQueryService answerDistributionQueryService,
                              ParticipantRankContextQueryService participantRankContextQueryService,
+                             TopFiveLeaderboardQueryService topFiveLeaderboardQueryService,
                              ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService,
                              CurrentUserProvider currentUserProvider) {
         this.startQuestionApplicationService = startQuestionApplicationService;
@@ -78,6 +81,7 @@ public class GameplayController {
         this.answerProgressQueryService = answerProgressQueryService;
         this.answerDistributionQueryService = answerDistributionQueryService;
         this.participantRankContextQueryService = participantRankContextQueryService;
+        this.topFiveLeaderboardQueryService = topFiveLeaderboardQueryService;
         this.releaseFinalResultsApplicationService = releaseFinalResultsApplicationService;
         this.currentUserProvider = currentUserProvider;
     }
@@ -183,6 +187,36 @@ public class GameplayController {
     public AnswerDistributionResponse answerDistribution(@PathVariable UUID id) {
         return AnswerDistributionResponse.from(
                 answerDistributionQueryService.distribution(currentUserProvider.currentUser(), id));
+    }
+
+    @GetMapping("/{id}/leaderboard/top-five")
+    @Operation(
+            summary = "Read the Top 5 standings before and after this question (host only)",
+            description = "The two authoritative boards the host's projected leaderboard animates "
+                    + "between: the standings as they stood before the question in play, and as they "
+                    + "stand now it has been revealed — five rows at most each, with each "
+                    + "participant's previous and current rank, score, and the points this question "
+                    + "awarded them. Host only: ranks 6 onward and other players' scores never reach "
+                    + "a participant device before the podium. Available only once the answer is "
+                    + "revealed, and never for the quiz's last question — that question has no "
+                    + "interim leaderboard at all; its standings belong to the winner ceremony.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The Top 5 before-and-after"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "No question is in play "
+                    + "(session.no-current-question), or not revealed yet / the last question "
+                    + "(session.top-five.not-available)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public TopFiveLeaderboardTransitionResponse topFiveLeaderboard(@PathVariable UUID id) {
+        return TopFiveLeaderboardTransitionResponse.from(
+                topFiveLeaderboardQueryService.transition(currentUserProvider.currentUser(), id));
     }
 
     @GetMapping("/{id}/participants/{participantId}/rank-context")

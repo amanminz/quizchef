@@ -122,11 +122,16 @@ class GameplayIntegrationTest {
                 .andExpect(jsonPath("$.remainingMillis").value(org.hamcrest.Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$.leaderboard").isArray());
 
-        // finish the game
+        // Finish the game. Q2 is the quiz's last question, so there is no
+        // leaderboard step here at all — the standings belong to the
+        // podium; the host finishes straight from the reveal.
         answer(sessionId, guestA, q2, quiz.questions().get(1).correctOptionId());
         close(hostToken, sessionId);
         reveal(hostToken, sessionId);
-        leaderboard(hostToken, sessionId);
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/leaderboard")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.leaderboard.not-available"));
         mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk())
@@ -337,7 +342,6 @@ class GameplayIntegrationTest {
         advanceToNext(hostToken, sessionId);
         close(hostToken, sessionId);
         reveal(hostToken, sessionId);
-        leaderboard(hostToken, sessionId);
         mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FINISHED"));
@@ -377,7 +381,6 @@ class GameplayIntegrationTest {
         answer(sessionId, guestA, q2, quiz.questions().get(1).correctOptionId());
         close(hostToken, sessionId);
         reveal(hostToken, sessionId);
-        leaderboard(hostToken, sessionId);
 
         // Still IN_PROGRESS — the host hasn't clicked "Finish Quiz" yet —
         // but q2 is the quiz's last question, so the hold must already
@@ -477,6 +480,87 @@ class GameplayIntegrationTest {
     }
 
     @Test
+    void topFiveTransitionIsHostOnlyAndTheFinalQuestionHasNoLeaderboardAtAll() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
+        answer(sessionId, guestB, q1, quiz.questions().get(0).wrongOptionId());
+
+        // Standings before the reveal would leak who answered correctly.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/leaderboard/top-five")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.top-five.not-available"));
+
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+
+        // A participant device holds no host token: the projected board —
+        // every name, score, and rank on it — is the host's alone.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/leaderboard/top-five"))
+                .andExpect(status().isUnauthorized());
+
+        // Both boards, from the server: Ann answered correctly and takes
+        // the lead she did not hold before the question.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/leaderboard/top-five")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questionNumber").value(1))
+                .andExpect(jsonPath("$.totalQuestions").value(2))
+                .andExpect(jsonPath("$.finalQuestion").value(false))
+                .andExpect(jsonPath("$.previousTopFive", org.hamcrest.Matchers.hasSize(2)))
+                .andExpect(jsonPath("$.currentTopFive", org.hamcrest.Matchers.hasSize(2)))
+                .andExpect(jsonPath("$.currentTopFive[0].participantId").value(guestA))
+                .andExpect(jsonPath("$.currentTopFive[0].displayName").value("Ann"))
+                .andExpect(jsonPath("$.currentTopFive[0].currentRank").value(1))
+                .andExpect(jsonPath("$.currentTopFive[0].previousScore").value(0))
+                .andExpect(jsonPath("$.currentTopFive[0].pointsEarned")
+                        .value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.currentTopFive[1].pointsEarned").value(0));
+
+        // A non-final question still passes through its standings: the host
+        // cannot skip them by advancing straight from the reveal.
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.invalid-transition"));
+
+        leaderboard(hostToken, sessionId);
+        String q2 = advanceToNext(hostToken, sessionId);
+        answer(sessionId, guestB, q2, quiz.questions().get(1).correctOptionId());
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+
+        // Q2 is the quiz's last. There is no interim board to animate, and
+        // no leaderboard step to enter — both are refused outright, so no
+        // client can put the finishing order on the projector ahead of the
+        // podium. The host's step here is to finish the session.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/leaderboard/top-five")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.top-five.not-available"));
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/leaderboard")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.leaderboard.not-available"));
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/advance")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.state").value("FINISHED"));
+
+        // And the host's own full standings — the podium's source — are
+        // untouched by any of it.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/results")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entries", org.hamcrest.Matchers.hasSize(2)));
+    }
+
+    @Test
     void rankContextShowsNeighboursExceptOnTheFinalQuestion() throws Exception {
         HostAccount host = onboardHost();
         String hostToken = host.token();
@@ -541,6 +625,9 @@ class GameplayIntegrationTest {
         assertThat(paths.has("/api/v1/sessions/{id}/questions/current")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/results")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/leaderboard")).isTrue();
+        assertThat(paths.has("/api/v1/sessions/{id}/leaderboard/top-five")).isTrue();
+        assertThat(paths.at("/~1api~1v1~1sessions~1{id}~1leaderboard~1top-five/get/security/0/bearerAuth")
+                .isMissingNode()).isFalse();
         assertThat(paths.has("/api/v1/sessions/{id}/answers")).isTrue();
         // answering is anonymous-friendly; host commands require bearer auth
         assertThat(paths.at("/~1api~1v1~1sessions~1{id}~1answers/post/security").isMissingNode()).isTrue();

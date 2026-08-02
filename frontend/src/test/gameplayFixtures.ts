@@ -6,7 +6,8 @@ import type {
   LeaderboardEntryDto,
   ParticipantSessionResponse,
   SessionResultsResponse,
-  SessionSnapshotResponse
+  SessionSnapshotResponse,
+  TopFiveLeaderboardTransitionResponse
 } from "@/types/api";
 
 let counter = 0;
@@ -119,6 +120,50 @@ export function sessionResultsResponse(
     entries: [
       leaderboardEntry({ displayName: "Ann", score: 750, rank: 1 }),
       leaderboardEntry({ displayName: "Ben", score: 320, rank: 2 })
+    ],
+    ...overrides
+  };
+}
+
+/**
+ * A six-player room's Top 5 transition, shaped like the real projection:
+ * Fran arrives from outside the board (no previous rank), Erin drops out
+ * of it (no current rank), and Ann is demoted a place without moving her
+ * score. One fixture therefore exercises an entrant, a leaver, a
+ * demotion, and rows that only count up.
+ */
+export function topFiveTransitionResponse(
+  overrides: Partial<TopFiveLeaderboardTransitionResponse> = {}
+): TopFiveLeaderboardTransitionResponse {
+  const players = {
+    ann: { participantId: "participant-ann", displayName: "Ann" },
+    ben: { participantId: "participant-ben", displayName: "Ben" },
+    cara: { participantId: "participant-cara", displayName: "Cara" },
+    dave: { participantId: "participant-dave", displayName: "Dave" },
+    erin: { participantId: "participant-erin", displayName: "Erin" },
+    fran: { participantId: "participant-fran", displayName: "Fran" }
+  };
+  return {
+    sessionId: nextId("session"),
+    questionId: nextId("question"),
+    questionNumber: 1,
+    totalQuestions: 2,
+    finalQuestion: false,
+    previousTopFive: [
+      { ...players.ann, previousRank: 1, currentRank: 2, previousScore: 900, currentScore: 900, pointsEarned: 0 },
+      { ...players.ben, previousRank: 2, currentRank: 3, previousScore: 800, currentScore: 800, pointsEarned: 0 },
+      { ...players.cara, previousRank: 3, currentRank: 4, previousScore: 700, currentScore: 700, pointsEarned: 0 },
+      { ...players.dave, previousRank: 4, currentRank: 5, previousScore: 600, currentScore: 600, pointsEarned: 0 },
+      // Out of the Top 5 now — no current rank is disclosed.
+      { ...players.erin, previousRank: 5, previousScore: 500, currentScore: 500, pointsEarned: 0 }
+    ],
+    currentTopFive: [
+      // Into the Top 5 from outside it — no previous rank is disclosed.
+      { ...players.fran, currentRank: 1, previousScore: 400, currentScore: 1400, pointsEarned: 1000 },
+      { ...players.ann, previousRank: 1, currentRank: 2, previousScore: 900, currentScore: 900, pointsEarned: 0 },
+      { ...players.ben, previousRank: 2, currentRank: 3, previousScore: 800, currentScore: 800, pointsEarned: 0 },
+      { ...players.cara, previousRank: 3, currentRank: 4, previousScore: 700, currentScore: 700, pointsEarned: 0 },
+      { ...players.dave, previousRank: 4, currentRank: 5, previousScore: 600, currentScore: 600, pointsEarned: 0 }
     ],
     ...overrides
   };
