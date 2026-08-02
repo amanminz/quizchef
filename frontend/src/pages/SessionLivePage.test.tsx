@@ -12,7 +12,8 @@ import {
   leaderboardEntry,
   previewQuestionResponse,
   revealedQuestionResponse,
-  sessionResultsResponse
+  sessionResultsResponse,
+  topFiveTransitionResponse
 } from "@/test/gameplayFixtures";
 import { apiError, testIdentity } from "@/test/handlers";
 import { quizResponse } from "@/test/quizFixtures";
@@ -346,7 +347,15 @@ describe("SessionLivePage", () => {
         holder.session = { ...holder.session, currentPhase: "LEADERBOARD" };
         holder.question = { ...holder.question, phase: "LEADERBOARD" };
         return HttpResponse.json({ entries: [] });
-      })
+      }),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/leaderboard/top-five`, () =>
+        HttpResponse.json(
+          topFiveTransitionResponse({
+            sessionId: holder.session.sessionId,
+            questionId: holder.question.questionId
+          })
+        )
+      )
     );
     const user = userEvent.setup();
 
@@ -362,15 +371,69 @@ describe("SessionLivePage", () => {
     // Revealed → one click issues exactly the leaderboard command.
     await user.click(screen.getByRole("button", { name: /show leaderboard/i }));
     expect(calls).toEqual(["reveal", "leaderboard"]);
-    // The standings render the server's rows verbatim.
-    expect(await screen.findByText("Ann")).toBeInTheDocument();
-    expect(screen.getByText("750")).toBeInTheDocument();
-    // Question 1 of 2 → the next advance is a plain next question.
-    expect(screen.getByRole("button", { name: /next question/i })).toBeInTheDocument();
+    // The projected Top 5 renders the server's rows verbatim.
+    expect(await screen.findByText("Fran")).toBeInTheDocument();
+    expect(screen.getByText("Ann")).toBeInTheDocument();
+    // Question 1 of 2 → the next advance is a plain next question, once
+    // the board has settled.
+    await user.click(screen.getByRole("button", { name: /skip animation/i }));
+    expect(await screen.findByRole("button", { name: /next question/i })).toBeEnabled();
+    expect(calls).toEqual(["reveal", "leaderboard"]);
   });
 
-  it("labels the last advance Finish Quiz", async () => {
+  it("finishes straight from the last question's reveal, with no leaderboard in between", async () => {
     signIn();
+    const base = currentQuestionResponse({ questionNumber: 2, totalQuestions: 2 });
+    const question = revealedQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    const calls: string[] = [];
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/leaderboard/top-five`, () => {
+        calls.push("top-five");
+        return HttpResponse.json(
+          apiError("session.top-five.not-available", "Not available for this question"),
+          { status: 409 }
+        );
+      }),
+      http.post(`/api/v1/sessions/${session.sessionId}/leaderboard`, () => {
+        calls.push("leaderboard");
+        return HttpResponse.json({ entries: [] });
+      }),
+      http.post(`/api/v1/sessions/${session.sessionId}/questions/advance`, () => {
+        calls.push("advance");
+        return HttpResponse.json({ ...session, state: "FINISHED", currentPhase: undefined });
+      })
+    );
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    // The last question's reveal offers the ceremony, not a leaderboard.
+    const finish = await screen.findByRole("button", { name: /finish quiz/i });
+    expect(screen.queryByRole("button", { name: /show leaderboard/i })).not.toBeInTheDocument();
+
+    await user.click(finish);
+
+    // Exactly one command, and it is the advance — the leaderboard step
+    // was never entered, so nothing could have flashed the finishing
+    // order onto the projector before the podium.
+    expect(calls).toEqual(["advance"]);
+    // And the Top 5 projection was never even requested for it.
+    expect(calls).not.toContain("top-five");
+  });
+
+  it("never mounts a leaderboard if the last question somehow lands on the leaderboard phase", async () => {
+    signIn();
+    // A stale tab or a session that entered LEADERBOARD before this rule
+    // existed: the host screen must still route to the ceremony, never
+    // render standings.
     const question = currentQuestionResponse({
       phase: "LEADERBOARD",
       questionNumber: 2,
@@ -384,7 +447,12 @@ describe("SessionLivePage", () => {
     });
     serveQuiz(session.publishedQuizVersionId!);
     serveGameplay(session, question);
+    let topFiveRequested = false;
     server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/leaderboard/top-five`, () => {
+        topFiveRequested = true;
+        return HttpResponse.json(topFiveTransitionResponse({ sessionId: session.sessionId }));
+      }),
       http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
         HttpResponse.json(
           sessionResultsResponse({ sessionId: session.sessionId, currentPhase: "LEADERBOARD" })
@@ -394,7 +462,11 @@ describe("SessionLivePage", () => {
 
     renderApp(`/sessions/${session.sessionId}/play`);
 
-    expect(await screen.findByRole("button", { name: /finish quiz/i })).toBeInTheDocument();
+    expect(await screen.findByText(/that was the last question/i)).toBeInTheDocument();
+    // No standings of any kind: not the animated board, not the table.
+    expect(screen.queryByText("Fran")).not.toBeInTheDocument();
+    expect(screen.queryByText("Ann")).not.toBeInTheDocument();
+    expect(topFiveRequested).toBe(false);
   });
 
   it("surfaces an authorization failure without leaving the page", async () => {
