@@ -25,6 +25,7 @@ Every RFC carries a `Status`. It answers the first question any reader has: **do
 - [RFC-015 Live Results UX](RFC-015-live-results-and-presentation-polish.md) — **Implemented** (projector-scale countdown, host per-option answer distribution, participant ranking neighbours, backend-held final results with a five-place host ceremony and explicit release; Question Versioning deferred to PR #47B)
 - [RFC-016 Question Reading Period Before Options](RFC-016-question-preview-phase.md) — **Implemented** (server-authoritative `QUESTION_PREVIEW` phase before `QUESTION_OPEN`; options genuinely absent until the automatic, scheduler-driven transition; answer duration unaffected; Question Versioning still deferred to PR #47B)
 - [RFC-017 Compact Projector Layout and the Final-Rank Hold](RFC-017-projector-layout-and-final-rank-hold.md) — **Implemented** (Presentation Mode fits one projector screen via a shared compact metric primitive; closes two participant-facing rank leaks — the last question's pre-FINISHED window, and an unconditional full-leaderboard leak in the reconnect snapshot; Question Versioning still deferred to PR #47B)
+- [RFC-018 The Animated Top 5 and the Final Question's Missing Leaderboard](RFC-018-animated-top-five-leaderboard.md) — **Implemented** (host-only before/after Top 5 projection with `LeaderboardService.rankBefore`; score count-up then rank movement, skippable and reduced-motion aware; the quiz's last question has no leaderboard step at all, refused in the engine; Question Versioning still deferred to PR #47B)
 
 ---
 
