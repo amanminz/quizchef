@@ -680,6 +680,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/leaderboard/top-five": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read the Top 5 standings before and after this question (host only)
+         * @description The two authoritative boards the host's projected leaderboard animates between: the standings as they stood before the question in play, and as they stand now it has been revealed — five rows at most each, with each participant's previous and current rank, score, and the points this question awarded them. Host only: ranks 6 onward and other players' scores never reach a participant device before the podium. Available only once the answer is revealed, and never for the quiz's last question — that question has no interim leaderboard at all; its standings belong to the winner ceremony.
+         */
+        get: operations["topFiveLeaderboard"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/answer-progress": {
         parameters: {
             query?: never;
@@ -1412,6 +1432,62 @@ export interface components {
             displayName?: string;
             /** Format: int32 */
             rank?: number;
+        };
+        TopFiveLeaderboardEntry: {
+            /** Format: uuid */
+            participantId?: string;
+            /** @example Amelia */
+            displayName?: string;
+            /**
+             * Format: int32
+             * @description Null when they were not in the previous Top 5
+             * @example 3
+             */
+            previousRank?: number;
+            /**
+             * Format: int32
+             * @description Null when they have dropped out of the Top 5
+             * @example 1
+             */
+            currentRank?: number;
+            /**
+             * Format: int32
+             * @example 4200
+             */
+            previousScore?: number;
+            /**
+             * Format: int32
+             * @example 4850
+             */
+            currentScore?: number;
+            /**
+             * Format: int32
+             * @example 650
+             */
+            pointsEarned?: number;
+        };
+        TopFiveLeaderboardTransitionResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            questionId?: string;
+            /**
+             * Format: int32
+             * @example 3
+             */
+            questionNumber?: number;
+            /**
+             * Format: int32
+             * @example 10
+             */
+            totalQuestions?: number;
+            /**
+             * @description Always false in a successful read — the last question has no interim leaderboard and this endpoint refuses for it
+             * @example false
+             */
+            finalQuestion?: boolean;
+            previousTopFive?: components["schemas"]["TopFiveLeaderboardEntry"][];
+            currentTopFive?: components["schemas"]["TopFiveLeaderboardEntry"][];
         };
         AnswerProgressResponse: {
             /** Format: uuid */
@@ -3521,6 +3597,64 @@ export interface operations {
                 };
             };
             /** @description Not available right now (session.rank-context.not-available) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    topFiveLeaderboard: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The Top 5 before-and-after */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["TopFiveLeaderboardTransitionResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No question is in play (session.no-current-question), or not revealed yet / the last question (session.top-five.not-available) */
             409: {
                 headers: {
                     [name: string]: unknown;
