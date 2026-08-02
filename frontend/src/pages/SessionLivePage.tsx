@@ -1,4 +1,4 @@
-import { Gamepad2, Users } from "lucide-react";
+import { Gamepad2, PartyPopper, Users } from "lucide-react";
 import { Link, useParams } from "react-router-dom";
 import { Button } from "@/components/common/Button";
 import { EmptyState } from "@/components/common/EmptyState";
@@ -6,6 +6,7 @@ import { ErrorPanel } from "@/components/common/ErrorPanel";
 import { PageContainer } from "@/components/common/PageContainer";
 import { Spinner } from "@/components/common/Spinner";
 import { WorkflowHeader } from "@/components/common/WorkflowHeader";
+import { AnimatedTopFiveLeaderboard } from "@/features/gameplay/components/AnimatedTopFiveLeaderboard";
 import { AnswerProgressBadge } from "@/features/gameplay/components/AnswerProgressBadge";
 import { CompletionBanner } from "@/features/gameplay/components/CompletionBanner";
 import { CountdownOverlay } from "@/features/gameplay/components/CountdownOverlay";
@@ -132,6 +133,26 @@ export function SessionLivePage() {
   );
 }
 
+/**
+ * The host's own between-the-final-reveal-and-the-podium state. Says what
+ * happens next and shows no standings whatsoever — the finishing order is
+ * the ceremony's to reveal, and this screen is on a projector.
+ */
+function FinalCeremonyPending() {
+  return (
+    <div
+      role="status"
+      className="flex flex-col items-center gap-3 rounded-lg border border-dashed px-6 py-16 text-center"
+    >
+      <PartyPopper aria-hidden className="h-8 w-8 text-primary" />
+      <p className="text-xl font-bold">That was the last question</p>
+      <p className="max-w-sm text-sm text-muted-foreground">
+        Finish the quiz to run the winners&rsquo; ceremony.
+      </p>
+    </div>
+  );
+}
+
 function ParticipantCount({ count }: { count: number }) {
   return (
     <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -248,6 +269,35 @@ function HostGameplayBody({
         </div>
       );
     case "LEADERBOARD":
+      // The quiz's last question has no leaderboard step — the server
+      // refuses to enter one, so this is unreachable in a healthy game.
+      // It is still handled explicitly rather than falling through to a
+      // board: a stale tab or a reconnect that lands here must go to the
+      // ceremony, never flash the finishing order onto the projector
+      // ahead of it.
+      if (host.isLastQuestion) {
+        return <FinalCeremonyPending />;
+      }
+      if (host.topFiveTransition) {
+        return (
+          <AnimatedTopFiveLeaderboard
+            transition={host.topFiveTransition}
+            presentationActive={presentation.active}
+            onComplete={host.markLeaderboardAnimationComplete}
+          />
+        );
+      }
+      if (host.isLoadingTopFive) {
+        return (
+          <div className="flex justify-center py-16">
+            <Spinner size="lg" className="text-primary" />
+          </div>
+        );
+      }
+      // The projection failed. The standings are the host's own read and
+      // still trustworthy, so fall back to the plain table rather than
+      // stranding the room on an error — the animation is presentation,
+      // not the data.
       if (host.resultsError != null) {
         return (
           <ErrorPanel
