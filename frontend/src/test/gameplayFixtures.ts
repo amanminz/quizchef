@@ -1,6 +1,6 @@
 import type {
   AnswerDistributionResponse,
-  ParticipantRankContextResponse,
+  ParticipantFinalPlacementResponse,
   ParticipantResultResponse,
   CurrentQuestionResponse,
   LeaderboardEntryDto,
@@ -108,19 +108,27 @@ export function leaderboardEntry(
   };
 }
 
+/**
+ * The host's standings. `exactRankRevealCount` defaults to "reveal
+ * everything" so a fixture never hides rows by accident; tests that care
+ * about the cutoff set it explicitly, which is also the only place in the
+ * frontend that number is ever chosen rather than read from the server.
+ */
 export function sessionResultsResponse(
   overrides: Partial<SessionResultsResponse> = {}
 ): SessionResultsResponse {
+  const entries = overrides.entries ?? [
+    leaderboardEntry({ displayName: "Ann", score: 750, rank: 1 }),
+    leaderboardEntry({ displayName: "Ben", score: 320, rank: 2 })
+  ];
   return {
+    exactRankRevealCount: entries.length,
     sessionId: nextId("session"),
     state: "IN_PROGRESS",
     currentPhase: "LEADERBOARD",
     totalQuestions: 2,
     participantCount: 2,
-    entries: [
-      leaderboardEntry({ displayName: "Ann", score: 750, rank: 1 }),
-      leaderboardEntry({ displayName: "Ben", score: 320, rank: 2 })
-    ],
+    entries,
     ...overrides
   };
 }
@@ -180,8 +188,8 @@ export function participantResultResponse(
     participantCount: 2,
     participantId: "participant-me",
     displayName: "Aman",
-    rank: 2,
     score: 320,
+    pointsEarned: 100,
     ...overrides
   };
 }
@@ -212,18 +220,36 @@ export function answerDistributionResponse(
   };
 }
 
-export function participantRankContextResponse(
-  overrides: Partial<ParticipantRankContextResponse> = {}
-): ParticipantRankContextResponse {
+export function finalPlacementResponse(
+  overrides: Partial<ParticipantFinalPlacementResponse> = {}
+): ParticipantFinalPlacementResponse {
   return {
     sessionId: nextId("session"),
     participantId: "participant-me",
     displayName: "Aman",
+    visibility: "EXACT_RANK",
     rank: 2,
-    score: 320,
-    pointsEarned: 100,
+    score: 8450,
+    label: "RUNNER_UP",
+    totalQuestions: 2,
+    participantCount: 6,
     ...overrides
   };
+}
+
+/** The other shape: outside the reveal group, names but no positions. */
+export function relativePlacementResponse(
+  overrides: Partial<ParticipantFinalPlacementResponse> = {}
+): ParticipantFinalPlacementResponse {
+  return finalPlacementResponse({
+    visibility: "RELATIVE_ONLY",
+    rank: undefined,
+    label: undefined,
+    score: 4210,
+    aheadOf: { displayName: "David" },
+    behind: { displayName: "Amelia" },
+    ...overrides
+  });
 }
 
 export function sessionSnapshotResponse(

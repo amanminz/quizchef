@@ -2,13 +2,15 @@ import { act, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
+import { motivationFor } from "@/features/gameplay/motivation";
 import { usePlayerSessionStore } from "@/features/gameplay/playerSessionStore";
 import { sessionTopic } from "@/realtime/SessionSubscriptions";
 import { fakeRealtimeClient, protocolMessage } from "@/test/fakeStomp";
 import {
   currentQuestionResponse,
-  participantRankContextResponse,
+  finalPlacementResponse,
   participantResultResponse,
+  relativePlacementResponse,
   participantSessionResponse,
   previewQuestionResponse,
   revealedQuestionResponse,
@@ -572,10 +574,10 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    expect(await screen.findByText("Not quite.")).toBeInTheDocument();
+    expect(await screen.findByText("Not quite this time")).toBeInTheDocument();
   });
 
-  it("shows only the participant's own rank at the leaderboard step", async () => {
+  it("shows their own score and encouragement at the leaderboard step, and no rank", async () => {
     const question = currentQuestionResponse({ phase: "LEADERBOARD" });
     const session = sessionSummary({
       sessionId: question.sessionId,
@@ -614,8 +616,8 @@ describe("PlaySessionPage", () => {
             participantResultResponse({
               sessionId: session.sessionId,
               participantId: record.participantId,
-              rank: 2,
-              score: 320
+              score: 320,
+              pointsEarned: 100
             })
           )
       )
@@ -624,10 +626,13 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    // Only the personal result renders — never a table, never a rival name.
-    expect(await screen.findByText("Your rank")).toBeInTheDocument();
-    expect(screen.getByText("2nd")).toBeInTheDocument();
-    expect(screen.getByText("320")).toBeInTheDocument();
+    // Their own numbers and a line of encouragement — and no standing of
+    // any kind: no rank, no movement, no neighbour, no table.
+    expect(await screen.findByText("320")).toBeInTheDocument();
+    expect(screen.getByText(/\+100/)).toBeInTheDocument();
+    expect(screen.queryByText("Your rank")).not.toBeInTheDocument();
+    expect(screen.queryByText("2nd")).not.toBeInTheDocument();
+    expect(screen.queryByText(/up \d+ place|down \d+ place/i)).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
     expect(screen.queryByText("Ann")).not.toBeInTheDocument();
     // The participant device never even calls the host's standings API.
@@ -713,7 +718,7 @@ describe("PlaySessionPage", () => {
     expect(rankContextCalled).toBe(false);
   });
 
-  it("shows one participant ahead and one behind after a non-final question", async () => {
+  it("never asks for ranking neighbours, and shows none, after a non-final question", async () => {
     const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
     const session = sessionSummary({
       sessionId: question.sessionId,
@@ -731,6 +736,8 @@ describe("PlaySessionPage", () => {
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     let fullStandingsCalled = false;
+    let neighboursCalled = false;
+    let topFiveCalled = false;
     server.use(
       http.post("/api/v1/sessions/reconnect", () =>
         HttpResponse.json(
@@ -746,6 +753,20 @@ describe("PlaySessionPage", () => {
         fullStandingsCalled = true;
         return HttpResponse.json(apiError("auth.unauthorized", "Host only"), { status: 401 });
       }),
+      // The host's projected Top 5 and the retired neighbours endpoint are
+      // both stubbed purely so a stray call would be *observable* rather
+      // than a network error — neither should ever be reached.
+      http.get(`/api/v1/sessions/${session.sessionId}/leaderboard/top-five`, () => {
+        topFiveCalled = true;
+        return HttpResponse.json(apiError("auth.unauthorized", "Host only"), { status: 401 });
+      }),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/rank-context`,
+        () => {
+          neighboursCalled = true;
+          return HttpResponse.json(apiError("not.found", "Gone"), { status: 404 });
+        }
+      ),
       http.get(
         `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
         () =>
@@ -753,22 +774,8 @@ describe("PlaySessionPage", () => {
             participantResultResponse({
               sessionId: session.sessionId,
               participantId: record.participantId,
-              rank: 7,
-              score: 640
-            })
-          )
-      ),
-      http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/rank-context`,
-        () =>
-          HttpResponse.json(
-            participantRankContextResponse({
-              sessionId: session.sessionId,
-              participantId: record.participantId,
-              rank: 7,
               score: 640,
-              ahead: { displayName: "Amelia", rank: 6, scoreDifference: 120 },
-              behind: { displayName: "David", rank: 8, scoreDifference: 80 }
+              pointsEarned: 120
             })
           )
       )
@@ -776,33 +783,36 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    expect(await screen.findByText("Ahead of you")).toBeInTheDocument();
-    expect(
-      screen.getByText(/6th · Amelia · 120 points\s*ahead/)
-    ).toBeInTheDocument();
-    expect(screen.getByText("Behind you")).toBeInTheDocument();
-    expect(
-      screen.getByText(/8th · David · 80 points\s*behind/)
-    ).toBeInTheDocument();
-    // Never the full leaderboard, and never another participant's context.
-    expect(fullStandingsCalled).toBe(false);
+    // Their own score renders; nothing about anyone's position does.
+    expect(await screen.findByText("640")).toBeInTheDocument();
+    expect(screen.queryByText("Ahead of you")).not.toBeInTheDocument();
+    expect(screen.queryByText("Behind you")).not.toBeInTheDocument();
+    expect(screen.queryByText(/tied with/i)).not.toBeInTheDocument();
+    expect(screen.queryByText("Amelia")).not.toBeInTheDocument();
+    expect(screen.queryByText("David")).not.toBeInTheDocument();
     expect(screen.queryByRole("table")).not.toBeInTheDocument();
+    // And none of the three standings reads is attempted at all.
+    expect(neighboursCalled).toBe(false);
+    expect(fullStandingsCalled).toBe(false);
+    expect(topFiveCalled).toBe(false);
   });
 
-  it("shows You are leading with only the participant behind, for first place", async () => {
-    const question = currentQuestionResponse({ phase: "LEADERBOARD" });
+  it("shows a motivational line matched to the outcome, in the player's language", async () => {
+    const question = revealedQuestionResponse(
+      currentQuestionResponse({ questionNumber: 1, totalQuestions: 3 })
+    );
     const session = sessionSummary({
       sessionId: question.sessionId,
       state: "IN_PROGRESS",
       currentQuestionId: question.questionId,
-      currentPhase: "LEADERBOARD"
+      currentPhase: "ANSWER_REVEALED"
     });
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
       guestParticipantToken: "guest-token-1",
       displayName: "Aman",
-      preferredLanguage: "en"
+      preferredLanguage: "hi"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
@@ -813,7 +823,10 @@ describe("PlaySessionPage", () => {
             sessionId: session.sessionId,
             participantId: record.participantId,
             currentQuestionId: question.questionId,
-            currentPhase: "LEADERBOARD"
+            currentPhase: "ANSWER_REVEALED",
+            // They answered wrongly — the gentlest case, and the one that
+            // most needs to read well.
+            submittedOptionIds: [question.options![1].optionId!]
           })
         )
       ),
@@ -824,21 +837,8 @@ describe("PlaySessionPage", () => {
             participantResultResponse({
               sessionId: session.sessionId,
               participantId: record.participantId,
-              rank: 1,
-              score: 900
-            })
-          )
-      ),
-      http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/rank-context`,
-        () =>
-          HttpResponse.json(
-            participantRankContextResponse({
-              sessionId: session.sessionId,
-              participantId: record.participantId,
-              rank: 1,
-              score: 900,
-              behind: { displayName: "Ben", rank: 2, scoreDifference: 100 }
+              score: 2670,
+              pointsEarned: 0
             })
           )
       )
@@ -846,133 +846,20 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    expect(await screen.findByText("You are leading")).toBeInTheDocument();
-    expect(screen.getByText("Behind you")).toBeInTheDocument();
-    expect(screen.queryByText("Ahead of you")).not.toBeInTheDocument();
-  });
-
-  it("shows only the participant ahead for last place", async () => {
-    const question = currentQuestionResponse({ phase: "LEADERBOARD" });
-    const session = sessionSummary({
-      sessionId: question.sessionId,
-      state: "IN_PROGRESS",
-      currentQuestionId: question.questionId,
-      currentPhase: "LEADERBOARD"
-    });
-    const record = {
-      sessionId: session.sessionId!,
-      participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
-      displayName: "Aman",
-      preferredLanguage: "en"
-    };
-    usePlayerSessionStore.getState().record(PIN, record);
-    serveGameplay(session, question);
-    server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
-        HttpResponse.json(
-          sessionSnapshotResponse({
-            sessionId: session.sessionId,
-            participantId: record.participantId,
-            currentQuestionId: question.questionId,
-            currentPhase: "LEADERBOARD"
-          })
-        )
-      ),
-      http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
-        () =>
-          HttpResponse.json(
-            participantResultResponse({
-              sessionId: session.sessionId,
-              participantId: record.participantId,
-              rank: 5,
-              score: 50
-            })
-          )
-      ),
-      http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/rank-context`,
-        () =>
-          HttpResponse.json(
-            participantRankContextResponse({
-              sessionId: session.sessionId,
-              participantId: record.participantId,
-              rank: 5,
-              score: 50,
-              ahead: { displayName: "Cara", rank: 4, scoreDifference: 40 }
-            })
-          )
-      )
+    // The Hindi catalogue, because that is the language they joined in.
+    const message = await screen.findByText(
+      motivationFor({
+        sessionId: session.sessionId,
+        participantId: record.participantId,
+        questionNumber: 1,
+        outcome: "incorrect",
+        language: "hi"
+      })
     );
-
-    renderApp(`/play/${PIN}`);
-
-    expect(await screen.findByText("Ahead of you")).toBeInTheDocument();
-    expect(screen.queryByText("Behind you")).not.toBeInTheDocument();
-    expect(screen.queryByText("You are leading")).not.toBeInTheDocument();
-  });
-
-  it("shows Tied with <name> instead of a false ahead or behind", async () => {
-    const question = currentQuestionResponse({ phase: "LEADERBOARD" });
-    const session = sessionSummary({
-      sessionId: question.sessionId,
-      state: "IN_PROGRESS",
-      currentQuestionId: question.questionId,
-      currentPhase: "LEADERBOARD"
-    });
-    const record = {
-      sessionId: session.sessionId!,
-      participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
-      displayName: "Aman",
-      preferredLanguage: "en"
-    };
-    usePlayerSessionStore.getState().record(PIN, record);
-    serveGameplay(session, question);
-    server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
-        HttpResponse.json(
-          sessionSnapshotResponse({
-            sessionId: session.sessionId,
-            participantId: record.participantId,
-            currentQuestionId: question.questionId,
-            currentPhase: "LEADERBOARD"
-          })
-        )
-      ),
-      http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
-        () =>
-          HttpResponse.json(
-            participantResultResponse({
-              sessionId: session.sessionId,
-              participantId: record.participantId,
-              rank: 2,
-              score: 300
-            })
-          )
-      ),
-      http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/rank-context`,
-        () =>
-          HttpResponse.json(
-            participantRankContextResponse({
-              sessionId: session.sessionId,
-              participantId: record.participantId,
-              rank: 2,
-              score: 300,
-              tiedWith: { displayName: "Priya", rank: 1 }
-            })
-          )
-      )
-    );
-
-    renderApp(`/play/${PIN}`);
-
-    expect(await screen.findByText("Tied with Priya")).toBeInTheDocument();
-    expect(screen.queryByText("Ahead of you")).not.toBeInTheDocument();
-    expect(screen.queryByText("Behind you")).not.toBeInTheDocument();
+    expect(message).toBeInTheDocument();
+    expect(message.textContent).toMatch(/[\u0900-\u097F]/);
+    // Encouragement, never a standing.
+    expect(screen.queryByText(/rank|place|position/i)).not.toBeInTheDocument();
   });
 
   it("shows the waiting-for-announcement screen after the final question, and it survives a fresh mount", async () => {
@@ -1065,16 +952,15 @@ describe("PlaySessionPage", () => {
         )
       ),
       http.get(
-        `/api/v1/sessions/${holder.session.sessionId}/participants/${record.participantId}/result`,
+        `/api/v1/sessions/${holder.session.sessionId}/participants/${record.participantId}/final-placement`,
         () =>
           holder.session.finalResultsReleased
             ? HttpResponse.json(
-                participantResultResponse({
+                finalPlacementResponse({
                   sessionId: holder.session.sessionId,
                   participantId: record.participantId,
-                  state: "FINISHED",
-                  currentPhase: undefined,
                   rank: 2,
+                  label: "WINNER",
                   score: 8_450
                 })
               )
@@ -1104,7 +990,7 @@ describe("PlaySessionPage", () => {
     expect(screen.queryByText(/winners are being announced/i)).not.toBeInTheDocument();
   });
 
-  it("labels 4th and 5th place Runner-up, and 6th+ with no label at all", async () => {
+  it("renders the label and rank the server assigned, never one it worked out", async () => {
     const session = sessionSummary({
       state: "FINISHED",
       currentQuestionId: undefined,
@@ -1131,15 +1017,14 @@ describe("PlaySessionPage", () => {
         )
       ),
       http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/final-placement`,
         () =>
           HttpResponse.json(
-            participantResultResponse({
+            finalPlacementResponse({
               sessionId: session.sessionId,
               participantId: record.participantId,
-              state: "FINISHED",
-              currentPhase: undefined,
               rank: 5,
+              label: "RUNNER_UP",
               score: 60
             })
           )
@@ -1153,6 +1038,104 @@ describe("PlaySessionPage", () => {
     expect(screen.getByText("5th")).toBeInTheDocument();
   });
 
+  it("gives a player outside the reveal group names and a score, never a position", async () => {
+    const session = sessionSummary({
+      state: "FINISHED",
+      currentQuestionId: undefined,
+      finalResultsReleased: true
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            sessionState: "FINISHED",
+            currentPhase: undefined
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/final-placement`,
+        () =>
+          HttpResponse.json(
+            relativePlacementResponse({
+              sessionId: session.sessionId,
+              participantId: record.participantId
+            })
+          )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
+    expect(screen.getByText("4,210")).toBeInTheDocument();
+    expect(
+      screen.getByText(/You finished ahead of David and just behind Amelia\./)
+    ).toBeInTheDocument();
+    // No position of their own, and no label that would imply one.
+    expect(screen.queryByText(/\d+(st|nd|rd|th)/)).not.toBeInTheDocument();
+    expect(screen.queryByText("You finished")).not.toBeInTheDocument();
+    expect(screen.queryByText(/winner|runner-up|finalist/i)).not.toBeInTheDocument();
+  });
+
+  it("says finished alongside, rather than ahead of, someone the server calls tied", async () => {
+    const session = sessionSummary({
+      state: "FINISHED",
+      currentQuestionId: undefined,
+      finalResultsReleased: true
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            sessionState: "FINISHED",
+            currentPhase: undefined
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/final-placement`,
+        () =>
+          HttpResponse.json(
+            relativePlacementResponse({
+              sessionId: session.sessionId,
+              participantId: record.participantId,
+              aheadOf: undefined,
+              behind: undefined,
+              tiedWith: { displayName: "Priya" }
+            })
+          )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText(/You finished alongside Priya\./)).toBeInTheDocument();
+    expect(screen.queryByText(/ahead of/i)).not.toBeInTheDocument();
+  });
+
   it("refreshes the personal result when a leaderboard.updated broadcast arrives", async () => {
     const question = currentQuestionResponse({ phase: "LEADERBOARD" });
     const holder = {
@@ -1162,7 +1145,8 @@ describe("PlaySessionPage", () => {
         currentQuestionId: question.questionId,
         currentPhase: "LEADERBOARD" as const
       }),
-      score: 320
+      score: 320,
+      pointsEarned: 100
     };
     const record = {
       sessionId: holder.session.sessionId!,
@@ -1186,8 +1170,8 @@ describe("PlaySessionPage", () => {
             participantResultResponse({
               sessionId: holder.session.sessionId,
               participantId: record.participantId,
-              rank: 1,
-              score: holder.score
+              score: holder.score,
+              pointsEarned: holder.pointsEarned
             })
           )
       ),
@@ -1211,6 +1195,7 @@ describe("PlaySessionPage", () => {
     // The push (a pure notification — its rows are empty) says results
     // changed; the personal refetch learns the new truth.
     holder.score = 820;
+    holder.pointsEarned = 500;
     act(() => {
       fake.deliver(
         sessionTopic(holder.session.sessionId!),
@@ -1221,8 +1206,9 @@ describe("PlaySessionPage", () => {
     });
 
     expect(await screen.findByText("820")).toBeInTheDocument();
-    // Two consecutive personal snapshots make a points delta.
-    expect(screen.getByText("+500 points")).toBeInTheDocument();
+    // The points are the server's own number for this question, not a
+    // diff of two renders — which is why they survive a refresh.
+    expect(screen.getByText(/\+500/)).toBeInTheDocument();
   });
 
   it("recovers the completion screen on a fresh mount after the session finished", async () => {
@@ -1248,15 +1234,14 @@ describe("PlaySessionPage", () => {
         )
       ),
       http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/final-placement`,
         () =>
           HttpResponse.json(
-            participantResultResponse({
+            finalPlacementResponse({
               sessionId: session.sessionId,
               participantId: record.participantId,
-              state: "FINISHED",
-              currentPhase: undefined,
               rank: 2,
+              label: "WINNER",
               score: 320
             })
           )
@@ -1265,9 +1250,8 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
     // The personal finish line — and nothing about anyone else.
-    expect(screen.getByText("You finished")).toBeInTheDocument();
+    expect(await screen.findByText("You finished")).toBeInTheDocument();
     expect(screen.getByText("2nd")).toBeInTheDocument();
     expect(screen.getByText(/final score/i)).toBeInTheDocument();
     expect(screen.getByRole("link", { name: /play another quiz/i })).toBeInTheDocument();
@@ -1358,15 +1342,14 @@ describe("PlaySessionPage", () => {
         )
       ),
       http.get(
-        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/final-placement`,
         () =>
           HttpResponse.json(
-            participantResultResponse({
+            finalPlacementResponse({
               sessionId: session.sessionId,
               participantId: record.participantId,
-              state: "FINISHED",
-              currentPhase: undefined,
               rank: 2,
+              label: "WINNER",
               score: 2032
             })
           )
@@ -1375,9 +1358,8 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
+    expect(await screen.findByText("You finished")).toBeInTheDocument();
     expect(screen.getByText("BELC Bible Quiz — Gospel of Mark")).toBeInTheDocument();
-    expect(screen.getByText("You finished")).toBeInTheDocument();
     expect(screen.getByText("2nd")).toBeInTheDocument();
   });
 });

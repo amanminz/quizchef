@@ -605,7 +605,7 @@ describe("SessionLivePage", () => {
     expect(
       await screen.findByLabelText("Podium", undefined, { timeout: 4_000 })
     ).toBeInTheDocument();
-    expect(screen.getByText("Remaining standings")).toBeInTheDocument();
+    expect(screen.getByLabelText("Revealed standings")).toBeInTheDocument();
     expect(screen.getByText("Dan")).toBeInTheDocument();
     sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
   }, 15_000);
@@ -958,7 +958,8 @@ describe("SessionLivePage", () => {
               leaderboardEntry({ displayName: "Dan", score: 600, rank: 4 }),
               leaderboardEntry({ displayName: "Eve", score: 500, rank: 5 }),
               leaderboardEntry({ displayName: "Fay", score: 100, rank: 6 })
-            ]
+            ],
+            exactRankRevealCount: 5
           })
         )
       )
@@ -979,8 +980,12 @@ describe("SessionLivePage", () => {
     expect(
       await screen.findByLabelText("Podium", undefined, { timeout: 4_000 })
     ).toBeInTheDocument();
-    expect(screen.getByText("Remaining standings")).toBeInTheDocument();
-    expect(screen.getByText("Fay")).toBeInTheDocument();
+    // Six players → the server's reveal group is ranks 1–5. Eve (5th) is
+    // shown below the podium; Fay, in sixth, is not on the projector at
+    // all — the room never learns she came last.
+    expect(screen.getByLabelText("Revealed standings")).toBeInTheDocument();
+    expect(screen.getByText("Eve")).toBeInTheDocument();
+    expect(screen.queryByText("Fay")).not.toBeInTheDocument();
     sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
   }, 20_000);
 
@@ -1055,7 +1060,7 @@ describe("SessionLivePage", () => {
     expect(await screen.findByText("Ann", undefined, { timeout: 4_000 })).toBeInTheDocument();
     const podium = await screen.findByLabelText("Podium", undefined, { timeout: 4_000 });
     expect(within(podium).getAllByRole("listitem")).toHaveLength(1);
-    expect(screen.queryByText("Remaining standings")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Revealed standings")).not.toBeInTheDocument();
     sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
   }, 15_000);
 
@@ -1125,7 +1130,7 @@ describe("SessionLivePage", () => {
 
     const podium = await screen.findByLabelText("Podium");
     expect(within(podium).getAllByRole("listitem")).toHaveLength(2);
-    expect(screen.queryByText("Remaining standings")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Revealed standings")).not.toBeInTheDocument();
     sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
   });
 });
