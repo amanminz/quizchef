@@ -5,8 +5,8 @@ import { sessionApi } from "@/api/sessionApi";
 import { useAnswerSubmission } from "@/features/gameplay/hooks/useAnswerSubmission";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
 import { useJoinSession } from "@/features/gameplay/hooks/useJoinSession";
+import { useFinalPlacement } from "@/features/gameplay/hooks/useFinalPlacement";
 import { useParticipantResult } from "@/features/gameplay/hooks/useParticipantResult";
-import { useRankContext } from "@/features/gameplay/hooks/useRankContext";
 import { isLastQuestion } from "@/features/gameplay/isLastQuestion";
 import { usePlayerSessionStore } from "@/features/gameplay/playerSessionStore";
 import type { JoinSessionRequest } from "@/types/api";
@@ -83,9 +83,11 @@ export function usePlayerGameplay(pin: string) {
   // only once it's FINISHED-but-not-released (see useParticipantResult).
   const onLastQuestion = isLastQuestion(gameplay.question);
 
-  // The participant's own result only — never the full standings; the
-  // rank and score are the server's verdicts (ADR-006), and other
-  // players' rows never reach this device (live-event privacy).
+  // Their own progress only: what this question awarded them and their
+  // running total, both the server's numbers (ADR-006). No rank — the
+  // response has none on it — and no other player's row ever reaches this
+  // device. `pointsEarned` comes from the server rather than a diff of two
+  // client snapshots, so it survives a refresh mid-reveal.
   const resultQuery = useParticipantResult(
     stored?.sessionId,
     stored?.participantId,
@@ -93,44 +95,14 @@ export function usePlayerGameplay(pin: string) {
     onLastQuestion
   );
 
-  // Ranking neighbours: shown after every question except the quiz's
-  // last, where final standings are held for the host's winner ceremony
-  // instead (the query itself refuses on the last question either way —
-  // this just avoids firing a request that would always 409).
-  const rankContextQuery = useRankContext(
+  // How they finished. Fires only once the host has released results —
+  // never during the ceremony, so no placement is ever sitting in this
+  // device's cache while the room is still watching the podium.
+  const finalPlacementQuery = useFinalPlacement(
     stored?.sessionId,
     stored?.participantId,
-    gameplay.phase,
-    onLastQuestion
+    gameplay.phase
   );
-  // Movement is a display diff of two consecutive server snapshots (the
-  // PR #5 delta pattern, personal edition) — absent after a refresh. The
-  // pair advances on data identity, not per render, so the delta survives
-  // re-renders until the next snapshot arrives.
-  const historyRef = useRef<{
-    current?: typeof resultQuery.data;
-    previous?: typeof resultQuery.data;
-  }>({});
-  if (resultQuery.data !== undefined && historyRef.current.current !== resultQuery.data) {
-    historyRef.current = { previous: historyRef.current.current, current: resultQuery.data };
-  }
-  const previousResult = historyRef.current.previous;
-  const scoreDelta =
-    resultQuery.data !== undefined &&
-    previousResult !== undefined &&
-    previousResult.score !== undefined &&
-    resultQuery.data.score !== undefined &&
-    previousResult.sessionId === resultQuery.data.sessionId
-      ? resultQuery.data.score - previousResult.score
-      : undefined;
-  const rankDelta =
-    resultQuery.data !== undefined &&
-    previousResult !== undefined &&
-    previousResult.rank !== undefined &&
-    resultQuery.data.rank !== undefined &&
-    previousResult.sessionId === resultQuery.data.sessionId
-      ? previousResult.rank - resultQuery.data.rank
-      : undefined;
 
   const join = (request: JoinSessionRequest) => joinMutation.mutateAsync({ pin, request });
 
@@ -148,13 +120,10 @@ export function usePlayerGameplay(pin: string) {
     personalResult: resultQuery.data,
     personalResultError: resultQuery.error,
     refetchPersonalResult: resultQuery.refetch,
-    /** Points gained since the previous personal snapshot, when known. */
-    scoreDelta,
-    /** Positive = moved up since the previous personal snapshot. */
-    rankDelta,
-    /** Own rank plus immediate neighbours — absent on the quiz's last question. */
-    rankContext: rankContextQuery.data,
-    rankContextError: rankContextQuery.error,
+    /** How they finished — exact or relative; only after the host releases. */
+    finalPlacement: finalPlacementQuery.data,
+    finalPlacementError: finalPlacementQuery.error,
+    refetchFinalPlacement: finalPlacementQuery.refetch,
     ...gameplay,
     ...answerSubmission
   };

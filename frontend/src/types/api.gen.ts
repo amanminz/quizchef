@@ -660,7 +660,7 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sessions/{id}/participants/{participantId}/rank-context": {
+    "/api/v1/sessions/{id}/participants/{participantId}/final-placement": {
         parameters: {
             query?: never;
             header?: never;
@@ -668,10 +668,10 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Read one participant's ranking neighbours
-         * @description The participant's own rank, score, and points just earned, plus whoever is immediately ahead and behind in the standings — never the full leaderboard. Open like the personal-result endpoint (the unguessable session and participant ids gate it). Available only for a non-final question whose answer has been revealed — the quiz's last question never exposes neighbours, since final standings are held for the host's winner ceremony.
+         * Read one participant's own finish
+         * @description The only participant-facing source of final ranking there is. Open like the personal-result endpoint (the unguessable session and participant ids gate it), and held until the host releases results — the winner ceremony runs first, always. Two shapes, decided by the server: the reveal group (the podium plus the top half) gets EXACT_RANK with their position and label; everyone else gets RELATIVE_ONLY — their score and the names either side of them, with no rank of their own, no neighbour rank, no neighbour score, and no score gap anywhere in the response.
          */
-        get: operations["rankContext"];
+        get: operations["finalPlacement"];
         put?: never;
         post?: never;
         delete?: never;
@@ -1310,6 +1310,12 @@ export interface components {
             totalQuestions?: number;
             /** Format: int32 */
             participantCount?: number;
+            /**
+             * Format: int32
+             * @description How many places may show an exact rank publicly — render this many and stop; the remainder is host-only administrative data
+             * @example 10
+             */
+            exactRankRevealCount?: number;
             entries?: components["schemas"]["LeaderboardEntryDto"][];
         };
         CurrentQuestionResponse: {
@@ -1400,38 +1406,66 @@ export interface components {
             /** Format: uuid */
             participantId?: string;
             displayName?: string;
-            /** Format: int32 */
-            rank?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @description Their running total
+             * @example 3420
+             */
             score?: number;
+            /**
+             * Format: int32
+             * @description What the question in play awarded them; 0 if they did not answer
+             * @example 750
+             */
+            pointsEarned?: number;
         };
-        Neighbour: {
+        FinalPlacementNeighbour: {
+            /** @example David */
             displayName?: string;
-            /** Format: int32 */
-            rank?: number;
-            /** Format: int32 */
-            scoreDifference?: number;
         };
-        ParticipantRankContextResponse: {
+        ParticipantFinalPlacementResponse: {
             /** Format: uuid */
             sessionId?: string;
             /** Format: uuid */
             participantId?: string;
             displayName?: string;
-            /** Format: int32 */
+            /**
+             * @description EXACT_RANK for the reveal group, RELATIVE_ONLY for everyone else
+             * @enum {string}
+             */
+            visibility?: "EXACT_RANK" | "RELATIVE_ONLY";
+            /**
+             * Format: int32
+             * @description Present only when visibility is EXACT_RANK
+             * @example 7
+             */
             rank?: number;
-            /** Format: int32 */
+            /**
+             * Format: int32
+             * @example 8450
+             */
             score?: number;
-            /** Format: int32 */
-            pointsEarned?: number;
-            ahead?: components["schemas"]["Neighbour"];
-            behind?: components["schemas"]["Neighbour"];
-            tiedWith?: components["schemas"]["TiedWith"];
-        };
-        TiedWith: {
-            displayName?: string;
-            /** Format: int32 */
-            rank?: number;
+            /**
+             * @description Present only when visibility is EXACT_RANK
+             * @enum {string}
+             */
+            label?: "WINNER" | "RUNNER_UP" | "FINALIST";
+            /**
+             * Format: int32
+             * @example 10
+             */
+            totalQuestions?: number;
+            /**
+             * Format: int32
+             * @example 20
+             */
+            participantCount?: number;
+            /** @description Whom they finished ahead of; RELATIVE_ONLY, name only */
+            aheadOf?: components["schemas"]["FinalPlacementNeighbour"];
+            /** @description Whom they finished behind; RELATIVE_ONLY, name only */
+            behind?: components["schemas"]["FinalPlacementNeighbour"];
+            /** @description Someone the ranking assigned an equal rank; RELATIVE_ONLY, name only */
+            tiedWith?: components["schemas"]["FinalPlacementNeighbour"];
         };
         TopFiveLeaderboardEntry: {
             /** Format: uuid */
@@ -3566,7 +3600,7 @@ export interface operations {
             };
         };
     };
-    rankContext: {
+    finalPlacement: {
         parameters: {
             query?: never;
             header?: never;
@@ -3578,13 +3612,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description The participant's rank context */
+            /** @description The participant's own finish */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "*/*": components["schemas"]["ParticipantRankContextResponse"];
+                    "*/*": components["schemas"]["ParticipantFinalPlacementResponse"];
                 };
             };
             /** @description Unknown session, or no such participant in it (session.participant.not-found) */
@@ -3596,7 +3630,7 @@ export interface operations {
                     "*/*": components["schemas"]["ApiError"];
                 };
             };
-            /** @description Not available right now (session.rank-context.not-available) */
+            /** @description The quiz has not finished, or the host has not released results yet (session.results.not-available) */
             409: {
                 headers: {
                     [name: string]: unknown;

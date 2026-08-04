@@ -23,9 +23,13 @@ export const gameplayKeys = {
   /** Host-only: per-option accepted-answer counts once the question is revealed. */
   answerDistribution: (sessionId: string) =>
     [...gameplayKeys.all, "answer-distribution", sessionId] as const,
-  /** A participant's own rank plus immediate neighbours — never the full leaderboard. */
-  rankContext: (sessionId: string, participantId: string) =>
-    [...gameplayKeys.all, "rank-context", sessionId, participantId] as const,
+  /**
+   * A participant's own finish. Separate from `personalResult` because it
+   * is a different contract with a different gate: personal progress is
+   * readable during the quiz, a finish only after the host's release.
+   */
+  finalPlacement: (sessionId: string, participantId: string) =>
+    [...gameplayKeys.all, "final-placement", sessionId, participantId] as const,
   /**
    * Host-only: the before/after Top 5 the projected leaderboard animates
    * between. Keyed by question as well as session — the transition *is*

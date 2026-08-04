@@ -7,7 +7,7 @@ import type {
   CurrentQuestionResponse,
   JoinSessionRequest,
   LeaderboardResponse,
-  ParticipantRankContextResponse,
+  ParticipantFinalPlacementResponse,
   ParticipantResultResponse,
   ParticipantSessionResponse,
   ReconnectRequest,
@@ -210,19 +210,20 @@ export const sessionApi = {
   },
 
   /**
-   * One participant's own rank plus the immediate neighbours ahead/behind
-   * (or tiedWith on an equal score) — never the full leaderboard.
-   * Anonymous-friendly like `participantResult`. Available only for a
-   * non-final question whose answer has been revealed; throws
-   * `session.rank-context.not-available` (409) otherwise, including for
-   * the quiz's last question.
+   * One participant's own finish — the only participant-facing source of
+   * final ranking there is. Anonymous-friendly like `participantResult`,
+   * and held until the host releases results (409
+   * `session.results.not-available` before that). Read `visibility`
+   * first: `EXACT_RANK` carries their position and label; `RELATIVE_ONLY`
+   * carries their score and the names either side of them, with no rank
+   * of their own and no neighbour rank, score, or gap anywhere in it.
    */
-  async rankContext(
+  async finalPlacement(
     sessionId: string,
     participantId: string
-  ): Promise<ParticipantRankContextResponse> {
-    const { data } = await apiClient.get<ParticipantRankContextResponse>(
-      `/api/v1/sessions/${sessionId}/participants/${participantId}/rank-context`
+  ): Promise<ParticipantFinalPlacementResponse> {
+    const { data } = await apiClient.get<ParticipantFinalPlacementResponse>(
+      `/api/v1/sessions/${sessionId}/participants/${participantId}/final-placement`
     );
     return data;
   },
