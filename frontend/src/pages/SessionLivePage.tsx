@@ -344,6 +344,7 @@ function HostGameplayBody({
           <PodiumReveal
             sessionId={host.session?.sessionId ?? ""}
             entries={host.results.entries ?? []}
+            exactRankRevealCount={host.results.exactRankRevealCount ?? 0}
             footer={
               <div className="flex flex-col gap-6">
                 <ReleaseResultsButton

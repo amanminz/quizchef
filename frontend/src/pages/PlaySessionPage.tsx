@@ -6,14 +6,12 @@ import { SectionHeader } from "@/components/common/SectionHeader";
 import { Spinner } from "@/components/common/Spinner";
 import { AnswerGrid } from "@/features/gameplay/components/AnswerGrid";
 import { AnswerRevealCard } from "@/features/gameplay/components/AnswerRevealCard";
-import { CompletionBanner } from "@/features/gameplay/components/CompletionBanner";
 import { CountdownOverlay } from "@/features/gameplay/components/CountdownOverlay";
 import { FinalResultsPendingScreen } from "@/features/gameplay/components/FinalResultsPendingScreen";
 import { GameConnectionBanner } from "@/features/gameplay/components/GameConnectionBanner";
-import { PersonalRankCard } from "@/features/gameplay/components/PersonalRankCard";
-import { RankNeighbours } from "@/features/gameplay/components/RankNeighbours";
+import { FinalPlacementCard } from "@/features/gameplay/components/FinalPlacementCard";
+import { PersonalAnswerFeedback } from "@/features/gameplay/components/PersonalAnswerFeedback";
 import { PlayAgainCard } from "@/features/gameplay/components/PlayAgainCard";
-import { QuestionResult } from "@/features/gameplay/components/QuestionResult";
 import {
   JoinSessionForm,
   type JoinSessionFormValues
@@ -27,6 +25,7 @@ import { WaitingOverlay } from "@/features/gameplay/components/WaitingOverlay";
 import { useCountdown } from "@/features/gameplay/hooks/useCountdown";
 import { usePlayerGameplay } from "@/features/gameplay/hooks/usePlayerGameplay";
 import { isLastQuestion } from "@/features/gameplay/isLastQuestion";
+import { motivationFor } from "@/features/gameplay/motivation";
 import { verdictFor } from "@/features/gameplay/verdict";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 
@@ -152,14 +151,29 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       );
     case "WAITING":
       return <WaitingOverlay />;
-    case "ANSWER_REVEALED":
+    case "ANSWER_REVEALED": {
       if (!player.question) {
         return <QuestionSkeleton />;
       }
+      // On the quiz's last question the personal read is held for the
+      // ceremony, so there is no score to show and the closing line
+      // replaces the usual encouragement — the answer itself still
+      // renders, which is content, not standings.
+      const finalQuestion = isLastQuestion(player.question);
+      const verdict = verdictFor(player.submittedOptionIds, player.question.correctOptionIds);
       return (
         <div className="flex flex-col gap-4">
-          <QuestionResult
-            verdict={verdictFor(player.submittedOptionIds, player.question.correctOptionIds)}
+          <PersonalAnswerFeedback
+            verdict={verdict}
+            pointsEarned={finalQuestion ? undefined : player.personalResult?.pointsEarned}
+            totalScore={finalQuestion ? undefined : player.personalResult?.score}
+            message={motivationFor({
+              sessionId: player.session?.sessionId,
+              participantId: player.participantId,
+              questionNumber: player.question.questionNumber,
+              outcome: finalQuestion ? "final" : verdict,
+              language: player.preferredLanguage
+            })}
           />
           <QuestionCard question={player.question} preferredLanguage={player.preferredLanguage}>
             <AnswerRevealCard
@@ -170,19 +184,17 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
           </QuestionCard>
         </div>
       );
-    case "LEADERBOARD":
-      // The quiz's last question holds its standings for the host's
-      // winner ceremony — same rule as FINAL_RESULTS_PENDING, just before
-      // the session has technically finished. Render the identical
-      // waiting screen without ever touching personalResult/rankContext
-      // (both queries are already disabled for this window; see
-      // usePlayerGameplay) so no stale cached rank can leak through here.
+    }
+    case "LEADERBOARD": {
+      // The host is projecting the animated Top 5. This device shows the
+      // player their own result and nothing about anyone's position —
+      // not their rank, not their movement, not who is near them. The
+      // data to show any of that is not on the wire (see the server's
+      // ParticipantResultView), so there is nothing here to leak.
       if (isLastQuestion(player.question)) {
+        // The last question's standings belong to the ceremony.
         return <FinalResultsPendingScreen />;
       }
-      // Participant privacy: only the player's own rank and score render
-      // here — the shared leaderboard belongs to the host's projected
-      // screen, and this device never even fetches it.
       if (player.personalResultError != null) {
         return (
           <ErrorPanel
@@ -199,29 +211,35 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
           </div>
         );
       }
+      const verdict = verdictFor(player.submittedOptionIds, player.question?.correctOptionIds);
       return (
-        <div className="flex flex-col gap-4">
-          <PersonalRankCard
-            result={player.personalResult}
-            scoreDelta={player.scoreDelta}
-            rankDelta={player.rankDelta}
-          />
-          {player.rankContext && <RankNeighbours context={player.rankContext} />}
-        </div>
+        <PersonalAnswerFeedback
+          verdict={verdict}
+          pointsEarned={player.personalResult.pointsEarned}
+          totalScore={player.personalResult.score}
+          message={motivationFor({
+            sessionId: player.session?.sessionId,
+            participantId: player.participantId,
+            questionNumber: player.question?.questionNumber,
+            outcome: verdict,
+            language: player.preferredLanguage
+          })}
+        />
       );
+    }
     case "FINAL_RESULTS_PENDING":
       return <FinalResultsPendingScreen />;
     case "FINISHED":
-      if (player.personalResultError != null) {
+      if (player.finalPlacementError != null) {
         return (
           <ErrorPanel
             title="Your result is unavailable"
-            error={player.personalResultError}
-            onRetry={() => void player.refetchPersonalResult()}
+            error={player.finalPlacementError}
+            onRetry={() => void player.refetchFinalPlacement()}
           />
         );
       }
-      if (!player.personalResult) {
+      if (!player.finalPlacement) {
         return (
           <div className="flex justify-center py-16">
             <Spinner size="lg" className="text-primary" />
@@ -230,8 +248,16 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       }
       return (
         <div className="flex flex-col gap-6">
-          <CompletionBanner />
-          <PersonalRankCard result={player.personalResult} variant="final" />
+          <FinalPlacementCard
+            placement={player.finalPlacement}
+            message={motivationFor({
+              sessionId: player.session?.sessionId,
+              participantId: player.participantId,
+              questionNumber: player.finalPlacement.totalQuestions,
+              outcome: "final",
+              language: player.preferredLanguage
+            })}
+          />
           <PlayAgainCard role="participant" />
         </div>
       );

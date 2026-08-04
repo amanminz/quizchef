@@ -2,8 +2,8 @@ import { Crown, RotateCcw, SkipForward } from "lucide-react";
 import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { Button } from "@/components/common/Button";
 import { finalResultLabel } from "@/features/gameplay/finalResultLabel";
-import { LeaderboardTable } from "@/features/gameplay/components/LeaderboardTable";
 import { Podium } from "@/features/gameplay/components/Podium";
+import { RevealedStandingsPages } from "@/features/gameplay/components/RevealedStandingsPages";
 import { usePrefersReducedMotion } from "@/features/gameplay/hooks/usePrefersReducedMotion";
 import { rankOrdinal } from "@/features/gameplay/rankOrdinal";
 import type { LeaderboardEntryDto } from "@/types/api";
@@ -25,14 +25,23 @@ export interface PodiumRevealProps {
   sessionId: string;
   /** The server's final standings, verbatim (ties and order included). */
   entries: LeaderboardEntryDto[];
+  /**
+   * How many places may be shown publicly — the server's
+   * `exactRankRevealCount`. The ceremony reveals the podium and then the
+   * rest of that group, and stops: the remainder of `entries` is the
+   * host's administrative data and never reaches the projector, because
+   * the room is watching and the people in it did not agree to have their
+   * exact position announced.
+   */
+  exactRankRevealCount: number;
   /** Rendered once the reveal completes (summary cards, actions). */
   footer?: ReactNode;
 }
 
 /**
  * The host's staged winner reveal: fifth, fourth, third, second, then
- * first — the crown last — then the podium (top 3) and the remaining
- * standings (rank 4 onward, in `LeaderboardTable`). Purely local display
+ * first — the crown last — then the podium (top 3) and, in fixed
+ * projector-sized pages, the rest of the reveal group. Purely local display
  * state: Skip and Replay never emit gameplay commands or touch session
  * state, and the reveal plays once per session (a refresh re-fetches
  * authoritative results and renders the completed podium, it never
@@ -43,7 +52,12 @@ export interface PodiumRevealProps {
  * release-results action) renders only once the ceremony has completed
  * or been skipped — never during the countdown.
  */
-export function PodiumReveal({ sessionId, entries, footer }: PodiumRevealProps) {
+export function PodiumReveal({
+  sessionId,
+  entries,
+  exactRankRevealCount,
+  footer
+}: PodiumRevealProps) {
   const reducedMotion = usePrefersReducedMotion();
   const storageKey = `quizchef.podium-played.${sessionId}`;
   const topFive = entries.slice(0, CEREMONY_PLACES);
@@ -77,6 +91,9 @@ export function PodiumReveal({ sessionId, entries, footer }: PodiumRevealProps) 
   }, [complete, stageIndex, stages, storageKey]);
 
   const revealCount = complete ? topFive.length : stages[stageIndex].revealCount;
+  // Everything the room may see, minus the three already on the podium.
+  // Cut from the server's own count, never recomputed here.
+  const revealedBelowPodium = entries.slice(3, Math.max(3, exactRankRevealCount));
   // Worst place first: fifth appears before fourth, before third, and so on.
   const revealed = topFive.slice(topFive.length - revealCount).reverse();
 
@@ -87,8 +104,8 @@ export function PodiumReveal({ sessionId, entries, footer }: PodiumRevealProps) 
           {!reducedMotion && <Confetti />}
           <Podium entries={entries} />
         </div>
-        {entries.length > 3 && (
-          <LeaderboardTable entries={entries.slice(3)} caption="Remaining standings" />
+        {revealedBelowPodium.length > 0 && (
+          <RevealedStandingsPages entries={revealedBelowPodium} />
         )}
         <div className="flex justify-center">
           <Button variant="ghost" size="sm" onClick={() => setStageIndex(0)}>
