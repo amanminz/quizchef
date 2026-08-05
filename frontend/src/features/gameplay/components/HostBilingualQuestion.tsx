@@ -221,8 +221,16 @@ export function HostBilingualQuestion({
                     aria-hidden
                     className={cn(
                       "mt-0.5 flex shrink-0 items-center justify-center rounded-full bg-muted font-bold",
-                      presentationActive ? "h-6 w-6 text-sm sm:h-7 sm:w-7" : "h-9 w-9 text-lg"
+                      presentationActive ? "h-auto w-auto min-w-[2.5rem] py-1" : "h-9 w-9 text-lg"
                     )}
+                    style={
+                      presentationActive
+                        ? // Scaled with the row it labels: a 6mm circle next
+                          // to a 2.6rem count reads as a bullet rather than
+                          // as the letter the host is calling out.
+                          { fontSize: "clamp(1.2rem, 1.8vw, 2rem)" }
+                        : undefined
+                    }
                   >
                     {String.fromCharCode(65 + index)}
                   </span>
