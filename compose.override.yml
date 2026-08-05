@@ -15,5 +15,30 @@ services:
       - "${BACKEND_PORT:-8080}:8080"
 
   frontend:
+    # nginx proxies /api and /ws to the backend, so the browser and the API
+    # share one origin — exactly what the Vite dev server already does for
+    # `npm run dev`, and what the frontend's default (empty
+    # VITE_API_BASE_URL, i.e. same-origin) already expects.
+    #
+    # This is the difference between working and not working, rather than a
+    # tidiness preference. On split origins the browser has to call the API on
+    # another origin, and the backend's CORS allowlist must then name the
+    # exact hostname the page was opened with. But http://localhost:3000,
+    # http://127.0.0.1:3000, a WSL address, and the LAN address a phone would
+    # use are four different origins, and only one can be configured at a
+    # time — any other spelling gets a 403 on the preflight. Same-origin has
+    # no such failure mode, and a phone on the same network can join a
+    # session with no configuration at all.
+    #
+    # The file is absent from the image and from production, where the two are
+    # separate Railway services with no shared network and the bundle is built
+    # with an explicit VITE_API_BASE_URL instead.
+    # A directory mount, not a single-file one. Bind-mounting an individual
+    # file is unreliable on Docker Desktop with WSL — the container can fail
+    # to start with "error mounting ... no such file or directory" — and it
+    # would not pick up a second file later anyway. The image ships this
+    # directory empty, so replacing it wholesale loses nothing.
+    volumes:
+      - ./docker/frontend/site-extra:/etc/nginx/site-extra:ro
     ports:
       - "${FRONTEND_PORT:-3000}:8080"

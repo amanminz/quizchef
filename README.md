@@ -39,7 +39,19 @@ This builds and starts the complete development environment:
 
 Database migrations run automatically at backend startup via Flyway. The `quizchef-media` bucket is created automatically in MinIO.
 
-The stack is defined in `compose.yml` (environment-agnostic services and health checks) plus `compose.override.yml` (local development concerns such as host port publishing), which Docker Compose merges automatically.
+The stack is defined in `compose.yml` (environment-agnostic services and health checks) plus `compose.override.yml` (local development concerns such as host port publishing and the frontend's API base URL), which Docker Compose merges automatically.
+
+nginx proxies `/api` and `/ws` through to the backend, so the browser and the API share one origin — the same thing the Vite dev server does for `npm run dev`. That means the app works whatever address you open it on: `localhost:3000`, `127.0.0.1:3000`, a WSL address, or your machine's LAN address from a phone on the same network (useful for testing a real session with real devices).
+
+The proxy is `docker/frontend/site-extra/local-api-proxy.conf`; `compose.override.yml` mounts that whole directory over the `/etc/nginx/site-extra/` the server block includes (a directory rather than a single file — individual file bind mounts are unreliable on Docker Desktop with WSL). The image ships that directory empty, so production — where the frontend and backend are separate Railway services with no shared network — renders exactly the server block it always did and uses a build-time `VITE_API_BASE_URL` instead.
+
+`scripts/verify-local-compose.sh` checks this wiring without starting anything.
+
+If you ever build the frontend image with a `VITE_*` value, remember Vite inlines those at build time: the value is baked into the bundle, so change them with a rebuild rather than a restart.
+
+```bash
+docker compose up -d --build frontend
+```
 
 Stop the environment with `docker compose down`. Add `-v` to also delete the PostgreSQL and MinIO volumes.
 
