@@ -92,6 +92,38 @@ class TokenBucketTest {
     }
 
     @Test
+    void nextTokenArrivesLongBeforeTheBucketRefillsCompletely() {
+        // The distinction that matters at venue sizes: 150 a minute is one
+        // token every 0.4 seconds, so a refused caller waits a second — not
+        // the full minute it takes to get all 150 back.
+        TokenBucket bucket = new TokenBucket(150, Duration.ofMinutes(1), clock);
+        for (int consumed = 0; consumed < 150; consumed++) {
+            bucket.tryConsume();
+        }
+
+        assertThat(bucket.secondsUntilNextToken()).isEqualTo(1);
+        assertThat(bucket.secondsUntilReset()).isEqualTo(60);
+    }
+
+    @Test
+    void nextTokenIsZeroWhileTokensRemain() {
+        TokenBucket bucket = new TokenBucket(5, Duration.ofMinutes(1), clock);
+        bucket.tryConsume();
+
+        assertThat(bucket.secondsUntilNextToken()).isZero();
+    }
+
+    @Test
+    void nextTokenRoundsUpSoTheAnswerIsNeverOptimistic() {
+        // One token a minute: a caller refused immediately after consuming
+        // must be told 60 seconds, never 59.
+        TokenBucket bucket = new TokenBucket(1, Duration.ofMinutes(1), clock);
+        bucket.tryConsume();
+
+        assertThat(bucket.secondsUntilNextToken()).isEqualTo(60);
+    }
+
+    @Test
     void capacityIsExposed() {
         TokenBucket bucket = new TokenBucket(7, Duration.ofSeconds(30), clock);
 

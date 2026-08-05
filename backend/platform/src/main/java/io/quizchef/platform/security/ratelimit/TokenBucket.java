@@ -41,6 +41,30 @@ final class TokenBucket {
         return (int) Math.floor(availableTokens);
     }
 
+    /**
+     * Seconds until one token is available — what a refused caller should
+     * actually wait, and therefore what belongs in {@code Retry-After}.
+     *
+     * <p>Distinct from {@link #secondsUntilReset()}, which is the window
+     * this bucket refills over and what {@code X-RateLimit-Reset}
+     * conventionally means. The two used to be the same value, which told a
+     * caller refused by a 150-per-minute bucket to wait a full minute when
+     * the next token was 0.4 seconds away — conservative, but wrong, and at
+     * a venue it is the difference between a phone retrying promptly and a
+     * participant giving up.
+     *
+     * <p>Rounded up, so the answer is never optimistic: waiting the
+     * returned number of seconds always finds a token.
+     */
+    synchronized long secondsUntilNextToken() {
+        refill();
+        if (availableTokens >= 1.0) {
+            return 0;
+        }
+        double secondsPerToken = (window.toNanos() / 1_000_000_000.0) / capacity;
+        return (long) Math.ceil((1.0 - availableTokens) * secondsPerToken);
+    }
+
     /** Seconds until the bucket is back to full capacity. */
     synchronized long secondsUntilReset() {
         refill();

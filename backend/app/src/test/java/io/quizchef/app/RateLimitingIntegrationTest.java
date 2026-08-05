@@ -104,9 +104,12 @@ class RateLimitingIntegrationTest {
         RateLimitRule reconnect = ruleFor("POST", "/api/v1/sessions/reconnect");
         assertThat(reconnect.capacity()).isGreaterThanOrEqualTo(join.capacity() * 2);
 
-        // A whole room answers within seconds of a question opening.
+        // A whole room answers within seconds of a question opening — so the
+        // answer budget must cover the room that was allowed to join, or the
+        // event fails one step after everyone got in.
         RateLimitRule answers = ruleFor("POST", "/api/v1/sessions/{id}/answers");
         assertThat(answers.capacity()).isGreaterThanOrEqualTo(smallestSupportedVenue);
+        assertThat(answers.capacity()).isGreaterThanOrEqualTo(join.capacity());
         assertThat(answers.window()).isLessThanOrEqualTo(Duration.ofSeconds(10));
     }
 
