@@ -23,6 +23,7 @@ import { QuestionTransition } from "@/features/gameplay/components/QuestionTrans
 import { SubmissionStatus } from "@/features/gameplay/components/SubmissionStatus";
 import { WaitingOverlay } from "@/features/gameplay/components/WaitingOverlay";
 import { useCountdown } from "@/features/gameplay/hooks/useCountdown";
+import { isEndpointMissing } from "@/features/gameplay/hooks/useFinalPlacement";
 import { usePlayerGameplay } from "@/features/gameplay/hooks/usePlayerGameplay";
 import { isLastQuestion } from "@/features/gameplay/isLastQuestion";
 import { motivationFor } from "@/features/gameplay/motivation";
@@ -230,6 +231,14 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
     case "FINAL_RESULTS_PENDING":
       return <FinalResultsPendingScreen />;
     case "FINISHED":
+      // A backend without this endpoint yet (a staggered deploy: the
+      // frontend and backend are separate Railway services and do not land
+      // together). "Results aren't out yet" is both the truthful reading
+      // and the same screen the participant was already on, so the
+      // transition is invisible rather than an error page.
+      if (isEndpointMissing(player.finalPlacementError)) {
+        return <FinalResultsPendingScreen />;
+      }
       if (player.finalPlacementError != null) {
         return (
           <ErrorPanel

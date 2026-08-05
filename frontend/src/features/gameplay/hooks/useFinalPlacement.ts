@@ -26,10 +26,33 @@ export function useFinalPlacement(
     queryFn: () => sessionApi.finalPlacement(sessionId!, participantId!),
     enabled: sessionId !== undefined && participantId !== undefined && phase === "FINISHED",
     retry: (failureCount, error) => {
-      if (isApiClientError(error) && error.code === "session.results.not-available") {
+      if (
+        isApiClientError(error) &&
+        (error.code === "session.results.not-available" ||
+          error.code === "session.participant.not-found" ||
+          // A backend that predates this endpoint (a staggered deploy —
+          // the two Railway services do not land together). Retrying a
+          // route that does not exist only delays the honest answer.
+          isEndpointMissing(error))
+      ) {
         return false;
       }
       return failureCount < 2;
     }
   });
+}
+
+/**
+ * The endpoint itself isn't there, as opposed to refusing to answer.
+ * Spring's fallback maps an unrouted request to `http.404`, whereas a real
+ * unknown participant is `session.participant.not-found` — so the two are
+ * distinguishable, and only the former means "this server is older than
+ * this client".
+ *
+ * It matters because the two want opposite screens: a genuinely missing
+ * participant is an error worth surfacing, while a missing *route* during
+ * a deploy should look like results simply not being out yet.
+ */
+export function isEndpointMissing(error: unknown): boolean {
+  return isApiClientError(error) && error.code === "http.404";
 }
