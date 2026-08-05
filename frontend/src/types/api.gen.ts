@@ -1464,8 +1464,6 @@ export interface components {
             aheadOf?: components["schemas"]["FinalPlacementNeighbour"];
             /** @description Whom they finished behind; RELATIVE_ONLY, name only */
             behind?: components["schemas"]["FinalPlacementNeighbour"];
-            /** @description Someone the ranking assigned an equal rank; RELATIVE_ONLY, name only */
-            tiedWith?: components["schemas"]["FinalPlacementNeighbour"];
         };
         TopFiveLeaderboardEntry: {
             /** Format: uuid */

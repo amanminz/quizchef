@@ -14,11 +14,14 @@ import java.util.UUID;
  * {@code label} are present, the neighbour fields are null.
  *
  * <p>{@code RELATIVE_ONLY} (everyone else): {@code rank} and {@code label}
- * are null, and {@code aheadOf}/{@code behind}/{@code tiedWith} carry
- * <em>display names only</em>. There is no neighbour rank, no neighbour
- * score, and no score gap anywhere in this shape — a participant outside
- * the reveal group has no exact position on the wire at all, so none can
- * be rendered, cached, or inferred.
+ * are null, and {@code aheadOf}/{@code behind} carry <em>display names
+ * only</em>. There is no neighbour rank, no neighbour score, and no score
+ * gap anywhere in this shape — a participant outside the reveal group has
+ * no exact position on the wire at all, so none can be rendered, cached,
+ * or inferred.
+ *
+ * <p>No "tied with": the ranking orders the field totally, so two equal
+ * scores are still one ahead of the other and are described that way.
  */
 public record ParticipantFinalPlacementResponse(
         UUID sessionId,
@@ -36,9 +39,7 @@ public record ParticipantFinalPlacementResponse(
         @Schema(description = "Whom they finished ahead of; RELATIVE_ONLY, name only")
         Neighbour aheadOf,
         @Schema(description = "Whom they finished behind; RELATIVE_ONLY, name only")
-        Neighbour behind,
-        @Schema(description = "Someone the ranking assigned an equal rank; RELATIVE_ONLY, name only")
-        Neighbour tiedWith
+        Neighbour behind
 ) {
 
     /** A name, and deliberately nothing else. */
@@ -58,8 +59,7 @@ public record ParticipantFinalPlacementResponse(
                 view.totalQuestions(),
                 view.participantCount(),
                 neighbour(view.aheadOf()),
-                neighbour(view.behind()),
-                neighbour(view.tiedWith()));
+                neighbour(view.behind()));
     }
 
     private static Neighbour neighbour(ParticipantFinalPlacementView.Neighbour neighbour) {

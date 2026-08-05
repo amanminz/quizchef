@@ -80,40 +80,20 @@ public class ParticipantFinalPlacementQueryService {
                     FinalPlacementPolicy.labelFor(own.rank()),
                     totalQuestions,
                     session.participantCount(),
-                    null, null, null);
+                    null, null);
         }
 
-        // Outside the reveal group. The neighbours are whoever the ranking
-        // put immediately either side — by name only, and the participant's
-        // own rank is simply not on this response.
+        // Outside the reveal group. The neighbours are simply whoever the
+        // canonical ordering put either side — by name only, and the
+        // participant's own rank is not on this response at all.
+        //
+        // No "tied with" case: the ranking orders the field totally
+        // (equal scores are separated by submission time, then join
+        // order), so it never calls two participants equal. Two players on
+        // the same score are still one ahead of the other, and that is
+        // what the wording says — see the equal-scores test.
         LeaderboardEntry justAbove = ownIndex > 0 ? ranked.get(ownIndex - 1) : null;
         LeaderboardEntry justBelow = ownIndex < ranked.size() - 1 ? ranked.get(ownIndex + 1) : null;
-
-        // "Tied" means the ranking service itself assigned an equal rank —
-        // never merely an equal score, which it breaks by submission time
-        // and join order. Saying "you finished ahead of X" when the game's
-        // own ranking calls them equal would be a small lie in the one
-        // direction this feature exists to avoid.
-        ParticipantFinalPlacementView.Neighbour tiedWith = null;
-        ParticipantFinalPlacementView.Neighbour aheadOf = null;
-        ParticipantFinalPlacementView.Neighbour behind = null;
-
-        if (justAbove != null) {
-            if (justAbove.rank() == own.rank()) {
-                tiedWith = neighbour(justAbove);
-            } else {
-                behind = neighbour(justAbove);
-            }
-        }
-        if (justBelow != null) {
-            if (justBelow.rank() == own.rank()) {
-                if (tiedWith == null) {
-                    tiedWith = neighbour(justBelow);
-                }
-            } else {
-                aheadOf = neighbour(justBelow);
-            }
-        }
 
         return new ParticipantFinalPlacementView(
                 sessionId,
@@ -125,9 +105,8 @@ public class ParticipantFinalPlacementQueryService {
                 null,
                 totalQuestions,
                 session.participantCount(),
-                aheadOf,
-                behind,
-                tiedWith);
+                justBelow == null ? null : neighbour(justBelow),
+                justAbove == null ? null : neighbour(justAbove));
     }
 
     private static ParticipantFinalPlacementView.Neighbour neighbour(LeaderboardEntry entry) {

@@ -1,6 +1,7 @@
 package io.quizchef.session.application;
 
 import io.quizchef.session.domain.FinalPlacementLabel;
+import io.quizchef.session.domain.LeaderboardService;
 import io.quizchef.session.domain.FinalPlacementVisibility;
 import java.util.UUID;
 
@@ -26,6 +27,14 @@ import java.util.UUID;
  * all, so no client bug, cached response, or future screen can show them
  * one — the same reasoning that made the Top 5 transition withhold ranks
  * below fifth rather than send them and ask the client to be careful.
+ *
+ * <p>There is deliberately no "tied with" here. {@link LeaderboardService}
+ * orders the field totally — equal scores are separated by submission
+ * time, then join order — so it never calls two participants equal, and a
+ * field for that case would be an unreachable branch on a
+ * privacy-sensitive response. The neighbours are simply whoever the
+ * canonical ordering put either side. If the ranking model ever gains
+ * genuinely shared ranks, this is where the wording for them belongs.
  */
 public record ParticipantFinalPlacementView(
         UUID sessionId,
@@ -38,8 +47,7 @@ public record ParticipantFinalPlacementView(
         int totalQuestions,
         int participantCount,
         Neighbour aheadOf,
-        Neighbour behind,
-        Neighbour tiedWith
+        Neighbour behind
 ) {
 
     /**

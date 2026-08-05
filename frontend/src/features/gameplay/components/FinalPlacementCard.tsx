@@ -69,15 +69,14 @@ export function FinalPlacementCard({ placement, message }: FinalPlacementCardPro
 
 /**
  * Who they finished near, in the wording the server's own shape supports.
- * `tiedWith` gets "alongside" rather than "ahead of": claiming to have
- * beaten someone the ranking calls an equal is exactly the small
- * inaccuracy this whole feature exists to avoid.
+ *
+ * There is no "tied" case to handle: the ranking orders the field totally,
+ * so two equal scores are still one ahead of the other and the server
+ * describes them that way. If shared ranks ever exist, the wording for
+ * them belongs on the server's shape first, not in a branch here.
  */
 function NeighbourContext({ placement }: { placement: ParticipantFinalPlacementResponse }) {
   const lines: string[] = [];
-  if (placement.tiedWith?.displayName) {
-    lines.push(`You finished alongside ${placement.tiedWith.displayName}`);
-  }
   if (placement.aheadOf?.displayName) {
     lines.push(`You finished ahead of ${placement.aheadOf.displayName}`);
   }

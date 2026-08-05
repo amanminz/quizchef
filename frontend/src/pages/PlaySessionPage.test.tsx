@@ -1089,7 +1089,10 @@ describe("PlaySessionPage", () => {
     expect(screen.queryByText(/winner|runner-up|finalist/i)).not.toBeInTheDocument();
   });
 
-  it("says finished alongside, rather than ahead of, someone the server calls tied", async () => {
+  it("describes equal scores by the server's ordering, never as a tie", async () => {
+    // Two players on the same score are still one ahead of the other —
+    // the ranking breaks every tie — so the wording says so. Nothing in
+    // the response or the card can call them tied.
     const session = sessionSummary({
       state: "FINISHED",
       currentQuestionId: undefined,
@@ -1122,9 +1125,11 @@ describe("PlaySessionPage", () => {
             relativePlacementResponse({
               sessionId: session.sessionId,
               participantId: record.participantId,
-              aheadOf: undefined,
-              behind: undefined,
-              tiedWith: { displayName: "Priya" }
+              // Everyone in this room scored 4,210; the server still put
+              // Priya above and David below.
+              score: 4210,
+              behind: { displayName: "Priya" },
+              aheadOf: { displayName: "David" }
             })
           )
       )
@@ -1132,8 +1137,133 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    expect(await screen.findByText(/You finished alongside Priya\./)).toBeInTheDocument();
-    expect(screen.queryByText(/ahead of/i)).not.toBeInTheDocument();
+    expect(
+      await screen.findByText(/You finished ahead of David and just behind Priya\./)
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/tied|alongside|level with|same as/i)).not.toBeInTheDocument();
+  });
+
+  it("waits rather than erroring when the backend predates the placement endpoint", async () => {
+    // Staggered deploy, new frontend against an older backend: the two
+    // Railway services do not land together. "Results aren't out yet" is
+    // the truthful reading of a missing route, and it is the screen the
+    // participant was already on.
+    const session = sessionSummary({
+      state: "FINISHED",
+      currentQuestionId: undefined,
+      finalResultsReleased: true
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    let attempts = 0;
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            sessionState: "FINISHED",
+            currentPhase: undefined
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/final-placement`,
+        () => {
+          attempts += 1;
+          // Spring's fallback for an unrouted request.
+          return HttpResponse.json(apiError("http.404", "Not Found"), { status: 404 });
+        }
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText(/winners are being announced/i)).toBeInTheDocument();
+    // Not an error page, and no rank invented to fill the gap.
+    expect(screen.queryByText(/unavailable/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\d+(st|nd|rd|th)/)).not.toBeInTheDocument();
+    // A route that does not exist is not worth retrying.
+    await waitFor(() => expect(attempts).toBe(1));
+  });
+
+  it("renders an older backend's response shape without inventing a rank", async () => {
+    // The same staggered window from the other side: an older backend
+    // still sends `rank` on the progress read and omits `pointsEarned`.
+    // The new client must ignore the former completely and survive the
+    // latter — a rank must not reappear just because one is on the wire.
+    const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "LEADERBOARD"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "LEADERBOARD"
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        () =>
+          HttpResponse.json({
+            sessionId: session.sessionId,
+            state: "IN_PROGRESS",
+            currentPhase: "LEADERBOARD",
+            totalQuestions: 2,
+            participantCount: 6,
+            participantId: record.participantId,
+            displayName: "Aman",
+            // The old shape, verbatim: a rank, and no pointsEarned.
+            rank: 4,
+            score: 640
+          })
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(await screen.findByText("640")).toBeInTheDocument();
+    // The rank on the wire is never read, so it cannot be rendered.
+    expect(screen.queryByText("4th")).not.toBeInTheDocument();
+    expect(screen.queryByText(/your rank/i)).not.toBeInTheDocument();
+    // A missing points figure omits the line instead of showing "+undefined".
+    expect(screen.queryByText(/\+\s*(undefined|NaN)/)).not.toBeInTheDocument();
+    // And the encouragement still renders, so the card is never empty.
+    expect(
+      screen.getByText(
+        motivationFor({
+          sessionId: session.sessionId,
+          participantId: record.participantId,
+          questionNumber: 1,
+          outcome: "unanswered",
+          language: "en"
+        })
+      )
+    ).toBeInTheDocument();
   });
 
   it("refreshes the personal result when a leaderboard.updated broadcast arrives", async () => {

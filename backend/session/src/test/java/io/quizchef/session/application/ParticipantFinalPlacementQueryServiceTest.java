@@ -103,7 +103,35 @@ class ParticipantFinalPlacementQueryServiceTest {
         // by name, and by name alone.
         assertThat(view.behind().displayName()).isEqualTo("P10");
         assertThat(view.aheadOf().displayName()).isEqualTo("P12");
-        assertThat(view.tiedWith()).isNull();
+    }
+
+    @Test
+    void describesEqualScoresByTheirCanonicalOrderAndNeverAsTied() {
+        // Twelve players all on the same score. The ranking still orders
+        // them totally — submission time, then join order — so nobody is
+        // "tied" with anyone: the player below you is one you finished
+        // ahead of, and the response says exactly that.
+        List<Participant> players = new ArrayList<>();
+        for (int index = 0; index < 12; index++) {
+            Participant participant = Participant.guest(UUID.randomUUID(),
+                    GuestParticipantToken.generate(), "P" + (index + 1), EN);
+            participant.recordAnswer(new ParticipantAnswer(QUESTION, Set.of(UUID.randomUUID()),
+                    EN, NOW.plusSeconds(index), 1000, 500));
+            players.add(participant);
+        }
+        UUID sessionId = releasedSession(players);
+
+        // Everyone scored 500; the reveal group is still ranks 1–6.
+        ParticipantFinalPlacementView eighth = service.placement(sessionId, players.get(7).getId());
+
+        assertThat(eighth.visibility()).isEqualTo(FinalPlacementVisibility.RELATIVE_ONLY);
+        assertThat(eighth.score()).isEqualTo(500);
+        assertThat(eighth.behind().displayName()).isEqualTo("P7");
+        assertThat(eighth.aheadOf().displayName()).isEqualTo("P9");
+        // The shape has no way to call them tied, and does not.
+        assertThat(ParticipantFinalPlacementView.class.getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .doesNotContain("tiedWith");
     }
 
     @Test
