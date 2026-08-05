@@ -22,7 +22,17 @@ What must be true before a production deploy is considered safe. Grouped by what
 ## Security (RFC-011)
 
 - [ ] `CORS_ALLOWED_ORIGINS` is set to the real deployed frontend origin(s) — no default exists outside `local`/`test`, so a missing value fails startup rather than silently allowing nothing (or everything).
-- [ ] `server.forward-headers-strategy: framework` is active in `prod` only — confirm the reverse proxy (Railway) actually sets `X-Forwarded-For`, or IP-based rate limits will key on the proxy's own address instead of real clients.
+- [ ] `server.forward-headers-strategy: native` is active in `prod` only — confirm the reverse proxy actually sets `X-Forwarded-For`, or IP-based rate limits will key on the proxy's own address instead of real clients.
+- [ ] **The proxy chain is trusted, and only the proxy chain.** `native` (Tomcat's `RemoteIpValve`) takes the address a trusted hop observed — the rightmost entry past `internal-proxies` — rather than the leftmost, which is whatever the client chose to send. The previous `framework` strategy read the leftmost value, which made every IP-keyed limit both evadable (edit your own prefix for a fresh bucket) and weaponizable (name someone else's address to spend their budget), authentication and registration included. Verify after deploy, from two different networks:
+
+  ```bash
+  # Six times from network A — the sixth should be 429
+  curl -s -o /dev/null -w "%{http_code} " -X POST https://<api-host>/api/v1/auth/login \
+    -H 'Content-Type: application/json' -H 'X-Forwarded-For: 203.0.113.10' \
+    -d '{"email":"nobody@example.com","password":"x"}'
+  ```
+
+  Then once more from network A with a *different* injected `X-Forwarded-For` — it must **still** be 429. Then once from network B — it must **not** be. If the injected header changes the outcome, the platform is passing the client's value through as the rightmost entry and `TRUSTED_PROXY_REGEX` needs narrowing to the real proxy addresses.
 - [ ] Rate-limit policy (`quizchef.security.rate-limit.rules`) reviewed against actual traffic patterns before launch.
 - [ ] **Venue capacity confirmed against the room you are about to run in.** The participant-facing routes are limited per client IP, and at a venue every phone shares one NAT address — so these are per-venue budgets. Defaults support a room of **150**:
 

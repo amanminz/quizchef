@@ -67,6 +67,7 @@ Backend service variables:
 | `JWT_ACCESS_TOKEN_TTL` | No | Defaults to `PT15M`. |
 | `JWT_AUDIENCE` | No | Optional audience claim. |
 | `CORS_ALLOWED_ORIGINS` | Yes | Frontend origin, for example `https://quizchef.example.com`. Governs both REST CORS and the WebSocket handshake — a wrong value leaves REST working while the realtime lobby connection is refused with 403. |
+| `TRUSTED_PROXY_REGEX` | No | Java regex for the addresses a proxy hop may come from. Defaults to the private ranges, which is where a platform edge proxy reaches the container. Rate limiting keys on the address a *trusted hop* observed, never on a client-supplied one — narrow this if the platform publishes fixed proxy addresses. Set it wrong and every client collapses into one shared bucket (fails closed: widespread 429s, not bypassed limits). |
 | `PARTICIPANT_RATE_LIMIT_CAPACITY` | No | Joins allowed per minute from one client IP. Defaults to `150`. At a venue every phone shares one NAT address, so this is the size of the largest room that can all join — raise it for a bigger event. |
 | `PARTICIPANT_RECONNECT_RATE_LIMIT_CAPACITY` | No | Reconnects per minute from one IP. Defaults to `300` — double the room size, because every device reconnects on join, on refresh, and after any dropped websocket. |
 | `PARTICIPANT_ANSWER_RATE_LIMIT_CAPACITY` | No | Answers per 10 seconds from one IP. Defaults to `200`, sized for a whole room replying within seconds of a question opening. |

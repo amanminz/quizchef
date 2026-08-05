@@ -5,12 +5,37 @@ springdoc:
     enabled: false
 
 server:
-  # Trusts X-Forwarded-For from the reverse proxy in front of this
-  # environment (Railway) so ClientIpResolver's rate limiting (RFC-011)
-  # keys on the real caller, not the proxy. Only safe where such a proxy
-  # actually sits in front and sets the header correctly — never enable
-  # this in a profile without one, or IP-based limits become spoofable.
-  forward-headers-strategy: framework
+  # Resolves the real caller from X-Forwarded-For so rate limiting (RFC-011)
+  # keys on the client rather than the proxy — but only through the proxy
+  # chain, which is the whole difference between the two strategies here.
+  #
+  # `framework` (Spring's ForwardedHeaderFilter) takes the *leftmost* entry
+  # as the client. A proxy appends what it saw, so the header arrives as
+  # "<whatever the client sent>, <real client IP>" and the leftmost value is
+  # attacker-controlled. Measured against this exact configuration: a caller
+  # escaped its own exhausted bucket by editing the prefix, and — worse — an
+  # unrelated client that happened to send the same prefix was refused on
+  # someone else's usage. Every IP-keyed limit was both evadable and
+  # weaponizable, authentication and registration included.
+  #
+  # `native` (Tomcat's RemoteIpValve) walks the chain from the right,
+  # skipping addresses that match `internal-proxies`, and takes the first
+  # one that does not. The rightmost entry is the one the trusted proxy
+  # appended, which the client cannot forge, so an attacker is pinned to
+  # their real address. It also only honours the header at all when the
+  # immediate peer is itself a trusted proxy: a request that reaches the app
+  # directly is keyed on its actual source, header or no header.
+  forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      remote-ip-header: x-forwarded-for
+      protocol-header: x-forwarded-proto
+      # The addresses a proxy hop may legitimately come from. Default is the
+      # private ranges, which is where a platform's edge proxy reaches the
+      # container from (Railway included). Narrow it with TRUSTED_PROXY_REGEX
+      # if the platform publishes fixed proxy addresses — anything outside
+      # this is treated as a client, never as a hop to be trusted.
+      internal-proxies: ${TRUSTED_PROXY_REGEX:10\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|192\\.168\\.\\d{1,3}\\.\\d{1,3}|169\\.254\\.\\d{1,3}\\.\\d{1,3}|127\\.\\d{1,3}\\.\\d{1,3}\\.\\d{1,3}|172\\.1[6-9]{1}\\.\\d{1,3}\\.\\d{1,3}|172\\.2[0-9]{1}\\.\\d{1,3}\\.\\d{1,3}|172\\.3[0-1]{1}\\.\\d{1,3}\\.\\d{1,3}|0:0:0:0:0:0:0:1|::1}
 
 management:
   endpoint:
