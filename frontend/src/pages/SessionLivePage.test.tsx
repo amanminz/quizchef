@@ -1144,6 +1144,109 @@ describe("SessionLivePage", () => {
     HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
   });
 
+  it("keeps Presentation Mode to one viewport, with nothing able to scroll", async () => {
+    // jsdom has no layout engine, so scrollHeight and clientHeight are both
+    // zero and comparing them proves nothing. What *is* checkable is the
+    // structure that makes one-viewport possible: a fixed-height column, a
+    // live region allowed to shrink, and no descendant quietly introducing
+    // a scroll container. Real fit stays a manual check.
+    signIn();
+    const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "LEADERBOARD"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/leaderboard/top-five`, () =>
+        HttpResponse.json(
+          topFiveTransitionResponse({
+            sessionId: session.sessionId,
+            questionId: question.questionId
+          })
+        )
+      )
+    );
+    // The presentation store is a module-level singleton with no automatic
+    // per-test reset, so an earlier test that entered it leaks in here.
+    usePresentationStore.getState().setActive(false);
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = () => Promise.resolve();
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText("Fran");
+    await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
+
+    // A fixed-height column that cannot grow past the screen.
+    const container = document.querySelector(".h-dvh");
+    expect(container).not.toBeNull();
+    expect(container).toHaveClass("overflow-hidden", "flex", "flex-col");
+
+    // The board sits in a region that is allowed to shrink — min-h-0 is the
+    // flexbox trick without which a flex child forces its parent to grow.
+    const board = screen.getByLabelText(/top 5 after question/i);
+    expect(board.closest(".min-h-0")).not.toBeNull();
+
+    // And nothing in the rendered tree opts into scrolling.
+    expect(
+      document.querySelectorAll(
+        "[class*='overflow-auto'], [class*='overflow-scroll'], [class*='overflow-y-auto'], [class*='overflow-x-auto']"
+      )
+    ).toHaveLength(0);
+
+    usePresentationStore.getState().setActive(false);
+    HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("recovers the settled leaderboard on a fresh mount, without replaying the count-up", async () => {
+    // A host refresh or reconnect mid-leaderboard: the board must come back
+    // from the server's own two snapshots, not from anything remembered
+    // locally, and must not re-run a transition the room already watched.
+    signIn();
+    const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "LEADERBOARD"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    let transitionReads = 0;
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/leaderboard/top-five`, () => {
+        transitionReads += 1;
+        return HttpResponse.json(
+          topFiveTransitionResponse({
+            sessionId: session.sessionId,
+            questionId: question.questionId
+          })
+        );
+      })
+    );
+    const user = userEvent.setup();
+
+    const first = renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText("Fran");
+    await user.click(screen.getByRole("button", { name: /skip animation/i }));
+    expect(await screen.findByRole("button", { name: /next question/i })).toBeEnabled();
+    first.unmount();
+
+    // Fresh mount — the authoritative boards are refetched.
+    renderApp(`/sessions/${session.sessionId}/play`);
+    expect(await screen.findByText("Fran")).toBeInTheDocument();
+    expect(transitionReads).toBeGreaterThanOrEqual(2);
+
+    // The server's final numbers are what render; the host is not stranded
+    // behind an animation they already skipped once.
+    await user.click(await screen.findByRole("button", { name: /skip animation/i }));
+    expect(await screen.findByRole("button", { name: /next question/i })).toBeEnabled();
+  });
+
   it("reveals five places — fifth through first — before the podium and remaining standings", async () => {
     signIn();
     const session = sessionSummary({ state: "FINISHED" });
