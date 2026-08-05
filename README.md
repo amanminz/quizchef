@@ -39,7 +39,15 @@ This builds and starts the complete development environment:
 
 Database migrations run automatically at backend startup via Flyway. The `quizchef-media` bucket is created automatically in MinIO.
 
-The stack is defined in `compose.yml` (environment-agnostic services and health checks) plus `compose.override.yml` (local development concerns such as host port publishing), which Docker Compose merges automatically.
+The stack is defined in `compose.yml` (environment-agnostic services and health checks) plus `compose.override.yml` (local development concerns such as host port publishing and the frontend's API base URL), which Docker Compose merges automatically.
+
+The browser talks to the backend directly on `http://localhost:8080` rather than through the frontend's nginx — the same split-origin arrangement as production. That URL is a Vite build argument, so it is **baked into the bundle at image build time**: after changing any `VITE_*` value, rebuild rather than restart.
+
+```bash
+docker compose up -d --build frontend
+```
+
+A frontend image built without it falls back to same-origin, and every API call hits the nginx serving the static files, which has no `/api` route — so requests never reach the backend and POSTs return `405 Not Allowed`. (`npm run dev` is unaffected: the Vite dev server proxies `/api` and `/ws` itself.)
 
 Stop the environment with `docker compose down`. Add `-v` to also delete the PostgreSQL and MinIO volumes.
 
