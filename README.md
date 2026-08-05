@@ -43,7 +43,7 @@ The stack is defined in `compose.yml` (environment-agnostic services and health 
 
 nginx proxies `/api` and `/ws` through to the backend, so the browser and the API share one origin — the same thing the Vite dev server does for `npm run dev`. That means the app works whatever address you open it on: `localhost:3000`, `127.0.0.1:3000`, a WSL address, or your machine's LAN address from a phone on the same network (useful for testing a real session with real devices).
 
-The proxy is `docker/frontend/local-api-proxy.conf`, mounted by `compose.override.yml` into the `/etc/nginx/site-extra/` directory the server block includes. The image ships that directory empty, so production — where the frontend and backend are separate Railway services with no shared network — renders exactly the server block it always did and uses a build-time `VITE_API_BASE_URL` instead.
+The proxy is `docker/frontend/site-extra/local-api-proxy.conf`; `compose.override.yml` mounts that whole directory over the `/etc/nginx/site-extra/` the server block includes (a directory rather than a single file — individual file bind mounts are unreliable on Docker Desktop with WSL). The image ships that directory empty, so production — where the frontend and backend are separate Railway services with no shared network — renders exactly the server block it always did and uses a build-time `VITE_API_BASE_URL` instead.
 
 `scripts/verify-local-compose.sh` checks this wiring without starting anything.
 

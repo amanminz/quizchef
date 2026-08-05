@@ -33,7 +33,12 @@ services:
     # The file is absent from the image and from production, where the two are
     # separate Railway services with no shared network and the bundle is built
     # with an explicit VITE_API_BASE_URL instead.
+    # A directory mount, not a single-file one. Bind-mounting an individual
+    # file is unreliable on Docker Desktop with WSL — the container can fail
+    # to start with "error mounting ... no such file or directory" — and it
+    # would not pick up a second file later anyway. The image ships this
+    # directory empty, so replacing it wholesale loses nothing.
     volumes:
-      - ./docker/frontend/local-api-proxy.conf:/etc/nginx/site-extra/local-api-proxy.conf:ro
+      - ./docker/frontend/site-extra:/etc/nginx/site-extra:ro
     ports:
       - "${FRONTEND_PORT:-3000}:8080"

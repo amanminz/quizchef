@@ -37,19 +37,26 @@ local_config="$(docker compose config --format json)"
 mounted="$(printf '%s' "$local_config" | python3 -c '
 import json, sys
 volumes = json.load(sys.stdin)["services"]["frontend"].get("volumes") or []
-print(next((v["target"] for v in volumes
-            if v["target"].startswith("/etc/nginx/site-extra/")
-            and v["target"].endswith(".conf")), ""))')"
+print(next((v["source"] for v in volumes
+            if v["target"].rstrip("/") == "/etc/nginx/site-extra"
+            and v["type"] == "bind"), ""))')"
 [ -n "$mounted" ] ||
-  fail "no API proxy is mounted into /etc/nginx/site-extra — API calls would hit the SPA fallback and POSTs would 405"
-pass "API proxy mounted at $mounted"
+  fail "no directory is mounted at /etc/nginx/site-extra — API calls would hit the SPA fallback and POSTs would 405"
+pass "site-extra directory mounted from $mounted"
+
+# A single-file bind mount is unreliable on Docker Desktop with WSL: the
+# container fails to start with "error mounting ... no such file or
+# directory". Mount the directory.
+[ -d "$mounted" ] ||
+  fail "$mounted is not a directory — mount the directory, not an individual .conf file"
+pass "it is a directory mount"
 
 grep -q 'include /etc/nginx/site-extra/\*\.conf;' docker/frontend/nginx.conf ||
   fail "docker/frontend/nginx.conf no longer includes /etc/nginx/site-extra/*.conf, so the mount above is never read"
 pass "the server block includes it"
 
 for path in "location /api/" "location /ws"; do
-  grep -q "^$path" docker/frontend/local-api-proxy.conf ||
+  grep -q "^$path" docker/frontend/site-extra/local-api-proxy.conf ||
     fail "local-api-proxy.conf has no '$path' block"
 done
 pass "it proxies both /api and /ws"
@@ -57,9 +64,9 @@ pass "it proxies both /api and /ws"
 # $host drops the port. The backend would then reconstruct a different origin
 # than the browser sent, treat a same-origin POST as cross-origin, and 403
 # every hostname but the one the CORS allowlist happens to name.
-! grep -qE '^[[:space:]]*proxy_set_header Host \$host;' docker/frontend/local-api-proxy.conf ||
+! grep -qE '^[[:space:]]*proxy_set_header Host \$host;' docker/frontend/site-extra/local-api-proxy.conf ||
   fail "proxy_set_header Host uses \$host, which drops the port — use \$http_host"
-grep -qE '^[[:space:]]*proxy_set_header Host \$http_host;' docker/frontend/local-api-proxy.conf ||
+grep -qE '^[[:space:]]*proxy_set_header Host \$http_host;' docker/frontend/site-extra/local-api-proxy.conf ||
   fail "proxy_set_header Host \$http_host is missing — the backend needs the port to see the request as same-origin"
 pass "it forwards Host with the port intact (\$http_host)"
 
