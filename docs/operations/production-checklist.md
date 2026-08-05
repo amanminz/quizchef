@@ -33,6 +33,9 @@ What must be true before a production deploy is considered safe. Grouped by what
   ```
 
   Then once more from network A with a *different* injected `X-Forwarded-For` — it must **still** be 429. Then once from network B — it must **not** be. If the injected header changes the outcome, the platform is passing the client's value through as the rightmost entry and `TRUSTED_PROXY_REGEX` needs narrowing to the real proxy addresses.
+
+- [ ] **`TRUSTED_PROXY_REGEX` reviewed as a regex, not as CIDR.** Tomcat takes a Java regular expression here. Startup refuses a catch-all (`.*`, `.+`, `^.*$`, or anything matching arbitrary public addresses) outright; a value that matches nothing — including a CIDR string like `10.0.0.0/8`, which compiles but matches no address — starts with a warning and leaves every caller on one shared bucket. Check the boot log for `security.trusted_proxy_configured`, and act on `security.trusted_proxy_absent` or `security.trusted_proxy_suspicious`.
+- [ ] **The value survived the round trip into Railway.** It contains backslashes, and quoting or escaping can change them in transit. An earlier revision of the shipped default lost this in YAML — `10\\.` instead of `10\.` — which matches no address and silently collapsed every caller into one bucket without erroring. Confirm the running value by checking the boot log line above appears without a warning.
 - [ ] Rate-limit policy (`quizchef.security.rate-limit.rules`) reviewed against actual traffic patterns before launch.
 - [ ] **Venue capacity confirmed against the room you are about to run in.** The participant-facing routes are limited per client IP, and at a venue every phone shares one NAT address — so these are per-venue budgets. Defaults support a room of **150**:
 
