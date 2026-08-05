@@ -31,16 +31,35 @@ The three combinations, and what each actually does:
 
 That last row cannot be fixed from the new code — the broken client is
 already shipped, and the only server-side "fix" would be to keep sending
-the rank this release exists to remove. So:
+the rank this release exists to remove.
 
-- [ ] **Deploy when no session is live.** This is already the standing rule
-      during events (feature freeze), and it is what makes the window
-      harmless: no participant is on a results screen to see "0th", and no
-      host is mid-ceremony.
-- [ ] After deploying, confirm **both** Railway services report the new
-      build before starting an event — `/actuator/info` for the backend,
-      and a hard reload of the frontend (Vite hashes assets, so a cached
-      `index.html` is the thing to watch for).
+So the ordering is not arbitrary: **deploy the frontend first**. That puts
+the release through the middle row of the table (which degrades quietly and
+is covered by tests) and skips the bottom one entirely.
+
+### Coordinated sequence for a contract-changing release
+
+- [ ] **No session is live.** Not lobby, not in progress, not mid-ceremony.
+      This is already the standing rule during events (feature freeze), and
+      it is what makes the whole window harmless.
+- [ ] **Pause auto-deploy on the backend service**, or use Railway's manual
+      deploy for it. Both services watch the same repository, so a plain
+      push to `main` starts both at once and the order becomes whichever
+      build happens to finish first — which is precisely what this sequence
+      exists to prevent.
+- [ ] **Deploy the frontend.** Wait for it to go healthy.
+- [ ] **Verify the frontend** on a hard-reloaded browser (Vite content-hashes
+      its assets, so a cached `index.html` is the thing to watch for). It
+      is now a new client against an old backend: the participant journey
+      still plays, and a finished session shows the announcement-waiting
+      screen rather than an error.
+- [ ] **Deploy the backend.** Wait for `/actuator/health/readiness`.
+- [ ] **Verify `/actuator/info`** reports the expected `build.version` — the
+      confirmation that the new backend is actually the one serving.
+- [ ] **Refresh every open browser tab**, host and participants alike. A tab
+      left open across the deploy is still running the bundle it loaded,
+      and this is the one step nothing server-side can do for you.
+- [ ] **Re-enable backend auto-deploy** if it was paused.
 
 ## 2. Build the images
 
