@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
 #
 # Guards the one thing about the local Docker stack that is easy to break and
-# hard to notice: the frontend image must be built knowing where the backend
-# is.
+# hard to notice: the browser must be able to reach the API.
 #
-# Vite inlines VITE_* at build time, so an image built without
-# VITE_API_BASE_URL falls back to same-origin — and every API call then goes
-# to the nginx serving the static files, which has no /api route. Requests
-# never reach the backend at all; POSTs come back 405 Not Allowed, which
-# looks like a broken API and isn't. `npm run dev` hides this completely,
-# because the Vite dev server proxies /api and /ws itself.
+# The failure is quiet and misleading. nginx serves the SPA and has no /api
+# route of its own, so an API call that reaches it lands on the SPA fallback
+# and a POST comes back 405 Not Allowed — which reads as a broken backend but
+# never reached one. `npm run dev` hides this entirely, because the Vite dev
+# server proxies /api and /ws itself; only the containerized stack is affected.
+#
+# The local stack solves it by proxying, so the browser and the API share an
+# origin. That also sidesteps CORS, which is the second trap here:
+# http://localhost:3000, http://127.0.0.1:3000, a WSL address, and the LAN
+# address a phone would use are four different origins, and an allowlist can
+# only name so many.
 #
 # Checks the *rendered* config rather than the YAML text, so it follows
 # variable substitution and file merging the way Docker actually does.
@@ -29,44 +33,56 @@ echo "Local stack (compose.yml + compose.override.yml)"
 
 local_config="$(docker compose config --format json)"
 
-api_base_url="$(printf '%s' "$local_config" |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["frontend"]["build"]["args"].get("VITE_API_BASE_URL") or "")')"
-[ -n "$api_base_url" ] ||
-  fail "frontend build arg VITE_API_BASE_URL is empty — the bundle would fall back to same-origin and every API call would 405 against nginx"
-pass "frontend builds with VITE_API_BASE_URL=$api_base_url"
+# The proxy is mounted where the server block's include picks it up.
+mounted="$(printf '%s' "$local_config" | python3 -c '
+import json, sys
+volumes = json.load(sys.stdin)["services"]["frontend"].get("volumes") or []
+print(next((v["target"] for v in volumes
+            if v["target"].startswith("/etc/nginx/site-extra/")
+            and v["target"].endswith(".conf")), ""))')"
+[ -n "$mounted" ] ||
+  fail "no API proxy is mounted into /etc/nginx/site-extra — API calls would hit the SPA fallback and POSTs would 405"
+pass "API proxy mounted at $mounted"
 
-# The URL is only correct if it names the port the backend is actually
-# published on: these two live in different files and drift silently.
-backend_port="$(printf '%s' "$local_config" |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["backend"]["ports"][0]["published"])')"
-case "$api_base_url" in
-  *":$backend_port") pass "it points at the published backend port ($backend_port)" ;;
-  *) fail "VITE_API_BASE_URL ($api_base_url) does not match the published backend port ($backend_port)" ;;
-esac
+grep -q 'include /etc/nginx/site-extra/\*\.conf;' docker/frontend/nginx.conf ||
+  fail "docker/frontend/nginx.conf no longer includes /etc/nginx/site-extra/*.conf, so the mount above is never read"
+pass "the server block includes it"
 
-# Split origins mean the browser's requests are cross-origin, so the backend
-# has to allow the frontend's origin or every call fails preflight instead.
-frontend_port="$(printf '%s' "$local_config" |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["frontend"]["ports"][0]["published"])')"
-cors="$(printf '%s' "$local_config" |
-  python3 -c 'import json,sys; print(json.load(sys.stdin)["services"]["backend"]["environment"].get("CORS_ALLOWED_ORIGINS") or "")')"
-case "$cors" in
-  *"localhost:$frontend_port"*) pass "backend CORS allows http://localhost:$frontend_port" ;;
-  *) fail "CORS_ALLOWED_ORIGINS ($cors) does not cover the frontend origin (http://localhost:$frontend_port)" ;;
-esac
+for path in "location /api/" "location /ws"; do
+  grep -q "^$path" docker/frontend/local-api-proxy.conf ||
+    fail "local-api-proxy.conf has no '$path' block"
+done
+pass "it proxies both /api and /ws"
 
-# The override is local-only by construction: compose.override.yml is merged
-# only with compose.yml, never with the production file, which is passed
-# explicitly with -f. This asserts the consequence rather than the mechanism
-# — production must source its own URL from the environment, with no
-# localhost anywhere near it.
-#
-# Read as text rather than rendered: docker-compose.prod.yml deliberately has
-# no defaults for its secrets (RFC-011 — a missing value should fail startup,
-# not deploy something insecure), so it cannot be rendered without inventing
-# a dozen placeholder credentials, and the invariant here is about what the
-# file declares anyway.
+# $host drops the port. The backend would then reconstruct a different origin
+# than the browser sent, treat a same-origin POST as cross-origin, and 403
+# every hostname but the one the CORS allowlist happens to name.
+! grep -qE '^[[:space:]]*proxy_set_header Host \$host;' docker/frontend/local-api-proxy.conf ||
+  fail "proxy_set_header Host uses \$host, which drops the port — use \$http_host"
+grep -qE '^[[:space:]]*proxy_set_header Host \$http_host;' docker/frontend/local-api-proxy.conf ||
+  fail "proxy_set_header Host \$http_host is missing — the backend needs the port to see the request as same-origin"
+pass "it forwards Host with the port intact (\$http_host)"
+
+# Same-origin means the bundle must NOT be built pointing somewhere else.
+api_base_url="$(printf '%s' "$local_config" | python3 -c '
+import json, sys
+build = json.load(sys.stdin)["services"]["frontend"].get("build") or {}
+print((build.get("args") or {}).get("VITE_API_BASE_URL") or "")')"
+[ -z "$api_base_url" ] ||
+  fail "VITE_API_BASE_URL is set to '$api_base_url' — with the proxy in place the bundle should stay same-origin, or every browser will call that one host regardless of how the page was opened"
+pass "the bundle stays same-origin (VITE_API_BASE_URL unset)"
+
+# The proxy is local-only by construction: compose.override.yml is merged only
+# with compose.yml, never with the production file, which is passed explicitly
+# with -f. Read as text because docker-compose.prod.yml deliberately has no
+# defaults for its secrets (RFC-011), so it cannot be rendered without
+# inventing a dozen placeholder credentials.
 echo "Production stack (docker-compose.prod.yml)"
+if grep -q "site-extra" docker-compose.prod.yml; then
+  fail "the local API proxy has leaked into docker-compose.prod.yml — the two are separate Railway services with no shared network, and 'backend' would not resolve"
+fi
+pass "no proxy mount (the image ships the include directory empty)"
+
 prod_arg="$(python3 - <<'PYTHON'
 import re, sys
 text = open("docker-compose.prod.yml", encoding="utf-8").read()

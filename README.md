@@ -41,13 +41,17 @@ Database migrations run automatically at backend startup via Flyway. The `quizch
 
 The stack is defined in `compose.yml` (environment-agnostic services and health checks) plus `compose.override.yml` (local development concerns such as host port publishing and the frontend's API base URL), which Docker Compose merges automatically.
 
-The browser talks to the backend directly on `http://localhost:8080` rather than through the frontend's nginx — the same split-origin arrangement as production. That URL is a Vite build argument, so it is **baked into the bundle at image build time**: after changing any `VITE_*` value, rebuild rather than restart.
+nginx proxies `/api` and `/ws` through to the backend, so the browser and the API share one origin — the same thing the Vite dev server does for `npm run dev`. That means the app works whatever address you open it on: `localhost:3000`, `127.0.0.1:3000`, a WSL address, or your machine's LAN address from a phone on the same network (useful for testing a real session with real devices).
+
+The proxy is `docker/frontend/local-api-proxy.conf`, mounted by `compose.override.yml` into the `/etc/nginx/site-extra/` directory the server block includes. The image ships that directory empty, so production — where the frontend and backend are separate Railway services with no shared network — renders exactly the server block it always did and uses a build-time `VITE_API_BASE_URL` instead.
+
+`scripts/verify-local-compose.sh` checks this wiring without starting anything.
+
+If you ever build the frontend image with a `VITE_*` value, remember Vite inlines those at build time: the value is baked into the bundle, so change them with a rebuild rather than a restart.
 
 ```bash
 docker compose up -d --build frontend
 ```
-
-A frontend image built without it falls back to same-origin, and every API call hits the nginx serving the static files, which has no `/api` route — so requests never reach the backend and POSTs return `405 Not Allowed`. (`npm run dev` is unaffected: the Vite dev server proxies `/api` and `/ws` itself.)
 
 Stop the environment with `docker compose down`. Add `-v` to also delete the PostgreSQL and MinIO volumes.
 

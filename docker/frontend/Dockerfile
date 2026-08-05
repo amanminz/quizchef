@@ -24,6 +24,10 @@ RUN npm run build
 FROM nginxinc/nginx-unprivileged:1.27-alpine
 ENV PORT=8080
 COPY docker/frontend/nginx.conf /etc/nginx/templates/default.conf.template
+# Empty in the image and in production: the server block includes
+# /etc/nginx/site-extra/*.conf, and a glob matching nothing is not an error.
+# Local development mounts an API proxy in here (compose.override.yml).
+RUN mkdir -p /etc/nginx/site-extra
 COPY --from=build /workspace/dist/ /usr/share/nginx/html/
 
 EXPOSE 8080

@@ -15,30 +15,25 @@ services:
       - "${BACKEND_PORT:-8080}:8080"
 
   frontend:
-    # The browser talks to the backend directly, on the host port published
-    # above — the same split-origin arrangement as production, where the two
-    # are separate Railway services.
+    # nginx proxies /api and /ws to the backend, so the browser and the API
+    # share one origin — exactly what the Vite dev server already does for
+    # `npm run dev`, and what the frontend's default (empty
+    # VITE_API_BASE_URL, i.e. same-origin) already expects.
     #
-    # This has to be a build arg, not an environment variable: Vite inlines
-    # VITE_* at build time, so the value is baked into the bundle and a
-    # container restart will not change it. Editing this needs a rebuild
-    # (`docker compose up -d --build frontend`).
+    # This is the difference between working and not working, rather than a
+    # tidiness preference. On split origins the browser has to call the API on
+    # another origin, and the backend's CORS allowlist must then name the
+    # exact hostname the page was opened with. But http://localhost:3000,
+    # http://127.0.0.1:3000, a WSL address, and the LAN address a phone would
+    # use are four different origins, and only one can be configured at a
+    # time — any other spelling gets a 403 on the preflight. Same-origin has
+    # no such failure mode, and a phone on the same network can join a
+    # session with no configuration at all.
     #
-    # Without it the bundle falls back to same-origin, and every API call
-    # goes to the nginx serving the static files. nginx has no /api route,
-    # so the request lands on the SPA fallback and POSTs come back
-    # **405 Not Allowed** — which looks like a broken backend but never
-    # reaches it. (The Vite dev server has no such problem: `npm run dev`
-    # proxies /api and /ws itself, which is why this only bites in Docker.)
-    #
-    # CORS is already satisfied: the backend's CORS_ALLOWED_ORIGINS defaults
-    # to http://localhost:${FRONTEND_PORT} in compose.yml.
-    build:
-      args:
-        VITE_API_BASE_URL: ${VITE_API_BASE_URL:-http://localhost:${BACKEND_PORT:-8080}}
-        # Left empty deliberately: the client derives
-        # ws://<api-host>/ws/websocket from the API base URL above, and one
-        # source of truth is harder to get wrong than two (RFC-009).
-        VITE_WS_URL: ${VITE_WS_URL:-}
+    # The file is absent from the image and from production, where the two are
+    # separate Railway services with no shared network and the bundle is built
+    # with an explicit VITE_API_BASE_URL instead.
+    volumes:
+      - ./docker/frontend/local-api-proxy.conf:/etc/nginx/site-extra/local-api-proxy.conf:ro
     ports:
       - "${FRONTEND_PORT:-3000}:8080"
