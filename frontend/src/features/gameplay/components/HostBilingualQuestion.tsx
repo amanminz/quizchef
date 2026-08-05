@@ -91,6 +91,13 @@ export function HostBilingualQuestion({
   const countFor = (optionId: string) =>
     distribution?.options?.find((entry) => entry.optionId === optionId);
 
+  /**
+   * Counts render for every option once revealed, including the ones nobody
+   * picked — a visible `0 · 0%` is information, and a row that simply omits
+   * its number reads as a rendering fault from the back of the room.
+   */
+  const showCounts = revealed && distribution !== undefined;
+
   // Presentation Mode's text sizes are clamp()-driven (viewport-aware,
   // never fixed), and deliberately smaller steps than the normal layout's
   // sm:/lg: classes — normal pages are untouched.
@@ -194,11 +201,21 @@ export function HostBilingualQuestion({
                 <li
                   key={id}
                   className={cn(
-                    "flex items-start gap-4 rounded-lg border-2",
+                    // A grid once the counts are showing: the label, count,
+                    // and percentage columns get reserved width so the
+                    // numbers stay put and stay aligned down the list, and
+                    // a long bilingual option shortens itself rather than
+                    // pushing them off the projector.
+                    "grid items-start gap-4 rounded-lg border-2",
                     presentationActive ? "gap-2 px-3 py-1.5 sm:gap-3 sm:py-2" : "px-5 py-4",
                     isCorrect ? "border-success bg-success/10" : "border-border",
                     revealed && !isCorrect && "opacity-60"
                   )}
+                  style={{
+                    gridTemplateColumns: showCounts
+                      ? "minmax(2.5rem, auto) minmax(0, 1fr) minmax(4rem, auto) minmax(5rem, auto)"
+                      : "minmax(2.5rem, auto) minmax(0, 1fr)"
+                  }}
                 >
                   <span
                     aria-hidden
@@ -232,14 +249,35 @@ export function HostBilingualQuestion({
                       </span>
                     )}
                   </span>
-                  {revealed && countFor(id) && (
-                    <span className="mt-1 shrink-0 whitespace-nowrap text-right font-mono text-sm tabular-nums text-muted-foreground sm:text-base">
-                      {countFor(id)?.count ?? 0}
-                      {countFor(id)?.percentage !== undefined && ` · ${countFor(id)?.percentage}%`}
-                    </span>
+                  {showCounts && (
+                    <>
+                      {/* One count and one percentage for the option, not one
+                          per language — the two localizations are the same
+                          answer and share the server's single tally. */}
+                      <span
+                        className="whitespace-nowrap text-right font-mono font-bold tabular-nums"
+                        style={{
+                          fontSize: presentationActive
+                            ? "clamp(1.45rem, 2.2vw, 2.6rem)"
+                            : undefined
+                        }}
+                      >
+                        {countFor(id)?.count ?? 0}
+                      </span>
+                      <span
+                        className="whitespace-nowrap text-right font-mono font-bold tabular-nums text-muted-foreground"
+                        style={{
+                          fontSize: presentationActive
+                            ? "clamp(1.45rem, 2.2vw, 2.6rem)"
+                            : undefined
+                        }}
+                      >
+                        {countFor(id)?.percentage ?? 0}%
+                      </span>
+                    </>
                   )}
                   {isCorrect && (
-                    <span className="mt-1 shrink-0">
+                    <span className="col-start-2 row-start-2 mt-1 justify-self-start">
                       <CorrectAnswerBadge />
                     </span>
                   )}
@@ -249,8 +287,15 @@ export function HostBilingualQuestion({
           </ol>
         )}
 
-        {revealed && distribution && (distribution.noAnswerCount ?? 0) > 0 && (
-          <p className="text-sm text-muted-foreground">No answer: {distribution.noAnswerCount}</p>
+        {showCounts && (distribution.noAnswerCount ?? 0) > 0 && (
+          <p
+            className="font-mono font-bold tabular-nums text-muted-foreground"
+            style={{
+              fontSize: presentationActive ? "clamp(1.2rem, 1.8vw, 2rem)" : undefined
+            }}
+          >
+            No answer: {distribution.noAnswerCount}
+          </p>
         )}
 
         {revealed && (primary?.explanation || secondary?.explanation) && (
