@@ -21,6 +21,17 @@ final class SessionLookup {
                 .orElseThrow(() -> new SessionNotFoundException("No active session for PIN " + pin));
     }
 
+    /**
+     * The same session, write-locked for the rest of the transaction — for
+     * joining, which appends to the roster and therefore has every device in
+     * the room contending for one row. See
+     * {@link SessionRepository#findAndLockBySessionPinValueAndStateNot}.
+     */
+    static Session activeByPinForUpdate(SessionRepository repository, String pin) {
+        return repository.findAndLockBySessionPinValueAndStateNot(pin, SessionState.ARCHIVED)
+                .orElseThrow(() -> new SessionNotFoundException("No active session for PIN " + pin));
+    }
+
     static Session byId(SessionRepository repository, UUID sessionId) {
         return repository.findById(sessionId)
                 .orElseThrow(() -> new SessionNotFoundException("Session %s does not exist".formatted(sessionId)));

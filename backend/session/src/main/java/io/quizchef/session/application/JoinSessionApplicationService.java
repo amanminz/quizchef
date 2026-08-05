@@ -29,6 +29,22 @@ import org.springframework.transaction.annotation.Transactional;
  * join), whether the session is full, and whether this identity/token is
  * already in it; the database unique constraints are the backstop for a
  * same-instant race.
+ *
+ * <p><strong>Joins are serialized on the session row.</strong> A join
+ * appends to the roster, so it is a read-modify-write of one shared record —
+ * and joining is the one moment when an entire room acts at once. Under the
+ * ordinary optimistic path they all load the same version and all but one
+ * are refused: a measured eight simultaneous joins produced two participants
+ * and six {@code conflict.concurrent-modification} errors, which on a phone
+ * reads as "the resource was changed" and leaves that person out of the
+ * quiz entirely. Taking a write lock for the few milliseconds a join takes
+ * turns that collision into a queue.
+ *
+ * <p>Locking here rather than retrying is deliberate. A bounded retry would
+ * still be a race — it makes success likely rather than certain, and the
+ * larger the room the worse the odds for whoever is last. Serializing makes
+ * every legitimate join succeed by construction. It is also strictly
+ * local: every other command keeps the optimistic path it always had.
  */
 @Service
 public class JoinSessionApplicationService {
@@ -52,7 +68,7 @@ public class JoinSessionApplicationService {
 
     @Transactional
     public ParticipantSessionView join(CurrentUser currentUser, JoinSessionCommand command) {
-        Session session = SessionLookup.activeByPin(sessionRepository, command.sessionPin());
+        Session session = SessionLookup.activeByPinForUpdate(sessionRepository, command.sessionPin());
         LanguageCode language = LanguageCode.of(command.preferredLanguage());
 
         Participant participant = currentUser.authenticated()
