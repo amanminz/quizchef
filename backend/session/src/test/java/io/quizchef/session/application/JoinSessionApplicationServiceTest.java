@@ -45,7 +45,7 @@ class JoinSessionApplicationServiceTest {
     private Session lobby(String pin) {
         Session session = sessionHostedBy(hostUser, pin);
         session.openLobby();
-        when(sessionRepository.findBySessionPinValueAndStateNot(eqPin(pin), any()))
+        when(sessionRepository.findAndLockBySessionPinValueAndStateNot(eqPin(pin), any()))
                 .thenReturn(Optional.of(session));
         return session;
     }
@@ -84,7 +84,7 @@ class JoinSessionApplicationServiceTest {
 
     @Test
     void unknownPinIsNotFound() {
-        when(sessionRepository.findBySessionPinValueAndStateNot(any(), any())).thenReturn(Optional.empty());
+        when(sessionRepository.findAndLockBySessionPinValueAndStateNot(any(), any())).thenReturn(Optional.empty());
 
         assertThatExceptionOfType(SessionNotFoundException.class)
                 .isThrownBy(() -> service.join(anonymous(), new JoinSessionCommand("999999", "G", "en")));
@@ -94,7 +94,7 @@ class JoinSessionApplicationServiceTest {
     @Test
     void joiningAClosedLobbyIsRejected() {
         Session session = sessionHostedBy(hostUser, "100003"); // still CREATED
-        when(sessionRepository.findBySessionPinValueAndStateNot(any(), any()))
+        when(sessionRepository.findAndLockBySessionPinValueAndStateNot(any(), any()))
                 .thenReturn(Optional.of(session));
 
         assertThatExceptionOfType(InvalidSessionTransitionException.class)
@@ -109,7 +109,7 @@ class JoinSessionApplicationServiceTest {
         session.registerParticipant(UUID.randomUUID(),
                 io.quizchef.session.domain.ParticipantKey.forGuest(
                         io.quizchef.session.domain.GuestParticipantToken.generate()));
-        when(sessionRepository.findBySessionPinValueAndStateNot(any(), any()))
+        when(sessionRepository.findAndLockBySessionPinValueAndStateNot(any(), any()))
                 .thenReturn(Optional.of(session));
 
         assertThatExceptionOfType(SessionFullException.class)
