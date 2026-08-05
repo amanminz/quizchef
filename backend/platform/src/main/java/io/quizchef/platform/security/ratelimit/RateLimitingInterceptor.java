@@ -74,7 +74,11 @@ public class RateLimitingInterceptor implements HandlerInterceptor {
 
         securityEventLogger.rateLimitTriggered(method, route, subject);
         response.setStatus(HttpStatus.TOO_MANY_REQUESTS.value());
-        response.setHeader(HttpHeaders.RETRY_AFTER, String.valueOf(bucket.secondsUntilReset()));
+        // When the next token lands, not when the bucket is full again: a
+        // 150-per-minute bucket refills one every 0.4 seconds, so the old
+        // "wait the whole window" answer was off by two orders of magnitude.
+        response.setHeader(HttpHeaders.RETRY_AFTER,
+                String.valueOf(Math.max(1, bucket.secondsUntilNextToken())));
         response.setContentType(MediaType.APPLICATION_JSON_VALUE);
         objectMapper.writeValue(response.getOutputStream(),
                 ApiError.of("rate-limit.exceeded", "Too many requests. Please try again later."));

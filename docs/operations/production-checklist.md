@@ -23,7 +23,32 @@ What must be true before a production deploy is considered safe. Grouped by what
 
 - [ ] `CORS_ALLOWED_ORIGINS` is set to the real deployed frontend origin(s) — no default exists outside `local`/`test`, so a missing value fails startup rather than silently allowing nothing (or everything).
 - [ ] `server.forward-headers-strategy: framework` is active in `prod` only — confirm the reverse proxy (Railway) actually sets `X-Forwarded-For`, or IP-based rate limits will key on the proxy's own address instead of real clients.
-- [ ] Rate-limit policy (`quizchef.security.rate-limit.rules`) reviewed against actual traffic patterns before launch — the shipped defaults (RFC-011) were sized for a single Bible Quiz event, not load-tested.
+- [ ] Rate-limit policy (`quizchef.security.rate-limit.rules`) reviewed against actual traffic patterns before launch.
+- [ ] **Venue capacity confirmed against the room you are about to run in.** The participant-facing routes are limited per client IP, and at a venue every phone shares one NAT address — so these are per-venue budgets. Defaults support a room of **150**:
+
+  | Route | Capacity | Window | Override |
+  | --- | --- | --- | --- |
+  | `POST /sessions/{pin}/join` | 150 | 1 min | `PARTICIPANT_RATE_LIMIT_CAPACITY` |
+  | `POST /sessions/reconnect` | 300 | 1 min | `PARTICIPANT_RECONNECT_RATE_LIMIT_CAPACITY` |
+  | `POST /sessions/{id}/answers` | 200 | 10 s | `PARTICIPANT_ANSWER_RATE_LIMIT_CAPACITY` |
+
+  Reconnect is double the room size because every device reconnects on join, on refresh, and after any dropped websocket — a wifi blip reconnects everyone at once. Answers are sized for a whole room replying within seconds of a question opening.
+
+  For a larger room, raise all three together. A 300-person event wants at least:
+
+  ```
+  PARTICIPANT_RATE_LIMIT_CAPACITY=350
+  PARTICIPANT_RECONNECT_RATE_LIMIT_CAPACITY=700
+  PARTICIPANT_ANSWER_RATE_LIMIT_CAPACITY=400
+  ```
+
+  The answer capacity must be **at least the expected attendance** — nearly everyone answers within the same few seconds, so a budget below the headcount silently drops answers.
+
+- [ ] **Capacity is not below the session's own `maxParticipants`.** They are different limits and do not move together: `maxParticipants` defaults to **500** per session, while the participant capacity above defaults to 150 *per minute per address*. A 500-person session is therefore admissible in principle but would take roughly four minutes to fill from one venue, and answers would be dropped throughout. If a session is configured to hold more people than the venue capacity allows, raise the capacity to match before the event.
+
+  Measured symptom of setting them too low: participants see the join screen fail, or their answers silently not register.
+
+  Authentication and registration limits are deliberately **not** sized this way — they are per person, not per room, and stay small (login 5/min, register 3/min, host-access 3/min).
 - [ ] A CSP/CORS/rate-limit smoke test (see the [Runbook](runbook.md)) passes against the deployed instance, not just CI.
 
 ## Still open (not this PR's scope — tracked for later Phase 3 work)

@@ -91,14 +91,40 @@ quizchef:
         "[POST /api/v1/sessions]":
           capacity: 10
           window: PT1M
+        # --- Participant-facing routes: sized per VENUE, not per person.
+        #
+        # These three are limited per client IP, and at a real event every
+        # phone in the building shares one NAT address — so the per-IP limit
+        # is in practice a per-venue limit. At the old numbers a measured
+        # 40-device room got 10 joins, 10 reconnects, and 7 answers through;
+        # everyone else was refused with a 60-second Retry-After, which at a
+        # live event means most of the room simply cannot play.
+        #
+        # Sized from PARTICIPANT_RATE_LIMIT_CAPACITY (the largest room to
+        # support). Raise it for a bigger venue; no other limit moves with
+        # it, and the authentication and registration buckets below are
+        # deliberately untouched.
+        #
+        # What this still bounds: a single address gets 150 join attempts a
+        # minute. Against the 6-digit PIN space that is roughly one chance in
+        # 6,700 per minute of guessing a specific live session — and a PIN is
+        # on the projector in front of the room anyway. The session's own
+        # maxParticipants, the lobby-state check, and one-answer-per-question
+        # remain the real limits on what a guessed PIN is worth.
         "[POST /api/v1/sessions/{pin}/join]":
-          capacity: 10
+          capacity: ${PARTICIPANT_RATE_LIMIT_CAPACITY:150}
           window: PT1M
+        # Every device reconnects right after joining (that is what marks it
+        # connected), on every refresh, and after every dropped websocket —
+        # so a wifi blip reconnects the whole room at once. Twice the room
+        # size per minute leaves headroom for that without a second thought.
         "[POST /api/v1/sessions/reconnect]":
-          capacity: 10
+          capacity: ${PARTICIPANT_RECONNECT_RATE_LIMIT_CAPACITY:300}
           window: PT1M
+        # A whole room answers within the same few seconds of a question
+        # opening, which is the entire point of the format.
         "[POST /api/v1/sessions/{id}/answers]":
-          capacity: 20
+          capacity: ${PARTICIPANT_ANSWER_RATE_LIMIT_CAPACITY:200}
           window: PT10S
         "[POST /api/v1/quizzes/{quizId}/publish]":
           capacity: 10

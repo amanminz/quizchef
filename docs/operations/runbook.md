@@ -77,6 +77,26 @@ done
 # the 6th call should be 429, with Retry-After and X-RateLimit-Remaining: 0 on the response
 ```
 
+**A whole room cannot join, or answers stop registering mid-question.** Almost
+always the venue rate limit rather than a fault: every phone in the building
+shares one NAT address, so the per-IP budget is a per-venue budget. Confirm
+from the response — a refused participant gets `429` with
+`code: rate-limit.exceeded`, `X-RateLimit-Limit` at the configured capacity,
+and a `Retry-After` in seconds.
+
+```bash
+# What the server is currently willing to accept from one address
+curl -s -o /dev/null -D - -X POST http://localhost:8080/api/v1/sessions/000001/join \
+  -H "Content-Type: application/json" \
+  -d '{"displayName":"probe","preferredLanguage":"en"}' | grep -i "x-ratelimit"
+```
+
+Defaults support a room of 150. Raise `PARTICIPANT_RATE_LIMIT_CAPACITY`,
+`PARTICIPANT_RECONNECT_RATE_LIMIT_CAPACITY`, and
+`PARTICIPANT_ANSWER_RATE_LIMIT_CAPACITY` together for a larger venue (see the
+[Production Checklist](production-checklist.md)), then restart the backend —
+they are read at startup.
+
 `security.*` events (see the [Logging Reference](logging-reference.md)) are the fastest way to see *why* a given caller is being blocked without turning on verbose/debug logging.
 
 ---
