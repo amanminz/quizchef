@@ -77,6 +77,16 @@ done
 # the 6th call should be 429, with Retry-After and X-RateLimit-Remaining: 0 on the response
 ```
 
+**Everyone is rate-limited at once, from every network.** The proxy chain is
+not being recognised: when the immediate peer does not match
+`server.tomcat.remoteip.internal-proxies`, Tomcat ignores `X-Forwarded-For`
+entirely and every client is keyed on the proxy's own address — one shared
+bucket for the whole internet. This fails closed (service degrades, limits
+are not bypassed), and it looks like sudden widespread 429s right after a
+deployment or a platform networking change. Fix by setting
+`TRUSTED_PROXY_REGEX` to match the address the proxy reaches the container
+from; the default covers the private ranges.
+
 **A whole room cannot join, or answers stop registering mid-question.** Almost
 always the venue rate limit rather than a fault: every phone in the building
 shares one NAT address, so the per-IP budget is a per-venue budget. Confirm
