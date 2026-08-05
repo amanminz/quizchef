@@ -11,20 +11,37 @@ import org.junit.jupiter.params.provider.CsvSource;
 
 class FinalPlacementPolicyTest {
 
-    @ParameterizedTest(name = "{0} participants → ranks 1–{1} revealed")
+    /**
+     * The published table, pinned here so it cannot drift from the RFC:
+     *
+     * <pre>
+     * participants | exact ranks | relative-only
+     *            1 |           1 |             0
+     *            4 |           4 |             0
+     *            6 |           5 |             1
+     *           10 |           5 |             5
+     *           11 |           6 |             5
+     *           20 |          10 |            10
+     * </pre>
+     */
+    @ParameterizedTest(name = "{0} participants → ranks 1–{1} exact, {2} relative-only")
     @CsvSource({
-            // Small rooms: everyone is inside the ceremony's own five places.
-            "1, 1",
-            "4, 4",
+            // Small rooms: everyone is inside the ceremony's own five places,
+            // and a room this size has no anonymity to offer anyone anyway.
+            "1, 1, 0",
+            "4, 4, 0",
             // Once there are more than five, the five places lead until half
             // the room overtakes them.
-            "6, 5",
-            "10, 5",
-            "11, 6",
-            "20, 10"
+            "6, 5, 1",
+            "10, 5, 5",
+            "11, 6, 5",
+            "20, 10, 10"
     })
-    void revealsTheCeremonialPlacesOrHalfTheRoom(int total, int expected) {
-        assertThat(FinalPlacementPolicy.exactRankRevealCount(board(total))).isEqualTo(expected);
+    void revealsTheCeremonialPlacesOrHalfTheRoom(int total, int exact, int relativeOnly) {
+        int revealed = FinalPlacementPolicy.exactRankRevealCount(board(total));
+
+        assertThat(revealed).isEqualTo(exact);
+        assertThat(total - revealed).isEqualTo(relativeOnly);
     }
 
     @Test

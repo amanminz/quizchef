@@ -19,13 +19,19 @@ import java.util.List;
  * through:
  *
  * <pre>
- * 1 participant  → 1   (they are simply first)
- * 4 participants → 4   (min(5,4)=4 beats ceil(4/2)=2)
- * 6 participants → 5   (min(5,6)=5 beats ceil(6/2)=3)
- * 10 participants → 5  (5 beats ceil(10/2)=5 — equal, so 5)
- * 11 participants → 6  (ceil(11/2)=6 beats 5)
- * 20 participants → 10 (ceil(20/2)=10 beats 5)
+ * participants | exact ranks | relative-only
+ *            1 |           1 |             0   they are simply first
+ *            4 |           4 |             0   min(5,4)=4 beats ceil(4/2)=2
+ *            6 |           5 |             1   min(5,6)=5 beats ceil(6/2)=3
+ *           10 |           5 |             5   equal at 5, so 5
+ *           11 |           6 |             5   ceil(11/2)=6 beats 5
+ *           20 |          10 |            10   ceil(20/2)=10 beats 5
  * </pre>
+ *
+ * <p>Note the small rooms: at four participants everyone is inside the
+ * group, so fourth place does learn they came fourth. That is intended —
+ * concealing a position among four people offers no practical anonymity,
+ * since everyone can see who is in the room.
  *
  * <p>This is domain policy, not presentation: the same number decides
  * what the projector renders and what each participant's own device is

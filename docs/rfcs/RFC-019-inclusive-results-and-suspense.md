@@ -18,7 +18,7 @@ Created
 
 Updated
 
-2026-08-04
+2026-08-05
 
 ---
 
@@ -68,7 +68,7 @@ The distinction between "not returned" and "not computed" is the point. A nulled
 
 `pointsEarned` arrives on the same projection, read from the stored answer. That replaces the old client-side score delta (a diff of two consecutive snapshots, which vanished on refresh) with the server's own number, so a participant who reloads mid-reveal still sees `+750`.
 
-**The rank-context endpoint is deleted** — service, view, response, exception, route, hook, and component. It existed only to show per-question neighbours, which is exactly the feature being removed; leaving it behind returning 409s would be a disabled endpoint that still exists, and the codebase's own precedent (no placeholder services, no dead code) says to remove it. Its one genuinely reusable idea — "tied" wording rather than a false "ahead of" — is carried into the new final projection.
+**The rank-context endpoint is deleted** — service, view, response, exception, route, hook, and component. It existed only to show per-question neighbours, which is exactly the feature being removed; leaving it behind returning 409s would be a disabled endpoint that still exists, and the codebase's own precedent (no placeholder services, no dead code) says to remove it. Nothing of it is carried forward: the per-question neighbours it existed to serve are the feature being removed.
 
 ## Encouragement: a written catalogue, not a generated one
 
@@ -78,7 +78,26 @@ The file carries four house rules for anything added to it (no position, no comp
 
 ## The final split: one policy, two consumers
 
-`FinalPlacementPolicy.exactRankRevealCount(ranked)` returns `max(min(5, total), ceil(total / 2))` — at least the five ceremonial places (or the whole room, if smaller), at least half the room once half exceeds five. It then expands the cutoff while the entry at the boundary shares a rank with the one before it, so a shared rank is never split.
+`FinalPlacementPolicy.exactRankRevealCount(ranked)` returns:
+
+```text
+revealCount = max( min(5, totalParticipants), ceil(totalParticipants / 2) )
+```
+
+— at least the five ceremonial places (or the whole room, if smaller), at least half the room once half exceeds five:
+
+| Participants | Exact ranks revealed | Relative-only |
+| ---: | ---: | ---: |
+| 1 | 1 | 0 |
+| 4 | 4 | 0 |
+| 6 | 5 | 1 |
+| 10 | 5 | 5 |
+| 11 | 6 | 5 |
+| 20 | 10 | 10 |
+
+That table is pinned in three places that must agree: this RFC, the `FinalPlacementPolicy` javadoc, and `FinalPlacementPolicyTest`'s parameterised cases, which assert both columns.
+
+It then expands the cutoff while the entry at the boundary shares a rank with the one before it, so a shared rank is never split.
 
 That expansion is written against **ranks, never scores**. `LeaderboardService` breaks every tie (submission time, then join order) and currently emits dense, unique ranks, so the loop never actually expands anything today. It is there so the rule is correct rather than accidentally correct, and so no future caller has to remember the edge case — the same reasoning RFC-018 applied to withholding ranks below fifth.
 
@@ -94,11 +113,11 @@ Because both read the same function over the same ranking, the projector and the
 `GET /sessions/{id}/participants/{participantId}/final-placement` returns either:
 
 - `EXACT_RANK` — `rank`, `score`, `label` (`WINNER` 1–3, `RUNNER_UP` 4–5, `FINALIST` 6+ inside the group).
-- `RELATIVE_ONLY` — `score`, and `aheadOf`/`behind`/`tiedWith` carrying **display names only**.
+- `RELATIVE_ONLY` — `score`, and `aheadOf`/`behind` carrying **display names only**.
 
 The neighbour type has exactly one component. There is no field on it for a rank, a score, or a gap, so none can be sent, cached, logged, or rendered by a later mistake — the guarantee is structural, and `ParticipantFinalPlacementQueryServiceTest` asserts it by reflecting over the record's components rather than by checking a particular response body.
 
-`tiedWith` fires only when the ranking service assigns two participants an equal rank, never on an equal score. Today it therefore never fires. It is on the contract because the alternative — saying "you finished ahead of Priya" about someone the game's own ranking calls an equal — is precisely the small inaccuracy this feature exists to avoid, and because the wording rule should exist before the ranking that needs it. It is flagged in Risks as the one deliberately-unreachable branch here.
+**There is no `tiedWith`.** An earlier revision carried one, firing only on an equal *rank* rather than an equal score — which, since `LeaderboardService` orders the field totally, meant it could never fire at all. Review rightly called that out: an unreachable field on a privacy-sensitive response is complexity without behaviour, and untested-in-anger code on exactly the path where that matters most. It is gone. Two players on the same score are still one ahead of the other, and the response says so, which is both true and what the ranking means. `describesEqualScoresByTheirCanonicalOrderAndNeverAsTied` pins that with twelve players on identical scores; the frontend has the matching case. If the ranking model ever gains genuinely shared ranks, the wording for them belongs on the server's shape first — and the RFC that introduces shared ranks is where it should be designed.
 
 The label rule moved from the frontend's `finalResultLabel` (which computed it from a rank) to the server, since the participant who most needs a label is now the one who is not told their rank.
 
@@ -128,8 +147,7 @@ The label rule moved from the frontend's `finalResultLabel` (which computed it f
 
 # Risks
 
-- **`tiedWith` is currently unreachable.** `LeaderboardService` emits unique ranks, so the branch never fires. It is deliberate (documented above), but it is untested-in-anger code on a privacy-sensitive path, and if the ranking ever does share a rank, that branch will run in production having never run anywhere else. The unit test covers the wording; the ranking it depends on does not yet produce the input.
-- **Removing `rank` from `ParticipantResultResponse` is a breaking response change**, as is deleting the rank-context route. Both are deployed as one unit with the only client that consumes them, so there is no compatibility window to manage — but a cached older bundle mid-deploy will render a missing rank rather than a stale one, which is the correct failure direction and worth knowing about.
+- **One deployment combination is cosmetically broken and cannot be fixed from this side.** The backend and frontend are separate Railway services built from the same push and do not land together. New-frontend-against-old-backend degrades quietly (a missing `/final-placement` reads as `http.404` → the announcement-waiting screen via `isEndpointMissing`; a missing `pointsEarned` omits that line; a `rank` still on the wire is never read — all covered by tests). **Old-frontend-against-new-backend renders `rankOrdinal(rank ?? 0)` — a 6xl "0th"** — because that bundle is already shipped, and the only server-side remedy would be to keep sending the rank this release removes. An old *host* bundle would also render the full standings below the podium, predating the cutoff. Mitigation is operational and documented in the [deployment checklist](../operations/deployment-checklist.md): deploy when no session is live (already the standing rule during events), and confirm both services report the new build before starting one.
 - **The pagination row count (10) and the `clamp()` sizes were reasoned about, not measured** — jsdom has no layout engine. A twenty-person room's second page is the first real test of it, and the manual checklist remains the acceptance test for the projector half, as in RFC-017 and RFC-018.
 - **The cutoff is generous in small rooms**: at four participants everyone is inside the reveal group, so nobody gets the relative-only treatment and the fourth player does learn they came fourth. That follows from `min(5, total)` and is intended — a room of four has no anonymity to offer anyone — but it does mean the feature's benefit only appears from about six participants up.
 - **The Hindi catalogue was written without a native reviewer in the loop.** The lines are simple and the forbidden-word test guards the one rule that matters most, but tone is not something a regex checks; this should be read by a Hindi speaker before the next event.
@@ -150,12 +168,13 @@ None. No database schema changed: every projection here is computed per request 
 - [x] The cutoff is correct at 1, 4, 6, 10, 11, and 20 participants, and expands rather than splitting a shared rank — with a separate test proving equal *scores* do not trigger that expansion.
 - [x] Ranks 1–3 are `WINNER`, 4–5 `RUNNER_UP`, and the rest of the group `FINALIST`, assigned by the server.
 - [x] A participant outside the reveal group receives no rank, no label, no neighbour rank, no neighbour score, and no gap — the neighbour record has exactly one component.
-- [x] The last player is told only whom they finished behind; a room of one gets first place; a tie is worded "alongside", never "ahead of".
+- [x] The last player is told only whom they finished behind; a room of one gets first place; equal scores are described by the ranking's own order and never as a tie, backend and frontend.
 - [x] Nothing at all is readable before the host's release, from either participant endpoint.
 - [x] The projector renders the podium plus the reveal group and stops — a sixth player in a room of six never appears on it.
 - [x] Revealed standings paginate at a fixed size, with keyboard-operable controls and no scrolling.
 - [x] Every catalogue line, in both languages and all four outcomes, is free of positional language; selection is deterministic and never repeats on consecutive questions.
 - [x] RFC-015's ceremony and release tests, RFC-017's holds, and RFC-018's Top 5 all pass with only the changes their own contracts required.
+- [x] A backend without `/final-placement` yields the announcement-waiting screen rather than an error, is not retried, and never produces a rank; an older backend's response shape (a `rank` present, `pointsEarned` absent) renders correctly and shows no position.
 
 ---
 
@@ -163,5 +182,5 @@ None. No database schema changed: every projection here is computed per request 
 
 - A native-speaker review of the Hindi catalogue, and catalogues for the dormant languages (`kn`, `ta`, `te`, `ml`) before any event that needs them — they currently fall back to English, which is honest but not good.
 - Revisit the cutoff after an event with a large room. `ceil(total / 2)` is a guess informed by nothing but taste; the interesting question is whether a fixed reveal group (say, the top ten) reads better on a projector than a proportional one.
-- If `LeaderboardService` ever adopts shared ranks, the `tiedWith` branch becomes live and should get an integration test with a genuinely tied ranking behind it.
+- If `LeaderboardService` ever adopts genuinely shared ranks, that RFC should design the "finished alongside" wording, add it to the placement shape, and cover it with an integration test driven by a real tied ranking — rather than reviving the unreachable field this one removed.
 - Question Versioning (PR #47B).
