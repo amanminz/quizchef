@@ -317,16 +317,20 @@ class GameplayIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.participantId").value(guestA))
                 .andExpect(jsonPath("$.displayName").value("Ann"))
-                .andExpect(jsonPath("$.rank").value(1))
                 .andExpect(jsonPath("$.score").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.pointsEarned").value(org.hamcrest.Matchers.greaterThan(0)))
                 .andExpect(jsonPath("$.totalQuestions").value(2))
                 .andExpect(jsonPath("$.participantCount").value(2))
+                // Their own progress, and no standing of any kind: no rank
+                // of their own, and no other player's row.
+                .andExpect(jsonPath("$.rank").doesNotExist())
                 .andExpect(jsonPath("$.entries").doesNotExist());
         mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/result"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.participantId").value(guestB))
-                .andExpect(jsonPath("$.rank").value(2))
-                .andExpect(jsonPath("$.score").value(0));
+                .andExpect(jsonPath("$.rank").doesNotExist())
+                .andExpect(jsonPath("$.score").value(0))
+                .andExpect(jsonPath("$.pointsEarned").value(0));
 
         // A guessed participant id resolves to nothing.
         mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/"
@@ -361,7 +365,8 @@ class GameplayIntegrationTest {
         mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("FINISHED"))
-                .andExpect(jsonPath("$.rank").value(1));
+                .andExpect(jsonPath("$.score").value(org.hamcrest.Matchers.greaterThan(0)))
+                .andExpect(jsonPath("$.rank").doesNotExist());
     }
 
     @Test
@@ -405,8 +410,13 @@ class GameplayIntegrationTest {
                 .andExpect(jsonPath("$.state").value("FINISHED"))
                 .andExpect(jsonPath("$.entries[0].displayName").value("Ann"));
 
-        // Participants see nothing about their final rank while pending.
+        // Participants see nothing about their finish while pending —
+        // neither the progress read nor the placement one answers.
         mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.results.not-available"));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA
+                        + "/final-placement"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.code").value("session.results.not-available"));
 
@@ -419,11 +429,17 @@ class GameplayIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.finalResultsReleased").value(true));
 
-        // Now every participant may read their own final rank.
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+        // Now every participant may read their own finish. This room has
+        // two players, so both are inside the reveal group and both get an
+        // exact rank; the split is exercised properly below.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA
+                        + "/final-placement"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rank").value(1));
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/result"))
+                .andExpect(jsonPath("$.visibility").value("EXACT_RANK"))
+                .andExpect(jsonPath("$.rank").value(1))
+                .andExpect(jsonPath("$.label").value("WINNER"));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB
+                        + "/final-placement"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rank").value(2));
 
@@ -432,7 +448,8 @@ class GameplayIntegrationTest {
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.finalResultsReleased").value(true));
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA + "/result"))
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestA
+                        + "/final-placement"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.rank").value(1));
 
@@ -561,36 +578,84 @@ class GameplayIntegrationTest {
     }
 
     @Test
-    void rankContextShowsNeighboursExceptOnTheFinalQuestion() throws Exception {
+    void finalPlacementSplitsTheRoomAtTheBackendCutoff() throws Exception {
         HostAccount host = onboardHost();
         String hostToken = host.token();
-        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
-        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        PlayableQuiz quiz = publishedQuizWithOneQuestion(host.reference());
 
-        // Question 1 is not the quiz's last question: neighbours are shown.
-        String q1 = openQuestion(hostToken, sessionId);
-        answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
-        answer(sessionId, guestB, q1, quiz.questions().get(0).wrongOptionId());
-        close(hostToken, sessionId);
-        reveal(hostToken, sessionId);
+        // Six players, each scoring a little less than the last, so the
+        // ranking is unambiguous end to end. Six → the reveal group is
+        // ranks 1–5, leaving exactly one player in the relative-only group.
+        Lobby lobby = createLobbyWithGuests(hostToken, quiz.quizId(),
+                List.of("Amelia", "Aman", "David", "Ruth", "John", "Grace"));
+        String questionId = openQuestion(hostToken, lobby.sessionId());
+        for (int index = 0; index < lobby.participantIds().size(); index++) {
+            // Everyone answers correctly; the scoring engine's speed bonus
+            // is what separates them, in join order.
+            answer(lobby.sessionId(), lobby.participantIds().get(index), questionId,
+                    quiz.questions().get(0).correctOptionId());
+        }
+        close(hostToken, lobby.sessionId());
+        reveal(hostToken, lobby.sessionId());
 
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/rank-context"))
+        // This quiz has one question, so that reveal was the last one: the
+        // whole room sits on the announcement-waiting screen, with neither
+        // read answering, until the host has run the ceremony.
+        for (String participantId : lobby.participantIds()) {
+            mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/participants/"
+                            + participantId + "/result"))
+                    .andExpect(status().isConflict());
+            mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/participants/"
+                            + participantId + "/final-placement"))
+                    .andExpect(status().isConflict());
+        }
+
+        mockMvc.perform(post("/api/v1/sessions/" + lobby.sessionId() + "/questions/advance")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FINISHED"));
+
+        // The host's own read carries the whole field plus the cutoff that
+        // says how much of it belongs on the projector.
+        JsonNode results = readJson(mockMvc.perform(
+                        get("/api/v1/sessions/" + lobby.sessionId() + "/results")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.rank").value(2))
-                .andExpect(jsonPath("$.ahead.displayName").value("Ann"))
-                .andExpect(jsonPath("$.behind").doesNotExist());
+                .andExpect(jsonPath("$.exactRankRevealCount").value(5))
+                .andExpect(jsonPath("$.entries", org.hamcrest.Matchers.hasSize(6)))
+                .andReturn().getResponse().getContentAsString());
 
-        // Question 2 is the quiz's last: neighbours are never disclosed,
-        // even once its own answer is revealed.
-        leaderboard(hostToken, sessionId);
-        String q2 = advanceToNext(hostToken, sessionId);
-        answer(sessionId, guestA, q2, quiz.questions().get(1).correctOptionId());
-        close(hostToken, sessionId);
-        reveal(hostToken, sessionId);
+        mockMvc.perform(post("/api/v1/sessions/" + lobby.sessionId() + "/results/release")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken)).andExpect(status().isOk());
 
-        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/participants/" + guestB + "/rank-context"))
-                .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.code").value("session.rank-context.not-available"));
+        // Ranks 1–5 learn exactly where they came, with the right label.
+        for (int rank = 1; rank <= 5; rank++) {
+            String participantId = results.get("entries").get(rank - 1).get("participantId").asText();
+            String expectedLabel = rank <= 3 ? "WINNER" : "RUNNER_UP";
+            mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/participants/"
+                            + participantId + "/final-placement"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.visibility").value("EXACT_RANK"))
+                    .andExpect(jsonPath("$.rank").value(rank))
+                    .andExpect(jsonPath("$.label").value(expectedLabel));
+        }
+
+        // The sixth gets their score and their neighbours' names — and no
+        // position, no neighbour rank, no neighbour score, no gap.
+        String sixth = results.get("entries").get(5).get("participantId").asText();
+        String fifthName = results.get("entries").get(4).get("displayName").asText();
+        mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/participants/" + sixth
+                        + "/final-placement"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.visibility").value("RELATIVE_ONLY"))
+                .andExpect(jsonPath("$.rank").doesNotExist())
+                .andExpect(jsonPath("$.label").doesNotExist())
+                .andExpect(jsonPath("$.score").exists())
+                .andExpect(jsonPath("$.behind.displayName").value(fifthName))
+                .andExpect(jsonPath("$.behind.rank").doesNotExist())
+                .andExpect(jsonPath("$.behind.score").doesNotExist())
+                // Nobody finished below them.
+                .andExpect(jsonPath("$.aheadOf").doesNotExist())
+                .andExpect(jsonPath("$.entries").doesNotExist());
     }
 
     @Test
@@ -785,6 +850,58 @@ class GameplayIntegrationTest {
     }
 
     private record HostAccount(String token, IdentityReference reference) {
+    }
+
+    /**
+     * A one-question quiz, so a session finishes after a single round —
+     * enough to exercise the finishing order without playing a whole game.
+     */
+    private PlayableQuiz publishedQuizWithOneQuestion(IdentityReference owner) {
+        LanguageCode en = LanguageCode.of("en");
+        Option correct = Option.of(true, 1);
+        Option wrong = Option.of(false, 2);
+        Quiz quiz = Quiz.create(new QuizLocalization(en, "Bible Quiz", null), owner);
+        Question question = questionRepository.save(Question.create(
+                new QuestionLocalization(en, "Q1", "Prompt 1", "Because of 1"),
+                owner, QuestionType.TRUE_FALSE, Difficulty.EASY,
+                List.of(correct, wrong),
+                List.of(correct.localized(en, "True"), wrong.localized(en, "False"))));
+        quiz.addQuestion(question.getId());
+        quiz.publish();
+        UUID quizId = quizRepository.save(quiz).getId();
+        return new PlayableQuiz(quizId,
+                List.of(new QuestionAnswers(question.getId(), correct.id(), wrong.id())));
+    }
+
+    /** A started session with as many connected guests as names given. */
+    private Lobby createLobbyWithGuests(String hostToken, UUID quizId, List<String> names)
+            throws Exception {
+        JsonNode session = readJson(mockMvc.perform(post("/api/v1/sessions")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"publishedQuizVersionId": "%s"}
+                                """.formatted(quizId)))
+                .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
+        String sessionId = session.get("sessionId").asText();
+        String pin = session.get("sessionPin").asText();
+        mockMvc.perform(post("/api/v1/sessions/" + pin + "/lobby")
+                .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken)).andExpect(status().isOk());
+
+        List<String> participantIds = new ArrayList<>();
+        for (String name : names) {
+            JsonNode guest = joinGuest(pin, name);
+            participantIds.add(guest.get("participantId").asText());
+            connect(guest.get("guestParticipantToken").asText());
+        }
+
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/start")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("IN_PROGRESS"));
+        return new Lobby(sessionId, participantIds);
+    }
+
+    private record Lobby(String sessionId, List<String> participantIds) {
     }
 
     private PlayableQuiz publishedQuizWithTwoQuestions(IdentityReference owner) {

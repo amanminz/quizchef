@@ -12,6 +12,55 @@ The steps of a deploy itself, as the system exists today: CI (`.github/workflows
 - [ ] `CORS_ALLOWED_ORIGINS` and `JWT_SECRET` are set for the target environment — neither has a production default (RFC-011), so a missing value fails startup rather than deploying insecurely.
 - [ ] `server.forward-headers-strategy: framework` (`application-prod.yml`) is deliberately `prod`-only — it makes `ClientIpResolver` (RFC-011) trust `X-Forwarded-For`, which is only safe behind a reverse proxy that sets it correctly (Railway). Never enable this outside an environment with such a proxy in front, or IP-based rate limits become spoofable.
 
+## 1b. When the two services can disagree
+
+The backend and frontend are separate Railway services built from the same
+push, and they do not finish at the same moment. For most releases that
+window is invisible. It is not invisible when a release changes a shared
+contract, and RFC-019 is the current example: it removes `rank` from the
+participant progress read, deletes the `rank-context` route, and adds
+`/final-placement`.
+
+The three combinations, and what each actually does:
+
+| Combination | Behaviour |
+| --- | --- |
+| New frontend → new backend | Correct. |
+| New frontend → old backend | Degrades quietly. `/final-placement` returns `http.404`, which the client reads as "results aren't out yet" and shows the announcement-waiting screen rather than an error (`isEndpointMissing`); a missing `pointsEarned` omits that line; a `rank` still sent by the old backend is never read. Covered by tests. |
+| Old frontend → new backend | **Cosmetically broken.** The old bundle renders `rankOrdinal(result.rank ?? 0)`, so a participant sees a 6xl **"0th"** where their rank used to be. Ranking neighbours silently disappear (the old client tolerates the 404). An old *host* bundle would also render the full standings below the podium, since it predates the reveal cutoff. |
+
+That last row cannot be fixed from the new code — the broken client is
+already shipped, and the only server-side "fix" would be to keep sending
+the rank this release exists to remove.
+
+So the ordering is not arbitrary: **deploy the frontend first**. That puts
+the release through the middle row of the table (which degrades quietly and
+is covered by tests) and skips the bottom one entirely.
+
+### Coordinated sequence for a contract-changing release
+
+- [ ] **No session is live.** Not lobby, not in progress, not mid-ceremony.
+      This is already the standing rule during events (feature freeze), and
+      it is what makes the whole window harmless.
+- [ ] **Pause auto-deploy on the backend service**, or use Railway's manual
+      deploy for it. Both services watch the same repository, so a plain
+      push to `main` starts both at once and the order becomes whichever
+      build happens to finish first — which is precisely what this sequence
+      exists to prevent.
+- [ ] **Deploy the frontend.** Wait for it to go healthy.
+- [ ] **Verify the frontend** on a hard-reloaded browser (Vite content-hashes
+      its assets, so a cached `index.html` is the thing to watch for). It
+      is now a new client against an old backend: the participant journey
+      still plays, and a finished session shows the announcement-waiting
+      screen rather than an error.
+- [ ] **Deploy the backend.** Wait for `/actuator/health/readiness`.
+- [ ] **Verify `/actuator/info`** reports the expected `build.version` — the
+      confirmation that the new backend is actually the one serving.
+- [ ] **Refresh every open browser tab**, host and participants alike. A tab
+      left open across the deploy is still running the bundle it loaded,
+      and this is the one step nothing server-side can do for you.
+- [ ] **Re-enable backend auto-deploy** if it was paused.
+
 ## 2. Build the images
 
 ```bash

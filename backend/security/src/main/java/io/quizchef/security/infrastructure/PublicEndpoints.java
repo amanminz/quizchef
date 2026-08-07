@@ -34,19 +34,20 @@ public final class PublicEndpoints {
             // revealed) — players are anonymous; the unguessable session id
             // gates it, same rationale as the summary read above.
             "/api/v1/sessions/*/questions/current",
-            // One participant's own result (phase-gated server-side; interim
-            // and final share it) — same anonymous audience; the unguessable
-            // session AND participant ids gate it, the same trust the answer
-            // endpoint places in the participant id. The full-standings
-            // GET /results is deliberately absent: every name, score, and
-            // rank is the host's projection and requires the hosting
-            // identity (live-event privacy).
+            // One participant's own progress — points just earned and their
+            // running total, never a rank (see ParticipantResultView) —
+            // phase-gated server-side; same anonymous audience, with the
+            // unguessable session AND participant ids gating it, the same
+            // trust the answer endpoint places in the participant id. The
+            // full-standings GET /results is deliberately absent: every
+            // name, score, and rank there is the host's projection and
+            // requires the hosting identity (live-event privacy).
             "/api/v1/sessions/*/participants/*/result",
-            // One participant's own ranking neighbours (ahead/behind) after a
-            // non-final question — phase- and last-question-gated
-            // server-side; same anonymous audience and unguessable-id trust
-            // as the personal result above. Never the full leaderboard.
-            "/api/v1/sessions/*/participants/*/rank-context"
+            // One participant's own finish, released-gated server-side and
+            // exact only for the reveal group. Same anonymous audience and
+            // unguessable-id trust as the personal result above; this is the
+            // only participant-facing source of final ranking there is.
+            "/api/v1/sessions/*/participants/*/final-placement"
     };
 
     private PublicEndpoints() {

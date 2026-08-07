@@ -7,10 +7,15 @@ import io.swagger.v3.oas.annotations.media.Schema;
 import java.util.UUID;
 
 /**
- * One participant's own result — rank, score, display name, and the counts
- * that frame them. The participant-facing counterpart of
- * {@link SessionResultsResponse}: a single row by construction, so no other
- * participant's name, score, or rank can reach a participant device.
+ * One participant's own progress during the quiz: what the question in
+ * play awarded them, their running total, and the counts that frame it.
+ *
+ * <p><strong>Carries no rank</strong> — not a nulled field, no field at
+ * all. Nobody is told where they stand until the host's ceremony has run;
+ * a participant's own finish comes from
+ * {@link ParticipantFinalPlacementResponse} after release, and no other
+ * participant's name, score, or rank can reach a participant device from
+ * here at any point.
  */
 public record ParticipantResultResponse(
         UUID sessionId,
@@ -21,8 +26,10 @@ public record ParticipantResultResponse(
         int participantCount,
         UUID participantId,
         String displayName,
-        int rank,
-        int score
+        @Schema(description = "Their running total", example = "3420") int score,
+        @Schema(description = "What the question in play awarded them; 0 if they did not answer",
+                example = "750")
+        int pointsEarned
 ) {
 
     static ParticipantResultResponse from(ParticipantResultView view) {
@@ -32,9 +39,9 @@ public record ParticipantResultResponse(
                 view.currentPhase(),
                 view.totalQuestions(),
                 view.participantCount(),
-                view.entry().participantId(),
-                view.entry().displayName(),
-                view.entry().rank(),
-                view.entry().score());
+                view.participantId(),
+                view.displayName(),
+                view.score(),
+                view.pointsEarned());
     }
 }

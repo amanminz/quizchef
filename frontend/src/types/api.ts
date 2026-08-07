@@ -54,9 +54,8 @@ export type AnswerDistributionResponse = Schemas["AnswerDistributionResponse"];
 export type OptionCount = Schemas["OptionCount"];
 export type TopFiveLeaderboardTransitionResponse = Schemas["TopFiveLeaderboardTransitionResponse"];
 export type TopFiveLeaderboardEntry = Schemas["TopFiveLeaderboardEntry"];
-export type ParticipantRankContextResponse = Schemas["ParticipantRankContextResponse"];
-export type RankNeighbour = Schemas["Neighbour"];
-export type RankTiedWith = Schemas["TiedWith"];
+export type ParticipantFinalPlacementResponse = Schemas["ParticipantFinalPlacementResponse"];
+export type FinalPlacementNeighbour = Schemas["FinalPlacementNeighbour"];
 
 /**
  * The backend has no named enum schemas — every state/type/difficulty

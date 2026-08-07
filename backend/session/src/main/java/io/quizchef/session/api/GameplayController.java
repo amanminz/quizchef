@@ -7,7 +7,7 @@ import io.quizchef.session.application.AnswerDistributionQueryService;
 import io.quizchef.session.application.AnswerProgressQueryService;
 import io.quizchef.session.application.CloseQuestionApplicationService;
 import io.quizchef.session.application.CurrentQuestionQueryService;
-import io.quizchef.session.application.ParticipantRankContextQueryService;
+import io.quizchef.session.application.ParticipantFinalPlacementQueryService;
 import io.quizchef.session.application.ReleaseFinalResultsApplicationService;
 import io.quizchef.session.application.SessionResultsQueryService;
 import io.quizchef.session.application.RevealAnswerApplicationService;
@@ -51,7 +51,7 @@ public class GameplayController {
     private final SessionResultsQueryService sessionResultsQueryService;
     private final AnswerProgressQueryService answerProgressQueryService;
     private final AnswerDistributionQueryService answerDistributionQueryService;
-    private final ParticipantRankContextQueryService participantRankContextQueryService;
+    private final ParticipantFinalPlacementQueryService participantFinalPlacementQueryService;
     private final TopFiveLeaderboardQueryService topFiveLeaderboardQueryService;
     private final ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService;
     private final CurrentUserProvider currentUserProvider;
@@ -66,7 +66,7 @@ public class GameplayController {
                              SessionResultsQueryService sessionResultsQueryService,
                              AnswerProgressQueryService answerProgressQueryService,
                              AnswerDistributionQueryService answerDistributionQueryService,
-                             ParticipantRankContextQueryService participantRankContextQueryService,
+                             ParticipantFinalPlacementQueryService participantFinalPlacementQueryService,
                              TopFiveLeaderboardQueryService topFiveLeaderboardQueryService,
                              ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService,
                              CurrentUserProvider currentUserProvider) {
@@ -80,7 +80,7 @@ public class GameplayController {
         this.sessionResultsQueryService = sessionResultsQueryService;
         this.answerProgressQueryService = answerProgressQueryService;
         this.answerDistributionQueryService = answerDistributionQueryService;
-        this.participantRankContextQueryService = participantRankContextQueryService;
+        this.participantFinalPlacementQueryService = participantFinalPlacementQueryService;
         this.topFiveLeaderboardQueryService = topFiveLeaderboardQueryService;
         this.releaseFinalResultsApplicationService = releaseFinalResultsApplicationService;
         this.currentUserProvider = currentUserProvider;
@@ -219,28 +219,30 @@ public class GameplayController {
                 topFiveLeaderboardQueryService.transition(currentUserProvider.currentUser(), id));
     }
 
-    @GetMapping("/{id}/participants/{participantId}/rank-context")
+    @GetMapping("/{id}/participants/{participantId}/final-placement")
     @Operation(
-            summary = "Read one participant's ranking neighbours",
-            description = "The participant's own rank, score, and points just earned, plus whoever is "
-                    + "immediately ahead and behind in the standings — never the full leaderboard. Open "
-                    + "like the personal-result endpoint (the unguessable session and participant ids "
-                    + "gate it). Available only for a non-final question whose answer has been revealed "
-                    + "— the quiz's last question never exposes neighbours, since final standings are "
-                    + "held for the host's winner ceremony.")
+            summary = "Read one participant's own finish",
+            description = "The only participant-facing source of final ranking there is. Open like the "
+                    + "personal-result endpoint (the unguessable session and participant ids gate it), "
+                    + "and held until the host releases results — the winner ceremony runs first, "
+                    + "always. Two shapes, decided by the server: the reveal group (the podium plus "
+                    + "the top half) gets EXACT_RANK with their position and label; everyone else gets "
+                    + "RELATIVE_ONLY — their score and the names either side of them, with no rank of "
+                    + "their own, no neighbour rank, no neighbour score, and no score gap anywhere in "
+                    + "the response.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "The participant's rank context"),
+            @ApiResponse(responseCode = "200", description = "The participant's own finish"),
             @ApiResponse(responseCode = "404", description = "Unknown session, or no such participant "
                     + "in it (session.participant.not-found)",
                     content = @Content(schema = @Schema(implementation = ApiError.class))),
-            @ApiResponse(responseCode = "409", description = "Not available right now "
-                    + "(session.rank-context.not-available)",
+            @ApiResponse(responseCode = "409", description = "The quiz has not finished, or the host "
+                    + "has not released results yet (session.results.not-available)",
                     content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
-    public ParticipantRankContextResponse rankContext(@PathVariable UUID id,
-                                                       @PathVariable UUID participantId) {
-        return ParticipantRankContextResponse.from(
-                participantRankContextQueryService.rankContext(id, participantId));
+    public ParticipantFinalPlacementResponse finalPlacement(@PathVariable UUID id,
+                                                            @PathVariable UUID participantId) {
+        return ParticipantFinalPlacementResponse.from(
+                participantFinalPlacementQueryService.placement(id, participantId));
     }
 
     @PostMapping("/{id}/results/release")

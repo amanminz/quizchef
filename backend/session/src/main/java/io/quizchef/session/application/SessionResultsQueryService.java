@@ -5,8 +5,11 @@ import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
 import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuizView;
+import io.quizchef.session.domain.FinalPlacementPolicy;
 import io.quizchef.session.domain.LeaderboardEntry;
 import io.quizchef.session.domain.LeaderboardService;
+import io.quizchef.session.domain.Participant;
+import io.quizchef.session.domain.ParticipantAnswer;
 import io.quizchef.session.domain.Session;
 import io.quizchef.session.domain.SessionPhase;
 import io.quizchef.session.domain.SessionState;
@@ -85,14 +88,22 @@ public class SessionResultsQueryService {
                 session.getCurrentPhase(),
                 totalQuestions,
                 session.participantCount(),
+                FinalPlacementPolicy.exactRankRevealCount(entries),
                 entries);
     }
 
     /**
-     * One participant's own row — rank, score, and the framing counts —
-     * with no other participant's name, score, or rank in the response.
-     * The ranking itself is still computed over the whole roster (a rank
-     * is meaningless otherwise); only the projection narrows.
+     * One participant's own progress: the points the question in play
+     * awarded them, their total, and the framing counts — no other
+     * participant's anything, and <strong>no rank of their own</strong>.
+     *
+     * <p>This read does not rank at all. It could have ranked the roster
+     * and then declined to return the position, but not computing it is
+     * the stronger guarantee: there is no rank in scope to leak through a
+     * later edit, a log line, or a field added in haste. Where a
+     * participant finished is
+     * {@link ParticipantFinalPlacementQueryService}'s to say, after the
+     * host's release.
      */
     @Transactional(readOnly = true)
     public ParticipantResultView personalResult(UUID sessionId, UUID participantId) {
@@ -105,12 +116,15 @@ public class SessionResultsQueryService {
             throw new ResultsNotAvailableException();
         }
 
-        List<LeaderboardEntry> entries = leaderboardService.rank(
-                participantRepository.findBySessionId(sessionId), session.roster());
-        LeaderboardEntry own = entries.stream()
-                .filter(entry -> entry.participantId().equals(participantId))
+        Participant own = participantRepository.findBySessionId(sessionId).stream()
+                .filter(participant -> participant.getId().equals(participantId))
                 .findFirst()
                 .orElseThrow(ParticipantNotFoundException::new);
+        int pointsEarned = own.answers().stream()
+                .filter(answer -> answer.questionId().equals(session.getCurrentQuestionId()))
+                .findFirst()
+                .map(ParticipantAnswer::pointsAwarded)
+                .orElse(0);
 
         return new ParticipantResultView(
                 session.getId(),
@@ -118,7 +132,10 @@ public class SessionResultsQueryService {
                 session.getCurrentPhase(),
                 quiz.questions().size(),
                 session.participantCount(),
-                own);
+                own.getId(),
+                own.getDisplayName(),
+                own.getTotalScore(),
+                pointsEarned);
     }
 
     private static boolean resultsReadable(Session session) {

@@ -8,6 +8,7 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import io.quizchef.identity.application.AuthorizationService;
@@ -15,9 +16,12 @@ import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuizView;
 import io.quizchef.quiz.domain.Difficulty;
+import io.quizchef.quiz.domain.LanguageCode;
 import io.quizchef.session.domain.GuestParticipantToken;
 import io.quizchef.session.domain.LeaderboardEntry;
 import io.quizchef.session.domain.LeaderboardService;
+import io.quizchef.session.domain.Participant;
+import io.quizchef.session.domain.ParticipantAnswer;
 import io.quizchef.session.domain.ParticipantKey;
 import io.quizchef.session.domain.QuestionTimer;
 import io.quizchef.session.domain.Session;
@@ -116,28 +120,49 @@ class SessionResultsQueryServiceTest {
     }
 
     @Test
-    void personalResultCarriesExactlyOneParticipantsRow() {
+    void personalResultCarriesTheirOwnProgressAndNoRankAtAll() {
         Session session = inProgressSession(hostUser);
         session.closeQuestion();
         session.revealAnswer();
-        UUID me = UUID.randomUUID();
-        UUID rival = UUID.randomUUID();
+        Participant me = player("Me", 750, 750);
+        Participant rival = player("Rival", 900, 900);
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
-        when(leaderboardService.rank(anyList(), any())).thenReturn(List.of(
-                new LeaderboardEntry(rival, "Rival", 900, 1),
-                new LeaderboardEntry(me, "Me", 750, 2)));
+        when(participantRepository.findBySessionId(session.getId()))
+                .thenReturn(List.of(rival, me));
         when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(quizWithQuestions(2));
 
-        ParticipantResultView view = service.personalResult(session.getId(), me);
+        ParticipantResultView view = service.personalResult(session.getId(), me.getId());
 
-        // Rank is computed over the whole roster, but only the caller's own
-        // row leaves the projection — no rival name, score, or rank.
-        assertThat(view.entry().participantId()).isEqualTo(me);
-        assertThat(view.entry().displayName()).isEqualTo("Me");
-        assertThat(view.entry().rank()).isEqualTo(2);
-        assertThat(view.entry().score()).isEqualTo(750);
+        assertThat(view.participantId()).isEqualTo(me.getId());
+        assertThat(view.displayName()).isEqualTo("Me");
+        assertThat(view.score()).isEqualTo(750);
+        assertThat(view.pointsEarned()).isEqualTo(750);
         assertThat(view.totalQuestions()).isEqualTo(2);
-        assertThat(view.participantCount()).isEqualTo(1);
+
+        // The projection has no rank on it to leak — and the read never
+        // ranked anyone in the first place, so there was none in scope.
+        assertThat(view).hasNoNullFieldsOrProperties();
+        assertThat(ParticipantResultView.class.getRecordComponents())
+                .extracting(java.lang.reflect.RecordComponent::getName)
+                .doesNotContain("rank");
+        verifyNoInteractions(leaderboardService);
+    }
+
+    @Test
+    void personalResultReportsZeroPointsForAQuestionTheyDidNotAnswer() {
+        Session session = inProgressSession(hostUser);
+        session.closeQuestion();
+        session.revealAnswer();
+        Participant me = player("Me", 0, null);
+        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(participantRepository.findBySessionId(session.getId())).thenReturn(List.of(me));
+        when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(quizWithQuestions(2));
+
+        ParticipantResultView view = service.personalResult(session.getId(), me.getId());
+
+        // An honest zero, not a missing value the client has to interpret.
+        assertThat(view.pointsEarned()).isZero();
+        assertThat(view.score()).isZero();
     }
 
     @Test
@@ -155,8 +180,8 @@ class SessionResultsQueryServiceTest {
         session.closeQuestion();
         session.revealAnswer();
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
-        when(leaderboardService.rank(anyList(), any())).thenReturn(List.of(
-                new LeaderboardEntry(UUID.randomUUID(), "Ann", 750, 1)));
+        when(participantRepository.findBySessionId(session.getId()))
+                .thenReturn(List.of(player("Ann", 750, 750)));
         when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(quizWithQuestions(2));
 
         assertThatExceptionOfType(ParticipantNotFoundException.class)
@@ -164,12 +189,12 @@ class SessionResultsQueryServiceTest {
     }
 
     @Test
-    void personalResultHoldsTheFinalRankUntilTheSessionActuallyFinishes() {
+    void personalResultHoldsEvenTheirOwnScoreOnTheQuizsLastQuestion() {
         // QUESTION is the quiz's *last* question: LEADERBOARD is showing, but
         // the session is still IN_PROGRESS (the host hasn't advanced past it
-        // yet) — the same hold that applies once FINISHED-but-not-released
-        // must already apply here, or a participant learns their final rank
-        // one host click before the podium even starts.
+        // yet). The hold predates this milestone and stays: the last
+        // question's screen belongs to the ceremony, so the participant sees
+        // the "watch the shared screen" state rather than a final tally.
         Session session = inProgressSession(hostUser);
         session.closeQuestion();
         session.revealAnswer();
@@ -190,15 +215,33 @@ class SessionResultsQueryServiceTest {
         session.closeQuestion();
         session.revealAnswer();
         session.showLeaderboard();
-        UUID me = UUID.randomUUID();
+        Participant me = player("Me", 750, 750);
         when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
-        when(leaderboardService.rank(anyList(), any())).thenReturn(List.of(
-                new LeaderboardEntry(me, "Me", 750, 1)));
+        when(participantRepository.findBySessionId(session.getId())).thenReturn(List.of(me));
         when(gameplayQuizQuery.load(QUIZ_VERSION)).thenReturn(quizWithQuestions(2));
 
-        ParticipantResultView view = service.personalResult(session.getId(), me);
+        ParticipantResultView view = service.personalResult(session.getId(), me.getId());
 
-        assertThat(view.entry().participantId()).isEqualTo(me);
+        assertThat(view.participantId()).isEqualTo(me.getId());
+    }
+
+    /**
+     * A participant whose whole score came from the question in play (or
+     * who never answered it, when {@code pointsOnCurrentQuestion} is null).
+     */
+    private static Participant player(String name, int totalScore, Integer pointsOnCurrentQuestion) {
+        Participant participant = Participant.guest(UUID.randomUUID(),
+                GuestParticipantToken.generate(), name, LanguageCode.of("en"));
+        if (pointsOnCurrentQuestion != null) {
+            participant.recordAnswer(new ParticipantAnswer(QUESTION, Set.of(UUID.randomUUID()),
+                    LanguageCode.of("en"), NOW, 1000, pointsOnCurrentQuestion));
+        }
+        int remainder = totalScore - (pointsOnCurrentQuestion == null ? 0 : pointsOnCurrentQuestion);
+        if (remainder > 0) {
+            participant.recordAnswer(new ParticipantAnswer(UUID.randomUUID(), Set.of(UUID.randomUUID()),
+                    LanguageCode.of("en"), NOW, 1000, remainder));
+        }
+        return participant;
     }
 
     private static Session inProgressSession(CurrentUser host) {
