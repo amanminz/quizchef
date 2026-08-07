@@ -151,11 +151,19 @@ function TopFiveRow({
     <li
       aria-hidden={leaving || undefined}
       className={cn(
-        "absolute inset-x-0 top-0 flex items-center gap-3 rounded-xl border bg-card px-3",
+        // A four-column grid rather than flex: the rank, score, and movement
+        // columns get reserved width, so a long name shortens itself instead
+        // of pushing the numbers off the side of the projector. `minmax(0,
+        // 1fr)` on the name is what actually permits that — a grid child
+        // defaults to min-content and would otherwise refuse to shrink.
+        "absolute inset-x-0 top-0 grid items-center gap-3 rounded-xl border bg-card px-3",
         "motion-safe:transition-all motion-safe:ease-out sm:gap-4 sm:px-4",
         entering && "border-success/50"
       )}
       style={{
+        gridTemplateColumns: presentationActive
+          ? "minmax(3rem, auto) minmax(0, 1fr) minmax(7rem, auto) minmax(4.5rem, auto)"
+          : "minmax(2rem, auto) minmax(0, 1fr) minmax(4rem, auto) minmax(3.5rem, auto)",
         height: "calc(var(--top-five-row-height) - 0.5rem)",
         transform: `translateY(calc(var(--top-five-row-height) * ${slot - 1}))`,
         opacity: visible ? 1 : 0,
@@ -163,41 +171,51 @@ function TopFiveRow({
       }}
     >
       <span
-        className="min-w-[1.5ch] shrink-0 text-center font-black tabular-nums text-muted-foreground"
-        style={{ fontSize: presentationActive ? "clamp(1.1rem, 2.4vw, 2rem)" : "1rem" }}
+        className="text-center font-black tabular-nums text-muted-foreground"
+        style={{ fontSize: presentationActive ? "clamp(1.75rem, 3vw, 3.5rem)" : "1rem" }}
       >
         {displayedRank ?? ""}
       </span>
+      {/* min-w-0 is load-bearing: without it the truncation never engages
+          and a long name wins the column fight against the score. The full
+          name stays available to assistive tech and on hover. */}
       <span
-        className="min-w-0 flex-1 truncate font-semibold"
-        style={{ fontSize: presentationActive ? "clamp(1.1rem, 2.4vw, 2rem)" : "1rem" }}
+        className="min-w-0 truncate font-semibold"
+        style={{ fontSize: presentationActive ? "clamp(1.6rem, 2.6vw, 3.1rem)" : "1rem" }}
+        title={entry.displayName}
       >
         {entry.displayName}
       </span>
-      {(entry.pointsEarned ?? 0) > 0 && (
+      <span className="flex items-center justify-end gap-2">
+        {(entry.pointsEarned ?? 0) > 0 && (
+          <span
+            className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 font-bold tabular-nums text-success"
+            style={{
+              fontSize: presentationActive ? "clamp(1rem, 1.5vw, 1.6rem)" : "0.75rem"
+            }}
+          >
+            +{entry.pointsEarned}
+          </span>
+        )}
         <span
-          className="shrink-0 rounded-full bg-success/15 px-2 py-0.5 font-bold tabular-nums text-success"
-          style={{ fontSize: presentationActive ? "clamp(0.75rem, 1.3vw, 1.1rem)" : "0.75rem" }}
+          className="text-right font-mono font-black tabular-nums"
+          style={{
+            fontSize: presentationActive ? "clamp(1.6rem, 2.6vw, 3.1rem)" : "1rem",
+            // Tabular numerals plus a reserved width: the score column holds
+            // still while the count-up runs, instead of nudging the row.
+            minWidth: "5ch"
+          }}
         >
-          +{entry.pointsEarned}
+          {score.toLocaleString()}
         </span>
-      )}
-      {stage !== "scores" && (
-        <span
-          className="shrink-0"
-          style={{ fontSize: presentationActive ? "clamp(0.75rem, 1.3vw, 1.1rem)" : "0.75rem" }}
-        >
-          <TopFiveMovement previousRank={entry.previousRank} currentRank={entry.currentRank} />
-        </span>
-      )}
+      </span>
       <span
-        className="shrink-0 text-right font-mono font-black tabular-nums"
-        style={{
-          fontSize: presentationActive ? "clamp(1.1rem, 2.6vw, 2.25rem)" : "1rem",
-          minWidth: "5ch"
-        }}
+        className="flex justify-end"
+        style={{ fontSize: presentationActive ? "clamp(1.2rem, 1.8vw, 2rem)" : "0.75rem" }}
       >
-        {score.toLocaleString()}
+        {stage !== "scores" && (
+          <TopFiveMovement previousRank={entry.previousRank} currentRank={entry.currentRank} />
+        )}
       </span>
     </li>
   );

@@ -34,20 +34,43 @@ function withReducedMotion(reduced: boolean) {
     }) as MediaQueryList;
 }
 
-/** The score cell of a named row — the last tabular figure in it. */
+/**
+ * The score cell of a named row. Selected by the monospace class rather
+ * than by position: the row is a grid of rank, name, score, and movement,
+ * several of which are numeric, and "the last number in the row" quietly
+ * followed the layout around.
+ */
 function scoreOf(displayName: string): string {
   const row = screen.getByText(displayName).closest("li");
   if (!row) {
     throw new Error(`${displayName} is not on the board`);
   }
-  const cells = within(row).getAllByText(/^[\d,]+$/);
-  return cells[cells.length - 1].textContent ?? "";
+  const score = row.querySelector(".font-mono");
+  if (!score) {
+    throw new Error(`${displayName}'s row has no score cell`);
+  }
+  return score.textContent ?? "";
 }
 
-function renderBoard(transition: TopFiveLeaderboardTransitionResponse = topFiveTransitionResponse()) {
+function renderBoard(
+  transition: TopFiveLeaderboardTransitionResponse = topFiveTransitionResponse(),
+  presentationActive = false
+) {
   const onComplete = vi.fn();
-  render(<AnimatedTopFiveLeaderboard transition={transition} onComplete={onComplete} />);
+  render(
+    <AnimatedTopFiveLeaderboard
+      transition={transition}
+      presentationActive={presentationActive}
+      onComplete={onComplete}
+    />
+  );
   return { onComplete };
+}
+
+/** The grid cell holding a row's name. */
+function nameCellOf(displayName: string): HTMLElement {
+  const cell = screen.getByText(displayName);
+  return cell;
 }
 
 describe("AnimatedTopFiveLeaderboard", () => {
@@ -246,6 +269,63 @@ describe("AnimatedTopFiveLeaderboard", () => {
     expect(within(screen.getByText("Aman").closest("li")!).getByText("2")).toBeInTheDocument();
     expect(scoreOf("Amelia")).toBe("900");
     expect(scoreOf("Aman")).toBe("900");
+  });
+
+  it("sizes ranks, names, and scores for a projector, not a phone", () => {
+    vi.useFakeTimers();
+    renderBoard(topFiveTransitionResponse(), true);
+
+    const row = screen.getByText("Ann").closest("li")!;
+
+    // Four reserved columns: rank, name, score, movement. The name column is
+    // minmax(0, 1fr) so it shrinks instead of pushing the numbers off screen
+    // — a grid child would otherwise refuse to go below its content width.
+    expect(row.getAttribute("style")).toContain("minmax(0, 1fr)");
+
+    // Projector-scale type on everything that carries meaning.
+    expect(nameCellOf("Ann").getAttribute("style")).toContain("clamp(1.6rem, 2.6vw, 3.1rem)");
+    expect(row.querySelector(".font-mono")!.getAttribute("style"))
+        .toContain("clamp(1.6rem, 2.6vw, 3.1rem)");
+    expect(within(row).getByText("1").getAttribute("style"))
+        .toContain("clamp(1.75rem, 3vw, 3.5rem)");
+
+    // Numerals that do not jitter while a score counts up.
+    expect(row.querySelector(".font-mono")).toHaveClass("tabular-nums");
+  });
+
+  it("truncates a long name rather than shrinking the row or losing the score", () => {
+    vi.useFakeTimers();
+    const transition = topFiveTransitionResponse();
+    transition.currentTopFive![1] = {
+      ...transition.currentTopFive![1],
+      displayName: "Bartholomew Fitzwilliam-Harrington the Third"
+    };
+    renderBoard(transition, true);
+    advance(SCORE_PHASE_MS + MOVE_PHASE_MS);
+
+    const name = nameCellOf("Bartholomew Fitzwilliam-Harrington the Third");
+    // min-w-0 plus truncate is what actually engages ellipsis inside a grid
+    // column; without min-w-0 the name wins and the score leaves the screen.
+    expect(name).toHaveClass("truncate", "min-w-0");
+    // The full name stays available even though it is visually clipped.
+    expect(name).toHaveAttribute("title", "Bartholomew Fitzwilliam-Harrington the Third");
+    // And its row still shows a score and a movement indicator.
+    const row = name.closest("li")!;
+    expect(row.querySelector(".font-mono")!.textContent).toBe("900");
+    expect(within(row).getByLabelText(/down 1 place/i)).toBeInTheDocument();
+  });
+
+  it("never renders more than five rows", () => {
+    vi.useFakeTimers();
+    renderBoard(topFiveTransitionResponse(), true);
+    advance(SCORE_PHASE_MS + MOVE_PHASE_MS);
+
+    // The board is the current Top 5 plus whoever is on their way out; the
+    // leaver is decorative and gone from the settled list.
+    const visible = screen
+      .getAllByRole("listitem")
+      .filter((row) => row.getAttribute("aria-hidden") !== "true");
+    expect(visible).toHaveLength(5);
   });
 
   it("shows only the players that exist in a room smaller than five", () => {

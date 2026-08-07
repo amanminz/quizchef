@@ -1,6 +1,6 @@
-import { useCallback, useMemo, useState } from "react";
-import { isApiClientError } from "@/api/apiError";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { sessionApi } from "@/api/sessionApi";
+import { isConvergentConflict } from "@/features/gameplay/convergence";
 import { useAnswerDistribution } from "@/features/gameplay/hooks/useAnswerDistribution";
 import { useAnswerProgress } from "@/features/gameplay/hooks/useAnswerProgress";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
@@ -69,6 +69,16 @@ export function useGameHost(sessionId: string | undefined) {
     topFiveTransition !== undefined &&
     animationCompletedFor !== currentQuestionId;
 
+  // A real failure that the game then moves past is no longer worth
+  // showing: the host is looking at a screen that has already changed.
+  const lastPhase = useRef(phase);
+  useEffect(() => {
+    if (lastPhase.current !== phase) {
+      lastPhase.current = phase;
+      setNextStepError(null);
+    }
+  }, [phase]);
+
   const nextStepLabel = (() => {
     switch (phase) {
       case "COUNTDOWN":
@@ -113,16 +123,7 @@ export function useGameHost(sessionId: string | undefined) {
       if (phase === "COUNTDOWN") {
         await sessionApi.startQuestion(sessionId);
       } else if (phase === "QUESTION_OPEN") {
-        try {
-          await sessionApi.closeQuestion(sessionId);
-        } catch (error) {
-          // The timer (or a double-fired command) closed the question
-          // first — the one transition already happened; converge on the
-          // server's state instead of reporting a fault.
-          if (!(isApiClientError(error) && error.code === "session.invalid-transition")) {
-            throw error;
-          }
-        }
+        await sessionApi.closeQuestion(sessionId);
       } else if (phase === "WAITING") {
         await sessionApi.revealAnswer(sessionId);
       } else if (phase === "ANSWER_REVEALED") {
@@ -140,7 +141,16 @@ export function useGameHost(sessionId: string | undefined) {
       }
       await Promise.all([refetchSession(), refetchQuestion()]);
     } catch (error) {
-      setNextStepError(error);
+      if (isConvergentConflict(error)) {
+        // The game is ahead of this client, not broken — the timer closed
+        // the question, or a second click already did. Re-read the server
+        // and render what it says. Never reissue the command: it lost a
+        // race, and whatever state replaced it is not what it was aimed at.
+        await Promise.all([refetchSession(), refetchQuestion()]);
+        setNextStepError(null);
+      } else {
+        setNextStepError(error);
+      }
     } finally {
       setIsAdvancing(false);
     }

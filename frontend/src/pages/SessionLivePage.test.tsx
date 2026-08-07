@@ -469,6 +469,155 @@ describe("SessionLivePage", () => {
     expect(topFiveRequested).toBe(false);
   });
 
+  it("converges instead of erroring when the timer closed the question first", async () => {
+    // The host taps Close as the countdown expires. The server already
+    // closed it, so the command comes back a conflict — but the game is
+    // ahead of this client, not broken.
+    signIn();
+    const question = currentQuestionResponse({ phase: "QUESTION_OPEN" });
+    const holder = {
+      session: sessionSummary({
+        sessionId: question.sessionId,
+        state: "IN_PROGRESS",
+        currentQuestionId: question.questionId,
+        currentPhase: "QUESTION_OPEN" as const
+      }),
+      question
+    };
+    serveQuiz(holder.session.publishedQuizVersionId!);
+    let closeAttempts = 0;
+    server.use(
+      http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
+        HttpResponse.json(holder.session)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
+        HttpResponse.json(holder.question)
+      ),
+      http.post(`/api/v1/sessions/${holder.session.sessionId}/questions/close`, () => {
+        closeAttempts += 1;
+        // The timer got there first and moved the session on.
+        holder.session = { ...holder.session, currentPhase: "QUESTION_CLOSED" };
+        holder.question = { ...holder.question, phase: "QUESTION_CLOSED" };
+        return HttpResponse.json(
+          apiError("session.invalid-transition", "Cannot close a question that is not open"),
+          { status: 409 }
+        );
+      })
+    );
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${holder.session.sessionId}/play`);
+
+    await user.click(await screen.findByRole("button", { name: /close question/i }));
+
+    // Converged onto the server's actual state, with no error screen.
+    expect(await screen.findByRole("button", { name: /reveal answer/i })).toBeInTheDocument();
+    expect(screen.queryByText(/could not advance the game/i)).not.toBeInTheDocument();
+    // And the losing command was never reissued against the new state.
+    expect(closeAttempts).toBe(1);
+  });
+
+  it("converges on a stale-version conflict too, and does not retry", async () => {
+    signIn();
+    const base = currentQuestionResponse({ phase: "QUESTION_CLOSED" });
+    const holder = {
+      session: sessionSummary({
+        sessionId: base.sessionId,
+        state: "IN_PROGRESS",
+        currentQuestionId: base.questionId,
+        currentPhase: "QUESTION_CLOSED" as const
+      }),
+      question: base
+    };
+    serveQuiz(holder.session.publishedQuizVersionId!);
+    let revealAttempts = 0;
+    server.use(
+      http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
+        HttpResponse.json(holder.session)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
+        HttpResponse.json(holder.question)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/answer-distribution`, () =>
+        HttpResponse.json(answerDistributionResponse({ sessionId: holder.session.sessionId }))
+      ),
+      http.post(`/api/v1/sessions/${holder.session.sessionId}/questions/reveal`, () => {
+        revealAttempts += 1;
+        // A second host tab revealed it a moment earlier; this request's
+        // view of the aggregate is stale.
+        holder.session = { ...holder.session, currentPhase: "ANSWER_REVEALED" };
+        holder.question = revealedQuestionResponse(base);
+        return HttpResponse.json(
+          apiError("conflict.concurrent-modification",
+            "The resource was modified by someone else. Refresh and try again."),
+          { status: 409 }
+        );
+      })
+    );
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${holder.session.sessionId}/play`);
+
+    await user.click(await screen.findByRole("button", { name: /reveal answer/i }));
+
+    expect(await screen.findByText("Correct answer")).toBeInTheDocument();
+    expect(screen.queryByText(/could not advance the game/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/modified by someone else/i)).not.toBeInTheDocument();
+    expect(revealAttempts).toBe(1);
+  });
+
+  it("still surfaces a genuine failure, and clears it once the game moves on", async () => {
+    // Convergence must not swallow real problems: a 500 is not a race.
+    signIn();
+    const question = currentQuestionResponse({ phase: "QUESTION_CLOSED" });
+    const holder = {
+      session: sessionSummary({
+        sessionId: question.sessionId,
+        state: "IN_PROGRESS",
+        currentQuestionId: question.questionId,
+        currentPhase: "QUESTION_CLOSED" as const
+      }),
+      question,
+      broken: true
+    };
+    serveQuiz(holder.session.publishedQuizVersionId!);
+    server.use(
+      http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
+        HttpResponse.json(holder.session)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
+        HttpResponse.json(holder.question)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/answer-distribution`, () =>
+        HttpResponse.json(answerDistributionResponse({ sessionId: holder.session.sessionId }))
+      ),
+      http.post(`/api/v1/sessions/${holder.session.sessionId}/questions/reveal`, () => {
+        if (holder.broken) {
+          return HttpResponse.json(apiError("internal.error", "An unexpected error occurred"), {
+            status: 500
+          });
+        }
+        holder.session = { ...holder.session, currentPhase: "ANSWER_REVEALED" };
+        holder.question = revealedQuestionResponse(question);
+        return HttpResponse.json(holder.session);
+      })
+    );
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${holder.session.sessionId}/play`);
+    await user.click(await screen.findByRole("button", { name: /reveal answer/i }));
+
+    expect(await screen.findByText(/could not advance the game/i)).toBeInTheDocument();
+
+    // It recovers, the host retries deliberately, and the stale error goes
+    // once the phase actually changes.
+    holder.broken = false;
+    await user.click(screen.getByRole("button", { name: /reveal answer/i }));
+
+    expect(await screen.findByText("Correct answer")).toBeInTheDocument();
+    expect(screen.queryByText(/could not advance the game/i)).not.toBeInTheDocument();
+  });
+
   it("surfaces an authorization failure without leaving the page", async () => {
     signIn();
     const question = currentQuestionResponse({ phase: "QUESTION_CLOSED" });
@@ -737,11 +886,60 @@ describe("SessionLivePage", () => {
     renderApp(`/sessions/${session.sessionId}/play`);
 
     expect(await screen.findByText("सही")).toBeInTheDocument();
-    // One count per option row, shared by both language lines — English and
-    // Hindi can never disagree since it is the same rendered node.
-    expect(await screen.findByText("12 · 60%")).toBeInTheDocument();
-    expect(screen.getByText("6 · 30%")).toBeInTheDocument();
+    // One count and one percentage per option row, shared by both language
+    // lines — English and Hindi can never disagree, since it is the same
+    // rendered node serving both.
+    expect(await screen.findByText("12")).toBeInTheDocument();
+    expect(screen.getByText("60%")).toBeInTheDocument();
+    expect(screen.getByText("6")).toBeInTheDocument();
+    expect(screen.getByText("30%")).toBeInTheDocument();
     expect(screen.getByText("No answer: 2")).toBeInTheDocument();
+
+    // The count belongs to the option, not to a language: exactly one of
+    // each figure, however many localizations the row renders.
+    expect(screen.getAllByText("12")).toHaveLength(1);
+    expect(screen.getAllByText("60%")).toHaveLength(1);
+  });
+
+  it("shows a zero-selection option as 0 and 0%, never as a blank", async () => {
+    // A row with no number reads as a rendering fault from the back of the
+    // room; an explicit zero is information.
+    signIn();
+    const base = currentQuestionResponse();
+    const revealed = revealedQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: revealed.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: revealed.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, revealed);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/answer-distribution`, () =>
+        HttpResponse.json(
+          answerDistributionResponse({
+            sessionId: session.sessionId,
+            questionId: revealed.questionId,
+            answeredCount: 5,
+            eligibleParticipantCount: 5,
+            noAnswerCount: 0,
+            options: [
+              { optionId: base.options![0].optionId!, count: 5, percentage: 100 },
+              { optionId: base.options![1].optionId!, count: 0, percentage: 0 }
+            ]
+          })
+        )
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    expect(await screen.findByText("100%")).toBeInTheDocument();
+    expect(screen.getByText("0")).toBeInTheDocument();
+    expect(screen.getByText("0%")).toBeInTheDocument();
+    // Nobody skipped the question, so the separate no-answer line stays off.
+    expect(screen.queryByText(/no answer:/i)).not.toBeInTheDocument();
   });
 
   it("shows nothing before the reveal and hides the host-only distribution from participants", async () => {
@@ -932,10 +1130,121 @@ describe("SessionLivePage", () => {
 
     await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
 
-    expect(await screen.findByText("7 · 70%")).toBeInTheDocument();
+    // Projector scale: the count and percentage are their own columns, sized
+    // with clamp() rather than left as small metadata beside the option.
+    const count = await screen.findByText("7");
+    expect(count).toBeInTheDocument();
+    expect(count).toHaveClass("tabular-nums");
+    expect(count.getAttribute("style")).toContain("clamp(1.45rem, 2.2vw, 2.6rem)");
+    const percentage = screen.getByText("70%");
+    expect(percentage).toHaveClass("tabular-nums");
+    expect(percentage.getAttribute("style")).toContain("clamp(1.45rem, 2.2vw, 2.6rem)");
     // No progress bar or Presentation Mode timer clutters the reveal view.
     expect(screen.queryByRole("progressbar")).not.toBeInTheDocument();
     HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("keeps Presentation Mode to one viewport, with nothing able to scroll", async () => {
+    // jsdom has no layout engine, so scrollHeight and clientHeight are both
+    // zero and comparing them proves nothing. What *is* checkable is the
+    // structure that makes one-viewport possible: a fixed-height column, a
+    // live region allowed to shrink, and no descendant quietly introducing
+    // a scroll container. Real fit stays a manual check.
+    signIn();
+    const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "LEADERBOARD"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/leaderboard/top-five`, () =>
+        HttpResponse.json(
+          topFiveTransitionResponse({
+            sessionId: session.sessionId,
+            questionId: question.questionId
+          })
+        )
+      )
+    );
+    // The presentation store is a module-level singleton with no automatic
+    // per-test reset, so an earlier test that entered it leaks in here.
+    usePresentationStore.getState().setActive(false);
+    const originalRequestFullscreen = HTMLElement.prototype.requestFullscreen;
+    HTMLElement.prototype.requestFullscreen = () => Promise.resolve();
+    const user = userEvent.setup();
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText("Fran");
+    await user.click(screen.getByRole("button", { name: /enter presentation mode/i }));
+
+    // A fixed-height column that cannot grow past the screen.
+    const container = document.querySelector(".h-dvh");
+    expect(container).not.toBeNull();
+    expect(container).toHaveClass("overflow-hidden", "flex", "flex-col");
+
+    // The board sits in a region that is allowed to shrink — min-h-0 is the
+    // flexbox trick without which a flex child forces its parent to grow.
+    const board = screen.getByLabelText(/top 5 after question/i);
+    expect(board.closest(".min-h-0")).not.toBeNull();
+
+    // And nothing in the rendered tree opts into scrolling.
+    expect(
+      document.querySelectorAll(
+        "[class*='overflow-auto'], [class*='overflow-scroll'], [class*='overflow-y-auto'], [class*='overflow-x-auto']"
+      )
+    ).toHaveLength(0);
+
+    usePresentationStore.getState().setActive(false);
+    HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
+  });
+
+  it("recovers the settled leaderboard on a fresh mount, without replaying the count-up", async () => {
+    // A host refresh or reconnect mid-leaderboard: the board must come back
+    // from the server's own two snapshots, not from anything remembered
+    // locally, and must not re-run a transition the room already watched.
+    signIn();
+    const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "LEADERBOARD"
+    });
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, question);
+    let transitionReads = 0;
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/leaderboard/top-five`, () => {
+        transitionReads += 1;
+        return HttpResponse.json(
+          topFiveTransitionResponse({
+            sessionId: session.sessionId,
+            questionId: question.questionId
+          })
+        );
+      })
+    );
+    const user = userEvent.setup();
+
+    const first = renderApp(`/sessions/${session.sessionId}/play`);
+    await screen.findByText("Fran");
+    await user.click(screen.getByRole("button", { name: /skip animation/i }));
+    expect(await screen.findByRole("button", { name: /next question/i })).toBeEnabled();
+    first.unmount();
+
+    // Fresh mount — the authoritative boards are refetched.
+    renderApp(`/sessions/${session.sessionId}/play`);
+    expect(await screen.findByText("Fran")).toBeInTheDocument();
+    expect(transitionReads).toBeGreaterThanOrEqual(2);
+
+    // The server's final numbers are what render; the host is not stranded
+    // behind an animation they already skipped once.
+    await user.click(await screen.findByRole("button", { name: /skip animation/i }));
+    expect(await screen.findByRole("button", { name: /next question/i })).toBeEnabled();
   });
 
   it("reveals five places — fifth through first — before the podium and remaining standings", async () => {
