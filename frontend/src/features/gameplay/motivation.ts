@@ -34,23 +34,37 @@ const CATALOGUES: Record<string, Catalogue> = {
   en: {
     correct: [
       "Great job—keep the momentum going!",
-      "Nicely done—you knew that one.",
-      "That's right—keep it up!",
-      "Spot on—on to the next."
+      "Nicely done! Keep it up.",
+      "That's right—well done!",
+      "Spot on! Ready for the next one?",
+      "Excellent! Keep going.",
+      "You got it! Stay focused.",
+      "Well done—you're doing great!",
+      "Correct! Keep the energy going."
     ],
     incorrect: [
       "Keep going—the next question is a fresh chance.",
-      "That one was tricky—the next is a clean slate.",
-      "No worries—there's plenty of quiz left.",
-      "Shake it off—the next one is waiting."
+      "No worries! Give the next one your best.",
+      "That one was tricky—keep going.",
+      "Stay positive—the next question is waiting.",
+      "Keep trying! Every question is a new opportunity.",
+      "Don't stop now—stay focused.",
+      "Almost! Get ready for the next one.",
+      "No problem—let's move on to the next question."
     ],
     unanswered: [
       "Stay ready—the next question is coming.",
-      "No answer this time—the next one is yours.",
-      "Get set—there's another question on the way."
+      "No answer this time—get ready for the next one.",
+      "Keep your eyes on the screen—the next question is coming.",
+      "Missed this one? No worries—stay ready.",
+      "Get set—the next question is on the way.",
+      "Stay focused—you'll get another chance."
     ],
     final: [
-      "Well played! Please watch the shared screen for the results."
+      "Well played! Please watch the main screen for the results.",
+      "Great effort! Keep your eyes on the main screen for the results.",
+      "That's the last question—well done! Results are coming up.",
+      "Quiz complete! Watch the main screen for the final results."
     ]
   },
 
@@ -59,24 +73,35 @@ const CATALOGUES: Record<string, Catalogue> = {
       "बहुत बढ़िया! ऐसे ही आगे बढ़ते रहिए।",
       "शाबाश! आपने सही जवाब दिया।",
       "बिलकुल सही! बहुत अच्छा कर रहे हैं।",
-      "एकदम सही! अब अगले सवाल के लिए तैयार हो जाइए।"
+      "एकदम सही! अब अगले सवाल के लिए तैयार हो जाइए।",
+      "बहुत अच्छा! इसी तरह खेलते रहिए।",
+      "सही जवाब! ध्यान बनाए रखिए।",
+      "वाह! बहुत बढ़िया जवाब।",
+      "शानदार! अब अगले सवाल की तैयारी कीजिए।"
     ],
-
     incorrect: [
       "कोई बात नहीं! अगला सवाल एक नया मौका है।",
       "यह सवाल थोड़ा मुश्किल था। अगले सवाल में फिर कोशिश कीजिए।",
       "हिम्मत बनाए रखिए—अभी और सवाल बाकी हैं।",
-      "कोई बात नहीं! अब अगले सवाल पर ध्यान दीजिए।"
+      "कोई बात नहीं! अब अगले सवाल पर ध्यान दीजिए।",
+      "चिंता मत कीजिए—अगले सवाल में फिर मौका मिलेगा।",
+      "कोशिश जारी रखिए! अगला सवाल आने वाला है।",
+      "इस बार नहीं हुआ—कोई बात नहीं, आगे बढ़ते रहिए।",
+      "मन लगाकर खेलते रहिए—अगला सवाल फिर एक मौका है।"
     ],
-
     unanswered: [
       "तैयार रहिए—अगला सवाल आने वाला है।",
       "इस बार जवाब नहीं दे पाए—कोई बात नहीं, अगला सवाल आपका है।",
-      "जल्दी तैयार हो जाइए—अगला सवाल आ रहा है।"
+      "जल्दी तैयार हो जाइए—अगला सवाल आ रहा है।",
+      "इस बार मौका छूट गया—अगले सवाल में फिर कोशिश कीजिए।",
+      "ध्यान बनाए रखिए—अगला सवाल आने वाला है।",
+      "कोई बात नहीं—अब अगले सवाल के लिए तैयार रहिए।"
     ],
-
     final: [
-      "बहुत बढ़िया! नतीजों के लिए सामने वाली स्क्रीन पर नज़र रखिए।"
+      "बहुत बढ़िया! नतीजों के लिए सामने वाली स्क्रीन पर नज़र रखिए।",
+      "बहुत अच्छा खेले! अब नतीजे सामने वाली स्क्रीन पर दिखाए जाएंगे।",
+      "आखिरी सवाल पूरा हुआ! अब नतीजों के लिए स्क्रीन पर ध्यान दीजिए।",
+      "क्विज़ पूरा हुआ! अंतिम नतीजों के लिए सामने वाली स्क्रीन देखें।"
     ]
   }
 };

@@ -65,8 +65,13 @@ describe("motivationFor", () => {
     // ordinary idiom for "keep going", the same way English "move on" is
     // not a claim about position; the positional words are the nouns
     // (स्थान, रैंक) and the explicit comparatives (आगे हैं, पीछे हैं).
+    // Positional *phrasing*, not bare words. An unanchored `top` matches
+    // "s-top"; "the last question" is a fact about the quiz rather than
+    // about the reader; and अंतिम in "अंतिम नतीजे" means final results, not
+    // last place. What to catch is "came last" and "अंतिम स्थान". A guard
+    // that cries wolf gets loosened by the next person, not tightened.
     const forbidden =
-      /rank|place[sd]?\b|position|first|last|top|bottom|ahead|behind|winning|losing|leader|catch up|स्थान|रैंक|प्रथम|अंतिम|आगे हैं|पीछे हैं/i;
+      /\brank|\bplace[sd]?\b|\bposition|\b(first|last|second|third)\s+place\b|\b(came|finished|are|in)\s+(first|last)\b|\btop\b|\bbottom\b|\bahead\b|\bbehind\b|\bwinning\b|\blosing\b|\bleader|catch(ing)? up|स्थान|रैंक|(प्रथम|अंतिम)\s*स्थान|आगे हैं|पीछे हैं/i;
     for (const language of ["en", "hi"]) {
       for (const outcome of ["correct", "incorrect", "unanswered", "final"] as const) {
         for (let questionNumber = 1; questionNumber <= 12; questionNumber++) {
@@ -78,9 +83,17 @@ describe("motivationFor", () => {
     }
   });
 
-  it("closes the quiz by pointing at the shared screen, not at a result", () => {
-    expect(motivationFor({ ...BASE, outcome: "final" })).toMatch(/shared screen/i);
-    expect(motivationFor({ ...BASE, outcome: "final", language: "hi" })).toMatch(/स्क्रीन/);
+  it("closes the quiz by pointing at the screen, not at a result", () => {
+    // Every closing line sends the room to the projector, and none hints at
+    // how the reader did — the ceremony has not run yet.
+    for (let questionNumber = 1; questionNumber <= 8; questionNumber++) {
+      expect(motivationFor({ ...BASE, outcome: "final", questionNumber })).toMatch(
+        /main screen|results/i
+      );
+      expect(
+        motivationFor({ ...BASE, outcome: "final", questionNumber, language: "hi" })
+      ).toMatch(/स्क्रीन|नतीजे|नतीजों/);
+    }
   });
 
   it("still produces a message before the ids are known", () => {

@@ -718,6 +718,201 @@ describe("PlaySessionPage", () => {
     expect(rankContextCalled).toBe(false);
   });
 
+  it.each([
+    ["correct", 0, "en"],
+    ["incorrect", 1, "en"],
+    ["correct", 0, "hi"],
+    ["incorrect", 1, "hi"]
+  ] as const)(
+    "renders a $# motivation on the participant screen",
+    async (outcome, optionIndex, language) => {
+      // The regression this exists for: the catalogue was fine and the
+      // message still never reached a phone. Asserting the *page* renders
+      // it is the only version of this test that would have caught that.
+      const base = currentQuestionResponse({ questionNumber: 2, totalQuestions: 4 });
+      const question = revealedQuestionResponse(base);
+      const session = sessionSummary({
+        sessionId: question.sessionId,
+        state: "IN_PROGRESS",
+        currentQuestionId: question.questionId,
+        currentPhase: "ANSWER_REVEALED"
+      });
+      const record = {
+        sessionId: session.sessionId!,
+        participantId: "participant-me",
+        guestParticipantToken: "guest-token-1",
+        displayName: "Aman",
+        preferredLanguage: language
+      };
+      usePlayerSessionStore.getState().record(PIN, record);
+      serveGameplay(session, question);
+      server.use(
+        http.post("/api/v1/sessions/reconnect", () =>
+          HttpResponse.json(
+            sessionSnapshotResponse({
+              sessionId: session.sessionId,
+              participantId: record.participantId,
+              currentQuestionId: question.questionId,
+              currentPhase: "ANSWER_REVEALED",
+              submittedOptionIds: [base.options![optionIndex].optionId!]
+            })
+          )
+        ),
+        http.get(
+          `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+          () =>
+            HttpResponse.json(
+              participantResultResponse({
+                sessionId: session.sessionId,
+                participantId: record.participantId,
+                score: 3420,
+                pointsEarned: outcome === "correct" ? 750 : 0
+              })
+            )
+        )
+      );
+
+      renderApp(`/play/${PIN}`);
+
+      const expected = motivationFor({
+        sessionId: session.sessionId,
+        participantId: record.participantId,
+        questionNumber: 2,
+        outcome,
+        language
+      });
+      expect(await screen.findByText(expected)).toBeVisible();
+      // Alongside the feedback it belongs to, not instead of it.
+      expect(await screen.findByText("3,420")).toBeInTheDocument();
+      // And never with a position of any kind.
+      expect(screen.queryByText(/\d+(st|nd|rd|th)\b/)).not.toBeInTheDocument();
+    }
+  );
+
+  it("shows a motivation for an unanswered question too", async () => {
+    const base = currentQuestionResponse({ questionNumber: 3, totalQuestions: 5 });
+    const question = revealedQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "ANSWER_REVEALED",
+            // Nothing submitted — the timer ran out on them.
+            submittedOptionIds: []
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        () =>
+          HttpResponse.json(
+            participantResultResponse({
+              sessionId: session.sessionId,
+              participantId: record.participantId,
+              score: 2670,
+              pointsEarned: 0
+            })
+          )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    expect(
+      await screen.findByText(
+        motivationFor({
+          sessionId: session.sessionId,
+          participantId: record.participantId,
+          questionNumber: 3,
+          outcome: "unanswered",
+          language: "en"
+        })
+      )
+    ).toBeVisible();
+    expect(screen.getByText("Time's up")).toBeInTheDocument();
+  });
+
+  it("shows the same motivation after a refresh, and still no rank", async () => {
+    const base = currentQuestionResponse({ questionNumber: 2, totalQuestions: 4 });
+    const question = revealedQuestionResponse(base);
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "ANSWER_REVEALED"
+    });
+    const record = {
+      sessionId: session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "hi"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    serveGameplay(session, question);
+    server.use(
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "ANSWER_REVEALED",
+            submittedOptionIds: [base.options![0].optionId!]
+          })
+        )
+      ),
+      http.get(
+        `/api/v1/sessions/${session.sessionId}/participants/${record.participantId}/result`,
+        () =>
+          HttpResponse.json(
+            participantResultResponse({
+              sessionId: session.sessionId,
+              participantId: record.participantId,
+              score: 3420,
+              pointsEarned: 750
+            })
+          )
+      )
+    );
+
+    const expected = motivationFor({
+      sessionId: session.sessionId,
+      participantId: record.participantId,
+      questionNumber: 2,
+      outcome: "correct",
+      language: "hi"
+    });
+
+    const first = renderApp(`/play/${PIN}`);
+    expect(await screen.findByText(expected)).toBeVisible();
+    first.unmount();
+
+    // Determinism is what makes a refresh mid-reveal show the same line the
+    // player was already reading — nothing is persisted to achieve it.
+    renderApp(`/play/${PIN}`);
+    expect(await screen.findByText(expected)).toBeVisible();
+    expect(screen.queryByText(/\d+(st|nd|rd|th)\b/)).not.toBeInTheDocument();
+  });
+
   it("never asks for ranking neighbours, and shows none, after a non-final question", async () => {
     const question = currentQuestionResponse({ phase: "LEADERBOARD", questionNumber: 1 });
     const session = sessionSummary({
