@@ -1298,6 +1298,48 @@ describe("SessionLivePage", () => {
     sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
   }, 20_000);
 
+  it("shows the captured standings on a completed session", async () => {
+    signIn();
+    const session = sessionSummary({ state: "FINISHED" });
+    sessionStorage.setItem(`quizchef.podium-played.${session.sessionId}`, "played");
+    serveQuiz(session.publishedQuizVersionId!);
+    serveGameplay(session, undefined);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/results`, () =>
+        HttpResponse.json(
+          sessionResultsResponse({
+            sessionId: session.sessionId,
+            state: "FINISHED",
+            currentPhase: undefined
+          })
+        )
+      ),
+      http.get(`/api/v1/sessions/${session.sessionId}/final-standings`, () =>
+        HttpResponse.json({
+          sessionId: session.sessionId,
+          capturedAt: "2026-08-07T18:00:00Z",
+          entries: [
+            { participantId: "p1", displayName: "Amelia", rank: 1, score: 8450 },
+            { participantId: "p2", displayName: "Aman", rank: 2, score: 8120 },
+            { participantId: "p3", displayName: "Ruth", rank: 3, score: 7780 }
+          ]
+        })
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}/play`);
+
+    // History, read back — every participant, with the rank and score the
+    // session actually ended on.
+    // The caption and the heading both name it; the table itself is what
+    // matters here.
+    const table = await screen.findByRole("table", { name: /final standings/i });
+    expect(within(table).getByText("Ruth")).toBeInTheDocument();
+    expect(within(table).getByText("8,450")).toBeInTheDocument();
+    expect(within(table).getByText("7,780")).toBeInTheDocument();
+    sessionStorage.removeItem(`quizchef.podium-played.${session.sessionId}`);
+  });
+
   it("releases final results to participants, idempotently, only after the host acts", async () => {
     signIn();
     const session = sessionSummary({ state: "FINISHED", finalResultsReleased: false });

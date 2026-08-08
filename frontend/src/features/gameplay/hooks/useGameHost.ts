@@ -5,6 +5,7 @@ import { useAnswerDistribution } from "@/features/gameplay/hooks/useAnswerDistri
 import { useAnswerProgress } from "@/features/gameplay/hooks/useAnswerProgress";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
 import { useReleaseFinalResults } from "@/features/gameplay/hooks/useReleaseFinalResults";
+import { useFinalStandings } from "@/features/gameplay/hooks/useFinalStandings";
 import { useResults } from "@/features/gameplay/hooks/useResults";
 import { useTopFiveTransition } from "@/features/gameplay/hooks/useTopFiveTransition";
 import { isLastQuestion as computeIsLastQuestion } from "@/features/gameplay/isLastQuestion";
@@ -33,6 +34,13 @@ export function useGameHost(sessionId: string | undefined) {
   const progressQuery = useAnswerProgress(sessionId, gameplay.phase);
   const distributionQuery = useAnswerDistribution(sessionId, gameplay.phase);
   const releaseMutation = useReleaseFinalResults(sessionId);
+  // History, read back rather than recomputed — available from the moment
+  // the session ends, independent of the release gate, because it is the
+  // host's own administrative record rather than anything participants see.
+  const finalStandingsQuery = useFinalStandings(
+    sessionId,
+    gameplay.session?.state === "FINISHED" || gameplay.session?.state === "ARCHIVED"
+  );
   const [isAdvancing, setIsAdvancing] = useState(false);
   const [nextStepError, setNextStepError] = useState<unknown>(null);
 
@@ -190,6 +198,8 @@ export function useGameHost(sessionId: string | undefined) {
     /** Called by the leaderboard once it has settled. */
     markLeaderboardAnimationComplete,
     isLastQuestion,
+    /** The standings captured when this session ended; undefined until it has. */
+    finalStandings: finalStandingsQuery.data,
     /** Whether the host has released final standings to participants. */
     finalResultsReleased: gameplay.session?.finalResultsReleased ?? false,
     releaseFinalResults: () => releaseMutation.mutateAsync(),

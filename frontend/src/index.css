@@ -13,3 +13,46 @@
     @apply bg-background text-foreground antialiased;
   }
 }
+
+@layer components {
+  /*
+   * The projected session code.
+   *
+   * Sized against the *card*, not the viewport: the presentation lobby puts
+   * this in a `minmax(16rem, 1fr)` grid column beside a 3fr player wall, so
+   * at 1366x768 the column is ~317px while a fixed text-7xl with 0.3em
+   * tracking wants ~390px. Viewport units cannot see that — container
+   * query units can, so the code shrinks with the column it lives in.
+   *
+   * `--code-tracking` is declared once and used twice on purpose. Letter
+   * spacing is applied *after every character including the last*, so the
+   * box carries a trailing gap with no glyph in it; centring the box then
+   * pushes the visible digits left by half that gap, which is what put them
+   * outside the card. Pulling the same value back off the end margin makes
+   * the glyphs centre rather than the box.
+   */
+  .session-code-card {
+    container-type: inline-size;
+    min-width: 0;
+  }
+
+  .session-code {
+    --code-tracking: clamp(0.08rem, 1cqw, 0.4rem);
+
+    display: inline-block;
+    max-width: 100%;
+    white-space: nowrap;
+    text-align: center;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+    font-size: clamp(2.25rem, 14cqw, 5rem);
+    letter-spacing: var(--code-tracking);
+    margin-inline-end: calc(-1 * var(--code-tracking));
+  }
+
+  /* Outside Presentation Mode the card is narrower and the code is a
+     supporting detail rather than the thing a room reads from a distance. */
+  .session-code--compact {
+    font-size: clamp(1.75rem, 11cqw, 2.5rem);
+  }
+}

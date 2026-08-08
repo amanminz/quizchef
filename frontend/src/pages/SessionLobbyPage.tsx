@@ -136,7 +136,10 @@ export function SessionLobbyPage() {
                 : "grid gap-6 lg:grid-cols-[1fr_1.5fr]"
             }
           >
-            <div className="flex flex-col gap-4">
+            {/* min-w-0: a grid child defaults to min-content width and would
+                otherwise refuse to shrink below the code's own size, which is
+                what let it overflow the column. */}
+            <div className="flex min-w-0 flex-col gap-4">
               <JoinCodeCard
                 sessionPin={lobby.session.sessionPin}
                 quizTitle={quizTitle}

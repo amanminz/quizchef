@@ -36,6 +36,9 @@ export const gameplayKeys = {
    * one question's, so the next question can never render against the
    * previous one's cached boards (the stale-animation failure mode).
    */
+  /** Host-only: a finished session's captured standings. */
+  finalStandings: (sessionId: string) =>
+    [...gameplayKeys.all, "final-standings", sessionId] as const,
   topFiveTransitions: (sessionId: string) =>
     [...gameplayKeys.all, "top-five", sessionId] as const,
   topFiveTransition: (sessionId: string, questionId: string) =>
