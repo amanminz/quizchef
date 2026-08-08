@@ -700,6 +700,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/final-standings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read a finished session's standings (host only)
+         * @description Every participant's finishing rank and score, with the name as it read at completion — captured when the session ended rather than recomputed, so a later change to the scoring or ranking rule cannot rewrite the result of an event that already happened. Host only: this is the complete field, and a participant reads only their own finish through the final-placement endpoint, which applies the reveal-group policy this one deliberately does not. Empty for a session that has not finished, or one that finished before this history was recorded.
+         */
+        get: operations["finalStandings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/answer-progress": {
         parameters: {
             query?: never;
@@ -1520,6 +1540,35 @@ export interface components {
             finalQuestion?: boolean;
             previousTopFive?: components["schemas"]["TopFiveLeaderboardEntry"][];
             currentTopFive?: components["schemas"]["TopFiveLeaderboardEntry"][];
+        };
+        FinalStandingEntry: {
+            /** Format: uuid */
+            participantId?: string;
+            /**
+             * @description The name as it read at completion
+             * @example Amelia
+             */
+            displayName?: string;
+            /**
+             * Format: int32
+             * @example 1
+             */
+            rank?: number;
+            /**
+             * Format: int32
+             * @example 8450
+             */
+            score?: number;
+        };
+        FinalStandingsResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /**
+             * Format: date-time
+             * @description When the standings were captured; null when none exist
+             */
+            capturedAt?: string;
+            entries?: components["schemas"]["FinalStandingEntry"][];
         };
         AnswerProgressResponse: {
             /** Format: uuid */
@@ -3688,6 +3737,55 @@ export interface operations {
             };
             /** @description No question is in play (session.no-current-question), or not revealed yet / the last question (session.top-five.not-available) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    finalStandings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The captured standings, in finishing order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["FinalStandingsResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

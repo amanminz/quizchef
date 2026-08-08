@@ -7,6 +7,7 @@ import type {
   CurrentQuestionResponse,
   JoinSessionRequest,
   LeaderboardResponse,
+  FinalStandingsResponse,
   ParticipantFinalPlacementResponse,
   ParticipantResultResponse,
   ParticipantSessionResponse,
@@ -224,6 +225,20 @@ export const sessionApi = {
   ): Promise<ParticipantFinalPlacementResponse> {
     const { data } = await apiClient.get<ParticipantFinalPlacementResponse>(
       `/api/v1/sessions/${sessionId}/participants/${participantId}/final-placement`
+    );
+    return data;
+  },
+
+  /**
+   * A finished session's standings as captured when it ended — HOST ONLY,
+   * and the complete field. Read back from history rather than recomputed,
+   * so a later change to scoring or ranking cannot rewrite a past event.
+   * Empty for a session that has not finished, or one that finished before
+   * this history existed; neither is an error.
+   */
+  async finalStandings(sessionId: string): Promise<FinalStandingsResponse> {
+    const { data } = await apiClient.get<FinalStandingsResponse>(
+      `/api/v1/sessions/${sessionId}/final-standings`
     );
     return data;
   },

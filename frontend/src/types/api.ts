@@ -55,6 +55,8 @@ export type OptionCount = Schemas["OptionCount"];
 export type TopFiveLeaderboardTransitionResponse = Schemas["TopFiveLeaderboardTransitionResponse"];
 export type TopFiveLeaderboardEntry = Schemas["TopFiveLeaderboardEntry"];
 export type ParticipantFinalPlacementResponse = Schemas["ParticipantFinalPlacementResponse"];
+export type FinalStandingsResponse = Schemas["FinalStandingsResponse"];
+export type FinalStandingEntry = Schemas["FinalStandingEntry"];
 export type FinalPlacementNeighbour = Schemas["FinalPlacementNeighbour"];
 
 /**

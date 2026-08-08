@@ -10,6 +10,7 @@ import { AnimatedTopFiveLeaderboard } from "@/features/gameplay/components/Anima
 import { AnswerProgressBadge } from "@/features/gameplay/components/AnswerProgressBadge";
 import { CompletionBanner } from "@/features/gameplay/components/CompletionBanner";
 import { CountdownOverlay } from "@/features/gameplay/components/CountdownOverlay";
+import { FinalStandingsTable } from "@/features/gameplay/components/FinalStandingsTable";
 import { FinalStatistics } from "@/features/gameplay/components/FinalStatistics";
 import { GameConnectionBanner } from "@/features/gameplay/components/GameConnectionBanner";
 import { HostBilingualQuestion } from "@/features/gameplay/components/HostBilingualQuestion";
@@ -353,6 +354,12 @@ function HostGameplayBody({
                   error={host.releaseFinalResultsError}
                   onRelease={() => void host.releaseFinalResults()}
                 />
+                {/* The captured history, not the live projection: the same
+                    numbers today, and still the same after a scoring rule
+                    changes. */}
+                {host.finalStandings && (
+                  <FinalStandingsTable standings={host.finalStandings} />
+                )}
                 <FinalStatistics results={host.results} />
                 <SessionSummaryCard
                   quizTitle={quizTitle}
