@@ -6,6 +6,8 @@ import { ErrorPanel } from "@/components/common/ErrorPanel";
 import { PageContainer } from "@/components/common/PageContainer";
 import { Spinner } from "@/components/common/Spinner";
 import { WorkflowHeader } from "@/components/common/WorkflowHeader";
+import { FinalStandingsTable } from "@/features/gameplay/components/FinalStandingsTable";
+import { useFinalStandings } from "@/features/gameplay/hooks/useFinalStandings";
 import { ConfigurationSection } from "@/features/sessions/components/ConfigurationSection";
 import { JoinCodeCard } from "@/features/sessions/components/JoinCodeCard";
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
@@ -35,6 +37,10 @@ export function SessionDetailsPage() {
   const { data: currentUser } = useCurrentUser();
   const quizTitle = useQuizTitle(session?.publishedQuizVersionId);
   const { canOpenLobby, openLobby, isOpeningLobby, openLobbyError } = useHostControls(session);
+  // A finished session's captured standings — this is the page a host opens
+  // to look back at an event, so it is where the history belongs.
+  const finished = session?.state === "FINISHED" || session?.state === "ARCHIVED";
+  const { data: finalStandings } = useFinalStandings(sessionId, finished);
 
   const openLobbyAndEnter = async () => {
     if (!session?.sessionPin) {
@@ -91,6 +97,12 @@ export function SessionDetailsPage() {
       {openLobbyError != null && (
         <div className="mb-6">
           <ErrorPanel title="Could not open the lobby" error={openLobbyError} />
+        </div>
+      )}
+
+      {session && finished && finalStandings && (
+        <div className="mb-6">
+          <FinalStandingsTable standings={finalStandings} />
         </div>
       )}
 

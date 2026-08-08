@@ -166,6 +166,7 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
         <div className="flex flex-col gap-4">
           <PersonalAnswerFeedback
             verdict={verdict}
+            quizComplete={finalQuestion}
             pointsEarned={finalQuestion ? undefined : player.personalResult?.pointsEarned}
             totalScore={finalQuestion ? undefined : player.personalResult?.score}
             message={motivationFor({
@@ -194,7 +195,7 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       // ParticipantResultView), so there is nothing here to leak.
       if (isLastQuestion(player.question)) {
         // The last question's standings belong to the ceremony.
-        return <FinalResultsPendingScreen />;
+        return <FinalResultsPendingScreen language={player.preferredLanguage} />;
       }
       if (player.personalResultError != null) {
         return (
@@ -229,7 +230,7 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       );
     }
     case "FINAL_RESULTS_PENDING":
-      return <FinalResultsPendingScreen />;
+      return <FinalResultsPendingScreen language={player.preferredLanguage} />;
     case "FINISHED":
       // A backend without this endpoint yet (a staggered deploy: the
       // frontend and backend are separate Railway services and do not land
@@ -237,7 +238,7 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       // and the same screen the participant was already on, so the
       // transition is invisible rather than an error page.
       if (isEndpointMissing(player.finalPlacementError)) {
-        return <FinalResultsPendingScreen />;
+        return <FinalResultsPendingScreen language={player.preferredLanguage} />;
       }
       if (player.finalPlacementError != null) {
         return (

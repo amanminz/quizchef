@@ -789,6 +789,71 @@ describe("PlaySessionPage", () => {
     }
   );
 
+  it("says the quiz is over on the last question, and waits in the player's language", async () => {
+    // The complaint this fixes: a Hindi player finished the quiz and was
+    // left on an English line telling them to watch a screen, with no way
+    // to tell whether another question was coming.
+    const base = currentQuestionResponse({ questionNumber: 2, totalQuestions: 2 });
+    const question = revealedQuestionResponse(base);
+    const holder = {
+      session: sessionSummary({
+        sessionId: question.sessionId,
+        state: "IN_PROGRESS" as const,
+        currentQuestionId: question.questionId,
+        currentPhase: "ANSWER_REVEALED" as const
+      })
+    };
+    const record = {
+      sessionId: holder.session.sessionId!,
+      participantId: "participant-me",
+      guestParticipantToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "hi"
+    };
+    usePlayerSessionStore.getState().record(PIN, record);
+    server.use(
+      http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
+        HttpResponse.json(holder.session)
+      ),
+      http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
+        HttpResponse.json(question)
+      ),
+      http.post("/api/v1/sessions/reconnect", () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: holder.session.sessionId,
+            participantId: record.participantId,
+            currentQuestionId: question.questionId,
+            currentPhase: "ANSWER_REVEALED",
+            submittedOptionIds: [base.options![0].optionId!]
+          })
+        )
+      )
+    );
+
+    const first = renderApp(`/play/${PIN}`);
+
+    // On the last question's reveal: said plainly, not left to a
+    // motivational line to imply.
+    expect(await screen.findByText(/that was the last question/i)).toBeInTheDocument();
+    // Still no standing of any kind — the ceremony has not run.
+    expect(screen.queryByText(/\d+(st|nd|rd|th)\b/)).not.toBeInTheDocument();
+    first.unmount();
+
+    // Once the host finishes — but before they release results — the wait
+    // is in the language they chose.
+    holder.session = {
+      ...holder.session,
+      state: "FINISHED",
+      currentQuestionId: undefined,
+      finalResultsReleased: false
+    };
+    renderApp(`/play/${PIN}`);
+    expect(await screen.findByText("क्विज़ पूरा हुआ!")).toBeInTheDocument();
+    expect(screen.getByText(/सामने वाली स्क्रीन/)).toBeInTheDocument();
+    expect(screen.queryByText(/quiz complete!/i)).not.toBeInTheDocument();
+  });
+
   it("shows a motivation for an unanswered question too", async () => {
     const base = currentQuestionResponse({ questionNumber: 3, totalQuestions: 5 });
     const question = revealedQuestionResponse(base);
@@ -1100,7 +1165,7 @@ describe("PlaySessionPage", () => {
 
     expect(await screen.findByText(/quiz complete/i)).toBeInTheDocument();
     expect(screen.getByText(/winners are being announced/i)).toBeInTheDocument();
-    expect(screen.getByText(/watch the shared screen/i)).toBeInTheDocument();
+    expect(screen.getByText(/watch the main screen/i)).toBeInTheDocument();
     // No rank, no name, no score leaks while pending.
     expect(screen.queryByText("You finished")).not.toBeInTheDocument();
     expect(screen.queryByText("Winner")).not.toBeInTheDocument();
