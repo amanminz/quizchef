@@ -2,6 +2,7 @@ import { Check, Copy, Share2 } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/common/Button";
 import { Card, CardContent } from "@/components/common/Card";
+import { cn } from "@/utils/cn";
 
 export interface JoinCodeCardProps {
   sessionPin: string | undefined;
@@ -50,18 +51,17 @@ export function JoinCodeCard({ sessionPin, quizTitle, presentation = false }: Jo
   };
 
   return (
-    <Card>
-      <CardContent className="flex flex-col items-center gap-3 p-6">
+    <Card className="session-code-card">
+      <CardContent className="flex min-w-0 flex-col items-center gap-3 p-6">
         <span className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
           Session code
         </span>
         <span
           aria-label={`Session code ${sessionPin ?? "unavailable"}`}
-          className={
-            presentation
-              ? "font-mono text-7xl font-bold tracking-[0.3em]"
-              : "font-mono text-4xl font-bold tracking-[0.3em]"
-          }
+          className={cn(
+            "session-code font-mono font-bold",
+            !presentation && "session-code--compact"
+          )}
         >
           {sessionPin ?? "——————"}
         </span>
