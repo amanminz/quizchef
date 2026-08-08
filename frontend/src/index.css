@@ -32,12 +32,18 @@
    * the glyphs centre rather than the box.
    */
   .session-code-card {
+    /* The query container is the *padded* content box, not the card, so
+       `cqw` already excludes the padding the digits cannot occupy. Putting
+       it on the card instead made every size a little optimistic. */
     container-type: inline-size;
     min-width: 0;
   }
 
   .session-code {
-    --code-tracking: clamp(0.08rem, 1cqw, 0.4rem);
+    /* Tracking in `em` rather than `cqw` so it scales with the font rather
+       than independently of it: the two must shrink together or a code that
+       fits at one width overflows at another. */
+    --code-tracking: 0.1em;
 
     display: inline-block;
     max-width: 100%;
@@ -45,8 +51,20 @@
     text-align: center;
     line-height: 1;
     font-variant-numeric: tabular-nums;
-    font-size: clamp(2.25rem, 14cqw, 5rem);
+    /*
+     * 22cqw is close to the arithmetic ceiling, not a guess. Six monospace
+     * digits advance about 0.6em each, plus five tracking gaps of 0.1em
+     * (the sixth is pulled back below), so the code occupies roughly
+     * 3.6 + 0.5 = 4.1 times the font size. At 22% of the container that is
+     * about 90% of the available width — enough headroom for a font whose
+     * digits are slightly wider than assumed, and no more.
+     */
+    font-size: clamp(2.5rem, 22cqw, 9rem);
     letter-spacing: var(--code-tracking);
+    /* Letter-spacing is applied after every character including the last,
+       so the box carries a trailing gap with no glyph in it. Centring the
+       box would then centre that gap too and push the digits left; pulling
+       it back off the end margin centres the glyphs instead. */
     margin-inline-end: calc(-1 * var(--code-tracking));
   }
 

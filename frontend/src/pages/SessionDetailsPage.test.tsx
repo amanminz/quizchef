@@ -1,4 +1,4 @@
-import { screen, waitFor } from "@testing-library/react";
+import { screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { http, HttpResponse } from "msw";
 import { describe, expect, it } from "vitest";
@@ -46,6 +46,56 @@ describe("SessionDetailsPage", () => {
     expect(screen.getByText("Max participants")).toBeInTheDocument();
     expect(screen.getByText("100")).toBeInTheDocument();
     expect(screen.getByText("Late join")).toBeInTheDocument();
+  });
+
+  it("shows a finished session's captured standings", async () => {
+    // This is the page a host opens from the sessions list to look back at
+    // an event, so it is where the history has to be — not only on the
+    // gameplay screen they have already navigated away from.
+    signIn();
+    const session = sessionSummary({ state: "FINISHED", participantCount: 3 });
+    serve(session);
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/final-standings`, () =>
+        HttpResponse.json({
+          sessionId: session.sessionId,
+          capturedAt: "2026-08-08T18:00:00Z",
+          entries: [
+            { participantId: "p1", displayName: "Amelia", rank: 1, score: 8450 },
+            { participantId: "p2", displayName: "Aman", rank: 2, score: 8120 },
+            { participantId: "p3", displayName: "Ruth", rank: 3, score: 7780 }
+          ]
+        })
+      )
+    );
+
+    renderApp(`/sessions/${session.sessionId}`);
+
+    const table = await screen.findByRole("table", { name: /final standings/i });
+    expect(within(table).getByText("Amelia")).toBeInTheDocument();
+    expect(within(table).getByText("Ruth")).toBeInTheDocument();
+    expect(within(table).getByText("8,450")).toBeInTheDocument();
+  });
+
+  it("asks for no standings on a session that has not finished", async () => {
+    // Nothing is recorded until a session ends, so requesting it would only
+    // earn an empty list that looks like a fault.
+    signIn();
+    const session = sessionSummary({ state: "LOBBY" });
+    serve(session);
+    let requested = false;
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}/final-standings`, () => {
+        requested = true;
+        return HttpResponse.json({ sessionId: session.sessionId, entries: [] });
+      })
+    );
+
+    renderApp(`/sessions/${session.sessionId}`);
+
+    expect(await screen.findByText(session.sessionPin!)).toBeInTheDocument();
+    expect(screen.queryByRole("table", { name: /final standings/i })).not.toBeInTheDocument();
+    await waitFor(() => expect(requested).toBe(false));
   });
 
   it("opens the lobby and navigates into it", async () => {

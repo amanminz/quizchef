@@ -10,6 +10,13 @@ export interface PersonalAnswerFeedbackProps {
   totalScore?: number;
   /** The line from the catalogue, already resolved to their language. */
   message: string;
+  /**
+   * The quiz has no more questions. Says so plainly rather than leaving the
+   * player on a screen that looks like every other reveal: without it the
+   * only signal is a motivational line, and a player who reads "watch the
+   * main screen" has no way to tell whether one more question is coming.
+   */
+  quizComplete?: boolean;
 }
 
 const HEADLINE: Record<AnswerVerdict, { icon: typeof CheckCircle2; text: string; tone: string }> = {
@@ -49,7 +56,8 @@ export function PersonalAnswerFeedback({
   verdict,
   pointsEarned,
   totalScore,
-  message
+  message,
+  quizComplete = false
 }: PersonalAnswerFeedbackProps) {
   const { icon: Icon, text, tone } = HEADLINE[verdict];
 
@@ -78,6 +86,10 @@ export function PersonalAnswerFeedback({
             {totalScore.toLocaleString()}
           </span>
         </p>
+      )}
+
+      {quizComplete && (
+        <p className="text-base font-bold text-foreground">That was the last question</p>
       )}
 
       <p className="max-w-sm text-pretty text-sm font-medium text-foreground/80">{message}</p>

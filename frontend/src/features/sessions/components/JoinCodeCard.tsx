@@ -51,8 +51,8 @@ export function JoinCodeCard({ sessionPin, quizTitle, presentation = false }: Jo
   };
 
   return (
-    <Card className="session-code-card">
-      <CardContent className="flex min-w-0 flex-col items-center gap-3 p-6">
+    <Card>
+      <CardContent className="session-code-card flex min-w-0 flex-col items-center gap-3 p-6">
         <span className="text-sm font-medium uppercase tracking-wide text-muted-foreground">
           Session code
         </span>
