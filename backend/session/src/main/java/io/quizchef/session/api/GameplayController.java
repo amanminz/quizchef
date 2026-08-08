@@ -7,6 +7,7 @@ import io.quizchef.session.application.AnswerDistributionQueryService;
 import io.quizchef.session.application.AnswerProgressQueryService;
 import io.quizchef.session.application.CloseQuestionApplicationService;
 import io.quizchef.session.application.CurrentQuestionQueryService;
+import io.quizchef.session.application.FinalStandingsQueryService;
 import io.quizchef.session.application.ParticipantFinalPlacementQueryService;
 import io.quizchef.session.application.ReleaseFinalResultsApplicationService;
 import io.quizchef.session.application.SessionResultsQueryService;
@@ -52,6 +53,7 @@ public class GameplayController {
     private final AnswerProgressQueryService answerProgressQueryService;
     private final AnswerDistributionQueryService answerDistributionQueryService;
     private final ParticipantFinalPlacementQueryService participantFinalPlacementQueryService;
+    private final FinalStandingsQueryService finalStandingsQueryService;
     private final TopFiveLeaderboardQueryService topFiveLeaderboardQueryService;
     private final ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService;
     private final CurrentUserProvider currentUserProvider;
@@ -67,6 +69,7 @@ public class GameplayController {
                              AnswerProgressQueryService answerProgressQueryService,
                              AnswerDistributionQueryService answerDistributionQueryService,
                              ParticipantFinalPlacementQueryService participantFinalPlacementQueryService,
+                             FinalStandingsQueryService finalStandingsQueryService,
                              TopFiveLeaderboardQueryService topFiveLeaderboardQueryService,
                              ReleaseFinalResultsApplicationService releaseFinalResultsApplicationService,
                              CurrentUserProvider currentUserProvider) {
@@ -81,6 +84,7 @@ public class GameplayController {
         this.answerProgressQueryService = answerProgressQueryService;
         this.answerDistributionQueryService = answerDistributionQueryService;
         this.participantFinalPlacementQueryService = participantFinalPlacementQueryService;
+        this.finalStandingsQueryService = finalStandingsQueryService;
         this.topFiveLeaderboardQueryService = topFiveLeaderboardQueryService;
         this.releaseFinalResultsApplicationService = releaseFinalResultsApplicationService;
         this.currentUserProvider = currentUserProvider;
@@ -217,6 +221,31 @@ public class GameplayController {
     public TopFiveLeaderboardTransitionResponse topFiveLeaderboard(@PathVariable UUID id) {
         return TopFiveLeaderboardTransitionResponse.from(
                 topFiveLeaderboardQueryService.transition(currentUserProvider.currentUser(), id));
+    }
+
+    @GetMapping("/{id}/final-standings")
+    @Operation(
+            summary = "Read a finished session's standings (host only)",
+            description = "Every participant's finishing rank and score, with the name as it read at "
+                    + "completion — captured when the session ended rather than recomputed, so a later "
+                    + "change to the scoring or ranking rule cannot rewrite the result of an event that "
+                    + "already happened. Host only: this is the complete field, and a participant reads "
+                    + "only their own finish through the final-placement endpoint, which applies the "
+                    + "reveal-group policy this one deliberately does not. Empty for a session that has "
+                    + "not finished, or one that finished before this history was recorded.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The captured standings, in finishing order"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public FinalStandingsResponse finalStandings(@PathVariable UUID id) {
+        return FinalStandingsResponse.from(id,
+                finalStandingsQueryService.standings(currentUserProvider.currentUser(), id));
     }
 
     @GetMapping("/{id}/participants/{participantId}/final-placement")

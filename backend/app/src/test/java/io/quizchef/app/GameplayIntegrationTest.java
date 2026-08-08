@@ -7,6 +7,7 @@ import static org.mockito.Mockito.atLeastOnce;
 import static org.mockito.Mockito.verify;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -656,6 +657,69 @@ class GameplayIntegrationTest {
                 // Nobody finished below them.
                 .andExpect(jsonPath("$.aheadOf").doesNotExist())
                 .andExpect(jsonPath("$.entries").doesNotExist());
+    }
+
+    @Test
+    void finishedSessionsKeepTheirStandingsAsHistory() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithOneQuestion(host.reference());
+        Lobby lobby = createLobbyWithGuests(hostToken, quiz.quizId(),
+                List.of("Amelia", "Aman", "Ruth"));
+
+        // Nothing to show before the session ends — an honest empty, not an
+        // error and not a reconstruction that would look authoritative.
+        mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/final-standings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entries", org.hamcrest.Matchers.hasSize(0)))
+                .andExpect(jsonPath("$.capturedAt").doesNotExist());
+
+        String questionId = openQuestion(hostToken, lobby.sessionId());
+        for (String participantId : lobby.participantIds()) {
+            answer(lobby.sessionId(), participantId, questionId,
+                    quiz.questions().get(0).correctOptionId());
+        }
+        close(hostToken, lobby.sessionId());
+        reveal(hostToken, lobby.sessionId());
+        mockMvc.perform(post("/api/v1/sessions/" + lobby.sessionId() + "/questions/advance")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.state").value("FINISHED"));
+
+        // Every participant, in the order the game produced, with the name
+        // they played under and the score they finished on.
+        JsonNode history = readJson(mockMvc.perform(
+                        get("/api/v1/sessions/" + lobby.sessionId() + "/final-standings")
+                                .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entries", org.hamcrest.Matchers.hasSize(3)))
+                .andExpect(jsonPath("$.capturedAt").exists())
+                .andExpect(jsonPath("$.entries[0].rank").value(1))
+                .andExpect(jsonPath("$.entries[1].rank").value(2))
+                .andExpect(jsonPath("$.entries[2].rank").value(3))
+                .andReturn().getResponse().getContentAsString());
+        assertThat(history.get("entries").get(0).get("score").asInt()).isPositive();
+        assertThat(history.get("entries")).allSatisfy(entry ->
+                assertThat(entry.get("displayName").asText()).isNotBlank());
+
+        // Reading it again returns the identical snapshot — it is stored,
+        // not recomputed, so nothing about it can drift.
+        mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/final-standings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(content().json(history.toString(), true));
+
+        // Host data. A participant device holds no host token and is refused
+        // the whole field — their own finish comes from the placement read,
+        // which applies the reveal-group policy this one deliberately does not.
+        mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/final-standings"))
+                .andExpect(status().isUnauthorized());
+
+        // And another host cannot read someone else's event.
+        HostAccount stranger = onboardHost();
+        mockMvc.perform(get("/api/v1/sessions/" + lobby.sessionId() + "/final-standings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + stranger.token()))
+                .andExpect(status().isForbidden());
     }
 
     @Test
