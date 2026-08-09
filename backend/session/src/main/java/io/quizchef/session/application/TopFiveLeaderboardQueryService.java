@@ -96,7 +96,7 @@ public class TopFiveLeaderboardQueryService {
         }
 
         PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
-        if (QuestionProgression.nextAfter(quiz, questionId).isEmpty()) {
+        if (QuestionProgression.nextAfter(quiz, session).isEmpty()) {
             throw new TopFiveLeaderboardNotAvailableException();
         }
 
@@ -132,7 +132,7 @@ public class TopFiveLeaderboardQueryService {
         return new TopFiveLeaderboardTransitionView(
                 sessionId,
                 questionId,
-                questionNumber(quiz, questionId),
+                QuestionProgression.numberOf(quiz, session, questionId),
                 quiz.questions().size(),
                 false,
                 previousTopFive,
@@ -194,13 +194,4 @@ public class TopFiveLeaderboardQueryService {
         return points;
     }
 
-    private static int questionNumber(PlayableQuizView quiz, UUID questionId) {
-        List<PlayableQuizView.PlayableQuestion> questions = quiz.questions();
-        for (int index = 0; index < questions.size(); index++) {
-            if (questions.get(index).questionId().equals(questionId)) {
-                return index + 1;
-            }
-        }
-        return 0;
-    }
 }

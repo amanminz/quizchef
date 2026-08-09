@@ -18,9 +18,12 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
+import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
@@ -103,6 +106,25 @@ public class Session extends AuditableEntity {
     @ElementCollection(fetch = FetchType.LAZY)
     @CollectionTable(name = "session_participants", joinColumns = @JoinColumn(name = "session_id"))
     private List<SessionRosterEntry> roster = new ArrayList<>();
+
+    /**
+     * The order this session plays its questions in, when it differs from
+     * the quiz's own.
+     *
+     * <p>Empty means "play the authored order", which is what every session
+     * does unless the host shuffles it. Published quizzes are immutable and
+     * sessions pin the version they execute, so the same quiz replayed runs
+     * the same sequence — correct for the content, wrong for the event. A
+     * group playing a quiz a second time should not get the questions in
+     * the order they already remember, and the way to give them a different
+     * one without editing published content is for the order to belong to
+     * the session.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "session_question_order", joinColumns = @JoinColumn(name = "session_id"))
+    @OrderColumn(name = "position")
+    @Column(name = "question_id", nullable = false)
+    private List<UUID> questionOrder = new ArrayList<>();
 
     private Session(UUID id, SessionPin sessionPin, UUID publishedQuizVersionId,
                     IdentityReference hostIdentity, SessionSettings sessionSettings) {
@@ -227,6 +249,46 @@ public class Session extends AuditableEntity {
         this.currentQuestionId = null;
         this.currentQuestionTimer = null;
         this.finalResultsReleased = false;
+    }
+
+    /**
+     * Fixes the order this session will play its questions in.
+     *
+     * <p>Only before the first question opens: the sequence a game is part
+     * way through is not something to renumber underneath the people
+     * playing it, and a participant who has answered question two would
+     * find question two arriving again. {@code CREATED} and {@code LOBBY}
+     * are both fine — a host may shuffle while the room fills — as is a
+     * started session that has not opened anything yet.
+     *
+     * <p>The caller supplies the order; the aggregate only checks that it
+     * is exactly the quiz's questions, once each. Which order is a decision
+     * for the application service, not the model, but "this is a permutation
+     * of the right set" is an invariant and belongs here.
+     */
+    public void useQuestionOrder(List<UUID> orderedQuestionIds, Set<UUID> quizQuestionIds) {
+        if (currentQuestionId != null) {
+            throw new InvalidSessionTransitionException(state,
+                    "change the question order once a question has been played");
+        }
+        if (state != SessionState.CREATED && state != SessionState.LOBBY
+                && state != SessionState.IN_PROGRESS) {
+            throw new InvalidSessionTransitionException(state, "change the question order in");
+        }
+        Objects.requireNonNull(orderedQuestionIds, "orderedQuestionIds must not be null");
+        Set<UUID> provided = new HashSet<>(orderedQuestionIds);
+        if (provided.size() != orderedQuestionIds.size() || !provided.equals(quizQuestionIds)) {
+            throw new IllegalArgumentException(
+                    "orderedQuestionIds must contain exactly the quiz's questions, each once");
+        }
+        this.questionOrder = new ArrayList<>(orderedQuestionIds);
+    }
+
+    /**
+     * This session's own question order, or empty when it plays the quiz's.
+     */
+    public List<UUID> questionOrder() {
+        return List.copyOf(questionOrder);
     }
 
     public void archive() {

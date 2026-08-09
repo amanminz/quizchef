@@ -139,6 +139,20 @@ export const sessionApi = {
   },
 
   /**
+   * Randomises the order this session plays its questions in — host only,
+   * and only before the first question opens. The quiz is never modified:
+   * published content is immutable and past sessions keep the questions
+   * they actually asked. The server draws the order, so there is nothing
+   * to send and nothing to preview.
+   */
+  async shuffleQuestions(sessionId: string): Promise<SessionSummaryResponse> {
+    const { data } = await apiClient.post<SessionSummaryResponse>(
+      `/api/v1/sessions/${sessionId}/questions/shuffle`
+    );
+    return data;
+  },
+
+  /**
    * The full standings — HOST ONLY since the live-event privacy split:
    * every name, score, and rank is the host's projection. Interim (once
    * revealed / on the leaderboard) and final (after FINISHED) share this

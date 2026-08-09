@@ -172,6 +172,6 @@ public class SessionResultsQueryService {
     }
 
     private static boolean isLastQuestion(Session session, PlayableQuizView quiz) {
-        return QuestionProgression.nextAfter(quiz, session.getCurrentQuestionId()).isEmpty();
+        return QuestionProgression.nextAfter(quiz, session).isEmpty();
     }
 }

@@ -80,7 +80,7 @@ public class CurrentQuestionQueryService {
         return new CurrentQuestionView(
                 session.getId(),
                 session.getCurrentPhase(),
-                questionNumber(quiz, questionId),
+                QuestionProgression.numberOf(quiz, session, questionId),
                 quiz.questions().size(),
                 quiz.questionTimeLimitSeconds(),
                 countingDown ? session.getCurrentQuestionTimer().endsAt() : null,
@@ -126,15 +126,6 @@ public class CurrentQuestionQueryService {
         return Math.max(0L, remaining);
     }
 
-    private static int questionNumber(PlayableQuizView quiz, UUID questionId) {
-        List<PlayableQuizView.PlayableQuestion> questions = quiz.questions();
-        for (int index = 0; index < questions.size(); index++) {
-            if (questions.get(index).questionId().equals(questionId)) {
-                return index + 1;
-            }
-        }
-        return 0;
-    }
 
     private static Set<UUID> correctOptionIds(PlayableQuizView quiz, UUID questionId) {
         return quiz.questions().stream()

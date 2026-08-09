@@ -14,11 +14,13 @@ import { JoinCodeCard } from "@/features/sessions/components/JoinCodeCard";
 import { ParticipantWall } from "@/features/sessions/components/ParticipantWall";
 import { PresentationToggle } from "@/features/sessions/components/PresentationToggle";
 import { ReadinessPanel } from "@/features/sessions/components/ReadinessPanel";
+import { ShuffleQuestionsCard } from "@/features/sessions/components/ShuffleQuestionsCard";
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
 import { useLobby } from "@/features/sessions/hooks/useLobby";
 import { usePresentationMode } from "@/features/sessions/hooks/usePresentationMode";
 import { useRoster } from "@/features/sessions/hooks/useRoster";
 import { useQuizTitle } from "@/features/sessions/hooks/useQuizTitle";
+import { useShuffleQuestions } from "@/features/sessions/hooks/useShuffleQuestions";
 
 /**
  * The host's lobby — realtime-driven, and since the live-event polish the
@@ -36,6 +38,7 @@ export function SessionLobbyPage() {
   const { data: quiz } = useQuiz(lobby.session?.publishedQuizVersionId);
   const quizTitle = useQuizTitle(lobby.session?.publishedQuizVersionId);
   const presentation = usePresentationMode();
+  const shuffleMutation = useShuffleQuestions(sessionId);
   const rosterQuery = useRoster(sessionId, lobby.session?.state === "LOBBY");
   const [confirmStart, setConfirmStart] = useState(false);
 
@@ -151,6 +154,17 @@ export function SessionLobbyPage() {
                 questionCount={quiz?.questionIds?.length}
                 playerCount={participantCount}
               />
+              {/* Lobby only: the server refuses a reorder once a question
+                  has opened, and Presentation Mode is for the room to read,
+                  not for the host to operate controls in. */}
+              {!presentation.active && (
+                <ShuffleQuestionsCard
+                  shuffled={lobby.session.questionsShuffled ?? false}
+                  onShuffle={() => shuffleMutation.mutate()}
+                  isShuffling={shuffleMutation.isPending}
+                  error={shuffleMutation.error}
+                />
+              )}
               {!presentation.active && <ConfigurationSection settings={lobby.session.settings} />}
             </div>
             <ParticipantWall

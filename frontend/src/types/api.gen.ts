@@ -196,6 +196,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/questions/shuffle": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Shuffle this session's question order (host only)
+         * @description Randomises the order this session will play its questions in, without touching the quiz. A published quiz is immutable and a session pins the version it executes, so replaying one otherwise repeats an order the room already remembers; the shuffled order belongs to the session, so past sessions keep the questions they actually asked. The server draws the order — a caller-supplied permutation would be a client deciding gameplay, and would let a host preview the draw before accepting it. Allowed only before the first question opens.
+         */
+        post: operations["shuffleQuestions"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/questions/reveal": {
         parameters: {
             query?: never;
@@ -1094,6 +1114,11 @@ export interface components {
             settings?: components["schemas"]["SessionSettingsDto"];
             /** @description Whether the host has released final standings to participants (always false before the session finishes; only meaningful once FINISHED) */
             finalResultsReleased?: boolean;
+            /**
+             * @description True when this session plays its own shuffled order rather than the quiz's authored one
+             * @example false
+             */
+            questionsShuffled?: boolean;
             /** Format: int64 */
             version?: number;
             /** Format: date-time */
@@ -2388,6 +2413,64 @@ export interface operations {
                 };
             };
             /** @description Not startable here (session.invalid-transition, session.not-startable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    shuffleQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, now with a shuffled order */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description A question has already been played (session.invalid-transition) */
             409: {
                 headers: {
                     [name: string]: unknown;

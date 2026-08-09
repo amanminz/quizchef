@@ -25,6 +25,7 @@ public record SessionSummaryView(
         int participantCount,
         SessionSettings settings,
         boolean finalResultsReleased,
+        boolean questionsShuffled,
         long version,
         Instant createdAt
 ) {
@@ -51,6 +52,7 @@ public record SessionSummaryView(
                 session.participantCount(),
                 session.getSessionSettings(),
                 session.isFinalResultsReleased(),
+                !session.questionOrder().isEmpty(),
                 session.getVersion(),
                 session.getCreatedAt());
     }

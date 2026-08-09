@@ -13,6 +13,7 @@ import io.quizchef.session.application.ReleaseFinalResultsApplicationService;
 import io.quizchef.session.application.SessionResultsQueryService;
 import io.quizchef.session.application.RevealAnswerApplicationService;
 import io.quizchef.session.application.ShowLeaderboardApplicationService;
+import io.quizchef.session.application.ShuffleQuestionsApplicationService;
 import io.quizchef.session.application.StartQuestionApplicationService;
 import io.quizchef.session.application.SubmitAnswerApplicationService;
 import io.quizchef.session.application.TopFiveLeaderboardQueryService;
@@ -46,6 +47,7 @@ public class GameplayController {
     private final CloseQuestionApplicationService closeQuestionApplicationService;
     private final RevealAnswerApplicationService revealAnswerApplicationService;
     private final ShowLeaderboardApplicationService showLeaderboardApplicationService;
+    private final ShuffleQuestionsApplicationService shuffleQuestionsApplicationService;
     private final AdvanceQuestionApplicationService advanceQuestionApplicationService;
     private final SubmitAnswerApplicationService submitAnswerApplicationService;
     private final CurrentQuestionQueryService currentQuestionQueryService;
@@ -62,6 +64,7 @@ public class GameplayController {
                              CloseQuestionApplicationService closeQuestionApplicationService,
                              RevealAnswerApplicationService revealAnswerApplicationService,
                              ShowLeaderboardApplicationService showLeaderboardApplicationService,
+                             ShuffleQuestionsApplicationService shuffleQuestionsApplicationService,
                              AdvanceQuestionApplicationService advanceQuestionApplicationService,
                              SubmitAnswerApplicationService submitAnswerApplicationService,
                              CurrentQuestionQueryService currentQuestionQueryService,
@@ -77,6 +80,7 @@ public class GameplayController {
         this.closeQuestionApplicationService = closeQuestionApplicationService;
         this.revealAnswerApplicationService = revealAnswerApplicationService;
         this.showLeaderboardApplicationService = showLeaderboardApplicationService;
+        this.shuffleQuestionsApplicationService = shuffleQuestionsApplicationService;
         this.advanceQuestionApplicationService = advanceQuestionApplicationService;
         this.submitAnswerApplicationService = submitAnswerApplicationService;
         this.currentQuestionQueryService = currentQuestionQueryService;
@@ -317,6 +321,34 @@ public class GameplayController {
     })
     public CurrentQuestionResponse currentQuestion(@PathVariable UUID id) {
         return CurrentQuestionResponse.from(currentQuestionQueryService.currentQuestion(id));
+    }
+
+    @PostMapping("/{id}/questions/shuffle")
+    @Operation(
+            summary = "Shuffle this session's question order (host only)",
+            description = "Randomises the order this session will play its questions in, without "
+                    + "touching the quiz. A published quiz is immutable and a session pins the version "
+                    + "it executes, so replaying one otherwise repeats an order the room already "
+                    + "remembers; the shuffled order belongs to the session, so past sessions keep the "
+                    + "questions they actually asked. The server draws the order — a caller-supplied "
+                    + "permutation would be a client deciding gameplay, and would let a host preview "
+                    + "the draw before accepting it. Allowed only before the first question opens.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session, now with a shuffled order"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "A question has already been played "
+                    + "(session.invalid-transition)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse shuffleQuestions(@PathVariable UUID id) {
+        return SessionSummaryResponse.from(shuffleQuestionsApplicationService.shuffle(
+                currentUserProvider.currentUser(), id));
     }
 
     @PostMapping("/{id}/questions/start")

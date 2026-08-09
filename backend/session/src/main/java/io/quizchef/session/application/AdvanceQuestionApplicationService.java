@@ -97,7 +97,7 @@ public class AdvanceQuestionApplicationService {
 
         PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
         Optional<PlayableQuestion> next =
-                QuestionProgression.nextAfter(quiz, session.getCurrentQuestionId());
+                QuestionProgression.nextAfter(quiz, session);
         if (phase == SessionPhase.ANSWER_REVEALED && next.isPresent()) {
             throw new InvalidSessionTransitionException(session.getState(),
                     "advance before the leaderboard is shown");
