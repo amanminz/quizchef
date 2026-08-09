@@ -28,6 +28,9 @@ public record SessionSummaryResponse(
         @Schema(description = "Whether the host has released final standings to participants "
                 + "(always false before the session finishes; only meaningful once FINISHED)")
         boolean finalResultsReleased,
+        @Schema(description = "True when this session plays its own shuffled order rather than the "
+                + "quiz's authored one", example = "false")
+        boolean questionsShuffled,
         long version,
         Instant createdAt
 ) {
@@ -45,6 +48,7 @@ public record SessionSummaryResponse(
                 view.participantCount(),
                 SessionSettingsDto.from(view.settings()),
                 view.finalResultsReleased(),
+                view.questionsShuffled(),
                 view.version(),
                 view.createdAt());
     }

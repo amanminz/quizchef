@@ -723,6 +723,67 @@ class GameplayIntegrationTest {
     }
 
     @Test
+    void shufflingChangesTheOrderThisSessionPlaysWithoutTouchingTheQuiz() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+
+        // A quiz plays its authored order unless a session says otherwise.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questionsShuffled").value(false));
+
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/shuffle")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questionsShuffled").value(true));
+
+        // Whatever order was drawn, the session plays a permutation of the
+        // same questions — the quiz's own content is untouched, so a second
+        // session of it still starts from the authored order.
+        String firstQuestionId = openQuestion(hostToken, sessionId);
+        assertThat(List.of(quiz.questions().get(0).questionId().toString(),
+                        quiz.questions().get(1).questionId().toString()))
+                .contains(firstQuestionId);
+
+        String otherSession = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        mockMvc.perform(get("/api/v1/sessions/" + otherSession))
+                .andExpect(jsonPath("$.questionsShuffled").value(false));
+
+        // Numbering follows the order actually being played, so "Question 1
+        // of 2" means the first question of *this* session.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questionNumber").value(1))
+                .andExpect(jsonPath("$.totalQuestions").value(2));
+    }
+
+    @Test
+    void shufflingIsRefusedOnceAQuestionHasBeenPlayed() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        openQuestion(hostToken, sessionId);
+
+        // Renumbering a game in progress would deal a question the room has
+        // already answered.
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/shuffle")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.invalid-transition"));
+
+        // Host-only, like every other session command.
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/shuffle"))
+                .andExpect(status().isUnauthorized());
+        HostAccount stranger = onboardHost();
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/shuffle")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + stranger.token()))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void rosterReadIsHostOnlyAndInJoinOrder() throws Exception {
         HostAccount host = onboardHost();
         String hostToken = host.token();

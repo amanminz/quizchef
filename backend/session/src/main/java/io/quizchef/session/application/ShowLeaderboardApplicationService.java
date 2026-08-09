@@ -69,7 +69,7 @@ public class ShowLeaderboardApplicationService {
         SessionHostPolicy.requireHost(currentUser, session);
 
         PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
-        if (QuestionProgression.nextAfter(quiz, session.getCurrentQuestionId()).isEmpty()) {
+        if (QuestionProgression.nextAfter(quiz, session).isEmpty()) {
             throw new LeaderboardNotAvailableException();
         }
 

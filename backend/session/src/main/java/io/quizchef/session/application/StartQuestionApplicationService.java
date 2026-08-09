@@ -48,7 +48,7 @@ public class StartQuestionApplicationService {
         SessionHostPolicy.requireHost(currentUser, session);
 
         PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
-        var first = QuestionProgression.nextAfter(quiz, session.getCurrentQuestionId())
+        var first = QuestionProgression.nextAfter(quiz, session)
                 .orElseThrow(() -> new SessionNotStartableException("This quiz has no questions to start"));
         questionOpener.startPreview(session, first, quiz.questionTimeLimitSeconds());
         sessionRepository.saveAndFlush(session);

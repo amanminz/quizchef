@@ -28,6 +28,7 @@ export function sessionSummary(
     // the final screen without every call site opting in; tests of the
     // final-results hold explicitly override this to false.
     finalResultsReleased: true,
+    questionsShuffled: false,
     version: 0,
     createdAt: new Date().toISOString(),
     ...overrides

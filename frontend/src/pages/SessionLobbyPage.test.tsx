@@ -268,4 +268,49 @@ describe("SessionLobbyPage", () => {
     expect(await screen.findByRole("link", { name: "Dashboard" })).toBeInTheDocument();
     HTMLElement.prototype.requestFullscreen = originalRequestFullscreen;
   });
+
+  it("shuffles this session's question order without touching the quiz", async () => {
+    const { holder } = setupLobby({ questionsShuffled: false });
+    let shuffleCalls = 0;
+    server.use(
+      http.post(`/api/v1/sessions/${holder.session.sessionId}/questions/shuffle`, () => {
+        shuffleCalls += 1;
+        holder.session = { ...holder.session, questionsShuffled: true };
+        return HttpResponse.json(holder.session);
+      })
+    );
+    const user = userEvent.setup();
+
+    expect(await screen.findByText(/the quiz's own order/i)).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /shuffle questions/i }));
+
+    // Server-confirmed: the badge follows the server's answer, not a guess.
+    expect(await screen.findByText(/shuffled for this session/i)).toBeInTheDocument();
+    expect(shuffleCalls).toBe(1);
+
+    // The drawn order is deliberately not shown — a host who could see it
+    // would be choosing rather than shuffling.
+    expect(screen.queryByText(/question 1/i)).not.toBeInTheDocument();
+    // And it stays available, so a host can draw again before starting.
+    expect(screen.getByRole("button", { name: /shuffle again/i })).toBeEnabled();
+  });
+
+  it("surfaces a refused shuffle without losing the lobby", async () => {
+    const { holder } = setupLobby({ questionsShuffled: false });
+    server.use(
+      http.post(`/api/v1/sessions/${holder.session.sessionId}/questions/shuffle`, () =>
+        HttpResponse.json(
+          apiError("session.invalid-transition", "Cannot change the question order"),
+          { status: 409 }
+        )
+      )
+    );
+    const user = userEvent.setup();
+
+    await user.click(await screen.findByRole("button", { name: /shuffle questions/i }));
+
+    expect(await screen.findByText(/could not shuffle the questions/i)).toBeInTheDocument();
+    // The lobby is still usable — a refused shuffle is not a broken page.
+    expect(screen.getByText(holder.session.sessionPin!)).toBeInTheDocument();
+  });
 });
