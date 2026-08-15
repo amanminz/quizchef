@@ -9,7 +9,9 @@ import io.quizchef.session.domain.event.ParticipantDisconnectedEvent;
 import io.quizchef.session.domain.event.ParticipantJoinedEvent;
 import io.quizchef.session.domain.event.ParticipantReconnectedEvent;
 import io.quizchef.session.domain.event.QuestionClosedEvent;
+import io.quizchef.session.domain.event.QuestionCorrectedEvent;
 import io.quizchef.session.domain.event.QuestionPreviewStartedEvent;
+import io.quizchef.session.domain.event.QuestionRemovedEvent;
 import io.quizchef.session.domain.event.QuestionStartedEvent;
 import io.quizchef.session.domain.event.SessionFinishedEvent;
 import io.quizchef.session.domain.event.SessionStartedEvent;
@@ -84,6 +86,27 @@ final class SessionProtocolMapper {
 
     static ProtocolMessage toMessage(QuestionClosedEvent event) {
         return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.QUESTION_CLOSED,
+                event.occurredAt(), new QuestionPayload(event.questionId()));
+    }
+
+    /**
+     * Ids only, deliberately. What the host changed includes the answer
+     * key, and this goes to every device in the room — so the message says
+     * that something changed and clients re-read state that is already
+     * phase-gated to hide correctness until the reveal.
+     */
+    static ProtocolMessage toMessage(QuestionCorrectedEvent event) {
+        return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.QUESTION_CORRECTED,
+                event.occurredAt(), new QuestionPayload(event.questionId()));
+    }
+
+    /**
+     * Ids only, for the stronger reason: the room never finished this
+     * question, so its correct answer is not reveal-time material at all —
+     * it is a spoiler for a question they were about to be asked.
+     */
+    static ProtocolMessage toMessage(QuestionRemovedEvent event) {
+        return ProtocolMessage.of(event.sessionId(), ProtocolMessageType.QUESTION_REMOVED,
                 event.occurredAt(), new QuestionPayload(event.questionId()));
     }
 

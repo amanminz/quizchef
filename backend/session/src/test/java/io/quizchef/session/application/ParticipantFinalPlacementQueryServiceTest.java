@@ -1,5 +1,6 @@
 package io.quizchef.session.application;
 
+import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionQuizQuery;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.QUIZ_VERSION;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.host;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionHostedBy;
@@ -51,7 +52,7 @@ class ParticipantFinalPlacementQueryServiceTest {
     private final GameplayQuizQuery gameplayQuizQuery = mock(GameplayQuizQuery.class);
     private final ParticipantFinalPlacementQueryService service =
             new ParticipantFinalPlacementQueryService(sessionRepository, participantRepository,
-                    new LeaderboardService(), gameplayQuizQuery);
+                    new LeaderboardService(), sessionQuizQuery(gameplayQuizQuery));
 
     private final CurrentUser hostUser = host();
 

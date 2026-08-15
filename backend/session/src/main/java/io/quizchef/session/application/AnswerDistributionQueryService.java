@@ -3,7 +3,6 @@ package io.quizchef.session.application;
 import io.quizchef.identity.application.AuthorizationService;
 import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
-import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuizView.PlayableQuestion;
 import io.quizchef.session.domain.Participant;
 import io.quizchef.session.domain.ParticipantAnswer;
@@ -38,16 +37,16 @@ public class AnswerDistributionQueryService {
 
     private final SessionRepository sessionRepository;
     private final ParticipantRepository participantRepository;
-    private final GameplayQuizQuery gameplayQuizQuery;
+    private final SessionQuizQuery sessionQuizQuery;
     private final AuthorizationService authorizationService;
 
     public AnswerDistributionQueryService(SessionRepository sessionRepository,
                                           ParticipantRepository participantRepository,
-                                          GameplayQuizQuery gameplayQuizQuery,
+                                          SessionQuizQuery sessionQuizQuery,
                                           AuthorizationService authorizationService) {
         this.sessionRepository = sessionRepository;
         this.participantRepository = participantRepository;
-        this.gameplayQuizQuery = gameplayQuizQuery;
+        this.sessionQuizQuery = sessionQuizQuery;
         this.authorizationService = authorizationService;
     }
 
@@ -66,7 +65,7 @@ public class AnswerDistributionQueryService {
             throw new AnswerDistributionNotAvailableException();
         }
 
-        Set<UUID> optionIds = gameplayQuizQuery.load(session.getPublishedQuizVersionId())
+        Set<UUID> optionIds = sessionQuizQuery.effectiveQuiz(session)
                 .questions().stream()
                 .filter(question -> question.questionId().equals(questionId))
                 .findFirst()

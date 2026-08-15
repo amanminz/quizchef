@@ -3,6 +3,7 @@ import type {
   AnswerAcceptedResponse,
   AnswerDistributionResponse,
   AnswerProgressResponse,
+  CorrectQuestionRequest,
   CreateSessionRequest,
   CurrentQuestionResponse,
   JoinSessionRequest,
@@ -13,6 +14,7 @@ import type {
   ParticipantSessionResponse,
   ReconnectRequest,
   SessionParticipantsResponse,
+  SessionQuestionsResponse,
   SessionResultsResponse,
   SessionSnapshotResponse,
   SessionSummaryResponse,
@@ -148,6 +150,60 @@ export const sessionApi = {
   async shuffleQuestions(sessionId: string): Promise<SessionSummaryResponse> {
     const { data } = await apiClient.post<SessionSummaryResponse>(
       `/api/v1/sessions/${sessionId}/questions/shuffle`
+    );
+    return data;
+  },
+
+  /**
+   * This session's questions — HOST ONLY. The sequence being played, in the
+   * session's own order, with each question's number, status, and whether
+   * it has already been corrected; removed questions are listed where they
+   * used to sit, without a number.
+   *
+   * Unlike every other question read, this one carries `correctOptionIds`
+   * before the reveal — a host cannot fix a wrong answer key without being
+   * shown it. Render it only inside the correction dialog, never in a row
+   * that could reach a projector.
+   */
+  async sessionQuestions(sessionId: string): Promise<SessionQuestionsResponse> {
+    const { data } = await apiClient.get<SessionQuestionsResponse>(
+      `/api/v1/sessions/${sessionId}/questions`
+    );
+    return data;
+  },
+
+  /**
+   * Corrects one question for this session only — HOST ONLY. The Question
+   * Library record is never touched. Whether this also replays the question
+   * is the server's decision, not this call's: an upcoming question is
+   * corrected silently, while the question in play is restarted from its
+   * reading period with every answer and point it produced reversed.
+   * Throws `session.invalid-transition` (409) for a question already
+   * played, already removed, or in a finished session.
+   */
+  async correctQuestion(
+    sessionId: string,
+    questionId: string,
+    request: CorrectQuestionRequest
+  ): Promise<SessionSummaryResponse> {
+    const { data } = await apiClient.post<SessionSummaryResponse>(
+      `/api/v1/sessions/${sessionId}/questions/${questionId}/correction`,
+      request
+    );
+    return data;
+  },
+
+  /**
+   * Pulls a question out of this session — HOST ONLY, and idempotent, so a
+   * double-click converges rather than conflicting. Answers cancelled,
+   * points reversed, numbering closed up. Removing the question in play
+   * advances to the next one, or finishes the session when there is none.
+   * Throws `session.question.removal-not-allowed` (409) for the last
+   * question left to play.
+   */
+  async removeQuestion(sessionId: string, questionId: string): Promise<SessionSummaryResponse> {
+    const { data } = await apiClient.post<SessionSummaryResponse>(
+      `/api/v1/sessions/${sessionId}/questions/${questionId}/removal`
     );
     return data;
   },

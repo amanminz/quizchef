@@ -8,7 +8,12 @@ import io.quizchef.identity.domain.IdentityType;
 import io.quizchef.session.domain.exception.DuplicateParticipantException;
 import io.quizchef.session.domain.exception.InvalidSessionTransitionException;
 import io.quizchef.session.domain.exception.ParticipantAlreadyJoinedException;
+import io.quizchef.session.domain.exception.QuestionRemovalNotAllowedException;
 import io.quizchef.session.domain.exception.SessionNotStartableException;
+import java.time.Duration;
+import java.time.Instant;
+import java.util.LinkedHashSet;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -179,5 +184,118 @@ class SessionTest {
         session.archive();
         assertThatExceptionOfType(InvalidSessionTransitionException.class).isThrownBy(session::archive);
         assertThatExceptionOfType(InvalidSessionTransitionException.class).isThrownBy(session::finish);
+    }
+
+    // --- Correcting and removing questions mid-session ---
+
+    private static final Instant AT = Instant.parse("2026-08-15T10:00:00Z");
+    private static final UUID Q1 = UUID.randomUUID();
+    private static final UUID Q2 = UUID.randomUUID();
+    private static final UUID Q3 = UUID.randomUUID();
+    private static final Set<UUID> THREE_QUESTIONS = new LinkedHashSet<>(java.util.List.of(Q1, Q2, Q3));
+
+    private Session inProgressSession() {
+        Session session = session();
+        session.openLobby();
+        session.registerParticipant(UUID.randomUUID(), guestKey());
+        session.start();
+        return session;
+    }
+
+    private static QuestionTimer timer() {
+        return QuestionTimer.startingAt(AT, Duration.ofSeconds(30));
+    }
+
+    @Test
+    void removingAQuestionRecordsWhatWasPulledAndWhenceWithoutErasingIt() {
+        Session session = inProgressSession();
+        session.previewQuestion(Q1, timer());
+        session.openQuestion(timer());
+
+        assertThat(session.removeQuestion(Q1, THREE_QUESTIONS, SessionPhase.QUESTION_OPEN, 4, AT))
+                .isTrue();
+
+        assertThat(session.isRemoved(Q1)).isTrue();
+        assertThat(session.removedQuestionIds()).containsExactly(Q1);
+        // A marker, not a deletion: the host's audit entry outlives the game.
+        assertThat(session.removedQuestions()).singleElement().satisfies(removed -> {
+            assertThat(removed.questionId()).isEqualTo(Q1);
+            assertThat(removed.removedAt()).isEqualTo(AT);
+            assertThat(removed.removedFromPhase()).isEqualTo(SessionPhase.QUESTION_OPEN);
+            assertThat(removed.cancelledAnswerCount()).isEqualTo(4);
+        });
+    }
+
+    @Test
+    void removingTheSameQuestionTwiceIsAConvergentNoOp() {
+        Session session = inProgressSession();
+        session.removeQuestion(Q2, THREE_QUESTIONS, null, 0, AT);
+
+        // A host double-click must not throw and must not undo the first.
+        assertThat(session.removeQuestion(Q2, THREE_QUESTIONS, null, 0, AT.plusSeconds(1))).isFalse();
+        assertThat(session.removedQuestions()).hasSize(1);
+        assertThat(session.removedQuestions().getFirst().removedAt()).isEqualTo(AT);
+    }
+
+    @Test
+    void refusesToRemoveTheLastQuestionLeftToPlay() {
+        Session session = inProgressSession();
+
+        // A session with nothing left cannot produce standings for a quiz
+        // nobody played, so the safe outcome is to refuse.
+        assertThatExceptionOfType(QuestionRemovalNotAllowedException.class)
+                .isThrownBy(() -> session.removeQuestion(Q1, Set.of(Q1), null, 0, AT));
+        assertThat(session.removedQuestionIds()).isEmpty();
+    }
+
+    @Test
+    void refusesToRemoveAQuestionThisSessionIsNotPlaying() {
+        Session session = inProgressSession();
+
+        assertThatExceptionOfType(IllegalArgumentException.class).isThrownBy(() ->
+                session.removeQuestion(UUID.randomUUID(), THREE_QUESTIONS, null, 0, AT));
+    }
+
+    @Test
+    void cancellingTheCurrentQuestionLeavesItReplayable() {
+        Session session = inProgressSession();
+        session.previewQuestion(Q1, timer());
+        session.openQuestion(timer());
+
+        session.cancelCurrentQuestion();
+
+        // The phase and its clock are gone; where the engine stands is not.
+        assertThat(session.getCurrentPhase()).isNull();
+        assertThat(session.getCurrentQuestionTimer()).isNull();
+        assertThat(session.getCurrentQuestionId()).isEqualTo(Q1);
+        assertThat(session.acceptsAnswersFor(Q1)).isFalse();
+
+        // And that is exactly what makes the corrected question replayable.
+        session.previewQuestion(Q1, timer());
+        assertThat(session.getCurrentPhase()).isEqualTo(SessionPhase.QUESTION_PREVIEW);
+    }
+
+    @Test
+    void cancellingTheCurrentQuestionLetsTheEngineStepPastItToTheNext() {
+        Session session = inProgressSession();
+        session.previewQuestion(Q1, timer());
+        session.openQuestion(timer());
+
+        session.removeQuestion(Q1, THREE_QUESTIONS, SessionPhase.QUESTION_OPEN, 0, AT);
+        session.cancelCurrentQuestion();
+        session.previewQuestion(Q2, timer());
+
+        assertThat(session.getCurrentQuestionId()).isEqualTo(Q2);
+        assertThat(session.getCurrentPhase()).isEqualTo(SessionPhase.QUESTION_PREVIEW);
+    }
+
+    @Test
+    void cancellingBetweenQuestionsIsHarmless() {
+        Session session = inProgressSession();
+
+        session.cancelCurrentQuestion();
+
+        assertThat(session.getCurrentPhase()).isNull();
+        assertThat(session.getCurrentQuestionId()).isNull();
     }
 }

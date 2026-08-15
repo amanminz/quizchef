@@ -179,6 +179,35 @@ public class Participant extends AuditableEntity {
     }
 
     /**
+     * Undoes one answer: drops the record and takes its points back out of
+     * the cached total — the exact inverse of {@link #recordAnswer}, and the
+     * only way points ever leave a participant.
+     *
+     * <p>Used when a question's attempt is cancelled because the host
+     * corrected or removed it. The reversal is arithmetic on this
+     * participant's own answers rather than a recomputation from the quiz,
+     * which is what makes it exact: {@code totalScore} is a cache of the
+     * answers (ADR-003), so removing an answer and its points leaves the
+     * two consistent by construction, whatever the scoring rule was when
+     * the answer was taken.
+     *
+     * @return true if there was an answer to discard
+     */
+    public boolean discardAnswerFor(UUID questionId) {
+        Objects.requireNonNull(questionId, "questionId must not be null");
+        ParticipantAnswer discarded = answers.stream()
+                .filter(answer -> answer.questionId().equals(questionId))
+                .findFirst()
+                .orElse(null);
+        if (discarded == null) {
+            return false;
+        }
+        answers.remove(discarded);
+        this.totalScore -= discarded.pointsAwarded();
+        return true;
+    }
+
+    /**
      * Derived from the lifecycle — never a stored flag.
      */
     public boolean isConnected() {

@@ -24,6 +24,7 @@ import { SessionSummaryCard } from "@/features/gameplay/components/SessionSummar
 import { useGameHost } from "@/features/gameplay/hooks/useGameHost";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { PresentationToggle } from "@/features/sessions/components/PresentationToggle";
+import { SessionQuestionsPanel } from "@/features/sessions/components/SessionQuestionsPanel";
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
 import { usePresentationMode } from "@/features/sessions/hooks/usePresentationMode";
 import { useQuizTitle } from "@/features/sessions/hooks/useQuizTitle";
@@ -124,6 +125,20 @@ export function SessionLivePage() {
           <ErrorPanel title="Could not advance the game" error={host.nextStepError} />
         </div>
       )}
+
+      {/* Never in presentation mode: this panel is backed by a read that
+          carries answer keys for questions the room has not reached, and a
+          projected screen is exactly where that must not appear. Only while
+          there is still a game to change — a finished session's questions
+          are history. */}
+      {!presentation.active &&
+        host.sessionError == null &&
+        host.session?.state === "IN_PROGRESS" && (
+          <SessionQuestionsPanel
+            sessionId={sessionId}
+            answeredCount={host.answerProgress?.answeredCount ?? 0}
+          />
+        )}
 
       {!host.isLoadingSession && host.sessionError == null && (
         <div className={presentation.active ? "min-h-0 flex-1 overflow-hidden" : undefined}>

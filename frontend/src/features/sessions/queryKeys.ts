@@ -11,5 +11,12 @@ export const sessionKeys = {
   details: () => [...sessionKeys.all, "detail"] as const,
   detail: (sessionId: string) => [...sessionKeys.details(), sessionId] as const,
   /** The host's roster read (names in join order) — the lobby wall's data. */
-  roster: (sessionId: string) => [...sessionKeys.all, "roster", sessionId] as const
+  roster: (sessionId: string) => [...sessionKeys.all, "roster", sessionId] as const,
+  /**
+   * The host's read of the session's own question sequence — what the live
+   * screen's question panel renders, and the only place a host can act on a
+   * question they are not currently showing. Host-only, and never mounted
+   * by a participant device: it carries unrevealed answer keys.
+   */
+  questions: (sessionId: string) => [...sessionKeys.all, "questions", sessionId] as const
 };

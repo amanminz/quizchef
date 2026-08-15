@@ -18,6 +18,7 @@ import {
 } from "@/features/gameplay/components/JoinSessionForm";
 import { QuestionCard } from "@/features/gameplay/components/QuestionCard";
 import { QuestionPreviewNotice } from "@/features/gameplay/components/QuestionPreviewNotice";
+import { QuestionRemovedNotice } from "@/features/gameplay/components/QuestionRemovedNotice";
 import { QuestionSkeleton } from "@/features/gameplay/components/QuestionSkeleton";
 import { QuestionTransition } from "@/features/gameplay/components/QuestionTransition";
 import { SubmissionStatus } from "@/features/gameplay/components/SubmissionStatus";
@@ -125,7 +126,10 @@ function PlayerGameplayBody({ player }: { player: ReturnType<typeof usePlayerGam
       return (
         <QuestionTransition transitionKey={player.question.questionId ?? ""}>
           <QuestionCard question={player.question} preferredLanguage={player.preferredLanguage}>
-            <QuestionPreviewNotice />
+            {/* The reading period after a removal is where the player is
+                told why the question changed — it stands in for the usual
+                "options shortly" notice rather than appearing beside it. */}
+            {player.questionRemoved ? <QuestionRemovedNotice /> : <QuestionPreviewNotice />}
           </QuestionCard>
         </QuestionTransition>
       );

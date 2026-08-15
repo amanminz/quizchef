@@ -45,6 +45,18 @@ export type LeaderboardResponse = Schemas["LeaderboardResponse"];
 export type CurrentQuestionResponse = Schemas["CurrentQuestionResponse"];
 export type PlayableOptionDto = Schemas["PlayableOptionDto"];
 export type PlayableLocalizationDto = Schemas["PlayableLocalizationDto"];
+/**
+ * Host-only. The session's own question sequence, and the two live
+ * recoveries acting on it. `SessionQuestionDto` is the one question shape
+ * that carries `correctOptionIds` before the reveal — a host cannot fix a
+ * wrong answer key without seeing it — so it must never reach a
+ * participant screen.
+ */
+export type SessionQuestionsResponse = Schemas["SessionQuestionsResponse"];
+export type SessionQuestionDto = Schemas["SessionQuestionDto"];
+export type SessionQuestionStatus = NonNullable<SessionQuestionDto["status"]>;
+export type CorrectQuestionRequest = Schemas["CorrectQuestionRequest"];
+
 export type SessionResultsResponse = Schemas["SessionResultsResponse"];
 export type LeaderboardEntryDto = Schemas["LeaderboardEntryDto"];
 export type ParticipantResultResponse = Schemas["ParticipantResultResponse"];

@@ -148,6 +148,50 @@ class ParticipantTest {
                 new ParticipantAnswer(questionId, Set.of(UUID.randomUUID()), EN, T2, 400, 200)));
     }
 
+    @Test
+    void discardingAnAnswerTakesItsPointsBackOut() {
+        Participant participant = registered();
+        UUID kept = UUID.randomUUID();
+        UUID discarded = UUID.randomUUID();
+        participant.recordAnswer(new ParticipantAnswer(kept, Set.of(UUID.randomUUID()), EN, T1, 500, 800));
+        participant.recordAnswer(new ParticipantAnswer(discarded, Set.of(UUID.randomUUID()), EN, T2, 400, 950));
+
+        assertThat(participant.discardAnswerFor(discarded)).isTrue();
+
+        // Exactly the discarded answer's points, not a recomputation: the
+        // cached total is a sum of the answers, so removing one leaves the
+        // two consistent whatever the scoring rule was at the time.
+        assertThat(participant.getTotalScore()).isEqualTo(800);
+        assertThat(participant.answers()).extracting(ParticipantAnswer::questionId)
+                .containsExactly(kept);
+    }
+
+    @Test
+    void discardingAnUnansweredQuestionChangesNothing() {
+        Participant participant = registered();
+        participant.recordAnswer(answer(600));
+
+        assertThat(participant.discardAnswerFor(UUID.randomUUID())).isFalse();
+        assertThat(participant.getTotalScore()).isEqualTo(600);
+        assertThat(participant.answers()).hasSize(1);
+    }
+
+    @Test
+    void aDiscardedQuestionCanBeAnsweredAgain() {
+        Participant participant = registered();
+        UUID questionId = UUID.randomUUID();
+        participant.recordAnswer(new ParticipantAnswer(questionId, Set.of(UUID.randomUUID()), EN, T1, 500, 700));
+        participant.discardAnswerFor(questionId);
+
+        // The point of a replay: the corrected question is asked again, and
+        // the guard against answering twice must not remember the attempt
+        // that was cancelled.
+        participant.recordAnswer(new ParticipantAnswer(questionId, Set.of(UUID.randomUUID()), EN, T2, 300, 900));
+
+        assertThat(participant.getTotalScore()).isEqualTo(900);
+        assertThat(participant.answers()).hasSize(1);
+    }
+
     private static ParticipantAnswer answer(int points) {
         return new ParticipantAnswer(UUID.randomUUID(), Set.of(UUID.randomUUID()), EN, T1, 500, points);
     }

@@ -1,6 +1,5 @@
 package io.quizchef.session.application;
 
-import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.session.domain.FinalPlacementPolicy;
 import io.quizchef.session.domain.FinalPlacementVisibility;
 import io.quizchef.session.domain.LeaderboardEntry;
@@ -40,16 +39,16 @@ public class ParticipantFinalPlacementQueryService {
     private final SessionRepository sessionRepository;
     private final ParticipantRepository participantRepository;
     private final LeaderboardService leaderboardService;
-    private final GameplayQuizQuery gameplayQuizQuery;
+    private final SessionQuizQuery sessionQuizQuery;
 
     public ParticipantFinalPlacementQueryService(SessionRepository sessionRepository,
                                                  ParticipantRepository participantRepository,
                                                  LeaderboardService leaderboardService,
-                                                 GameplayQuizQuery gameplayQuizQuery) {
+                                                 SessionQuizQuery sessionQuizQuery) {
         this.sessionRepository = sessionRepository;
         this.participantRepository = participantRepository;
         this.leaderboardService = leaderboardService;
-        this.gameplayQuizQuery = gameplayQuizQuery;
+        this.sessionQuizQuery = sessionQuizQuery;
     }
 
     @Transactional(readOnly = true)
@@ -66,7 +65,7 @@ public class ParticipantFinalPlacementQueryService {
         int ownIndex = indexOf(ranked, participantId);
         LeaderboardEntry own = ranked.get(ownIndex);
         int revealCount = FinalPlacementPolicy.exactRankRevealCount(ranked);
-        int totalQuestions = gameplayQuizQuery.load(session.getPublishedQuizVersionId())
+        int totalQuestions = sessionQuizQuery.effectiveQuiz(session)
                 .questions().size();
 
         if (FinalPlacementPolicy.revealsExactRank(own.rank(), revealCount)) {

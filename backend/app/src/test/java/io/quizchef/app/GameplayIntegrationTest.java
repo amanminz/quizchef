@@ -88,6 +88,12 @@ class GameplayIntegrationTest {
     @Autowired
     private ParticipantRepository participantRepository;
 
+    @Autowired
+    private io.quizchef.quiz.application.GameplayQuizQuery gameplayQuizQuery;
+
+    @Autowired
+    private io.quizchef.quiz.application.GameplayQuestionContentQuery gameplayQuestionContentQuery;
+
     @Test
     void fullGame() throws Exception {
         HostAccount host = onboardHost();
@@ -1029,11 +1035,259 @@ class GameplayIntegrationTest {
     private record Lobby(String sessionId, List<String> participantIds) {
     }
 
+
+    // --- Correcting and removing a question mid-session (RFC-020) ---
+
+    @Test
+    void removingAnUpcomingQuestionRenumbersTheSequenceWithNoGap() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithQuestions(host.reference(), 3);
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        openQuestion(hostToken, sessionId);
+
+        removeQuestion(hostToken, sessionId, quiz.questions().get(1).questionId());
+
+        // The room must never see "Question 1 of 3" become "Question 3 of 3":
+        // the sequence closes up, and the count closes with it.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.questionNumber").value(1))
+                .andExpect(jsonPath("$.totalQuestions").value(2));
+
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+        leaderboard(hostToken, sessionId);
+        String next = advanceToNext(hostToken, sessionId);
+
+        assertThat(next).isEqualTo(quiz.questions().get(2).questionId().toString());
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(jsonPath("$.questionNumber").value(2))
+                .andExpect(jsonPath("$.totalQuestions").value(2));
+    }
+
+    @Test
+    void removingTheAnsweredQuestionInPlayCancelsItsScoresAndOpensTheNext() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithQuestions(host.reference(), 3);
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, quiz.questions().get(0).correctOptionId());
+        answer(sessionId, guestB, q1, quiz.questions().get(0).wrongOptionId());
+
+        removeQuestion(hostToken, sessionId, quiz.questions().get(0).questionId());
+
+        // Points awarded by the removed question are gone from the source of
+        // truth, so every projection over them follows without being told.
+        assertThat(participantRepository.findBySessionId(UUID.fromString(sessionId)))
+                .allSatisfy(participant -> assertThat(participant.getTotalScore()).isZero());
+
+        // The next question takes over — with its own reading period, and
+        // without ever revealing the removed question's answer.
+        awaitQuestionOpen(sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(jsonPath("$.questionId").value(quiz.questions().get(1).questionId().toString()))
+                .andExpect(jsonPath("$.questionNumber").value(1))
+                .andExpect(jsonPath("$.totalQuestions").value(2))
+                .andExpect(jsonPath("$.correctOptionIds").doesNotExist());
+
+        // And no answer survives: the host's progress read counts the new
+        // question from zero rather than carrying the cancelled attempt over.
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/answer-progress")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.answeredCount").value(0));
+
+        // The room is told, additively and without a spoiler: the removal
+        // rides the wire as a bare notification, and the removed question's
+        // answer never reaches the session topic on its account.
+        var captor = org.mockito.ArgumentCaptor.forClass(ProtocolMessage.class);
+        verify(messagingTemplate, atLeastOnce())
+                .convertAndSend(startsWith("/topic/session/"), captor.capture());
+        assertThat(captor.getAllValues()).extracting(ProtocolMessage::type)
+                .contains(ProtocolMessageType.QUESTION_REMOVED);
+        assertThat(captor.getAllValues())
+                .filteredOn(message -> message.type() == ProtocolMessageType.QUESTION_REMOVED)
+                .singleElement()
+                .satisfies(message -> assertThat(message.payload().toString())
+                        .doesNotContain(quiz.questions().getFirst().correctOptionId().toString()));
+    }
+
+    @Test
+    void correctingTheQuestionInPlayReplaysItAndLeavesTheLibraryUntouched() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithQuestions(host.reference(), 2);
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        QuestionAnswers first = quiz.questions().getFirst();
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, first.correctOptionId());
+
+        // The host discovers the answer key is wrong: what was marked wrong
+        // is in fact the right answer.
+        correctQuestion(hostToken, sessionId, first.questionId(), first.wrongOptionId(),
+                "Corrected prompt");
+
+        // The published question is not a party to any of this — read back
+        // through the quiz module's own gameplay boundary, which is what a
+        // *different* session of the same quiz would see.
+        assertThat(gameplayQuizQuery.load(quiz.quizId()).questions())
+                .filteredOn(question -> question.questionId().equals(first.questionId()))
+                .singleElement()
+                .satisfies(question ->
+                        assertThat(question.correctOptionIds()).containsExactly(first.correctOptionId()));
+        assertThat(gameplayQuestionContentQuery.content(first.questionId()).localizations())
+                .singleElement()
+                .satisfies(localization -> assertThat(localization.prompt()).isEqualTo("Prompt 1"));
+
+        // The attempt is cancelled and the same question restarts.
+        assertThat(participantRepository.findBySessionId(UUID.fromString(sessionId)))
+                .allSatisfy(participant -> assertThat(participant.getTotalScore()).isZero());
+        awaitQuestionOpen(sessionId);
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(jsonPath("$.questionId").value(first.questionId().toString()))
+                .andExpect(jsonPath("$.localizations[0].prompt").value("Corrected prompt"));
+
+        // And it is now scored against the corrected key.
+        answer(sessionId, guestA, q1, first.wrongOptionId());
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+        JsonNode board = leaderboard(hostToken, sessionId);
+        assertThat(board.get("entries").get(0).get("participantId").asText()).isEqualTo(guestA);
+        assertThat(board.get("entries").get(0).get("score").asInt()).isGreaterThan(0);
+    }
+
+    @Test
+    void removingTheLastRemainingQuestionFinishesTheSession() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        String q1 = openQuestion(hostToken, sessionId);
+        answer(sessionId, guestA, q1, quiz.questions().getFirst().correctOptionId());
+        close(hostToken, sessionId);
+        reveal(hostToken, sessionId);
+        leaderboard(hostToken, sessionId);
+        advanceToNext(hostToken, sessionId);
+
+        // Nothing follows the last question, so removing it ends the quiz —
+        // no leaderboard for a question the room never completed.
+        removeQuestion(hostToken, sessionId, quiz.questions().get(1).questionId());
+
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId))
+                .andExpect(jsonPath("$.state").value("FINISHED"))
+                .andExpect(jsonPath("$.finalResultsReleased").value(false));
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/final-standings")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.entries.length()").value(2));
+    }
+
+    @Test
+    void aSessionCannotBeEmptiedOfQuestions() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        openQuestion(hostToken, sessionId);
+        removeQuestion(hostToken, sessionId, quiz.questions().get(1).questionId());
+
+        // One question left, and a quiz with nothing to ask cannot produce a
+        // result worth showing.
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/"
+                        + quiz.questions().getFirst().questionId() + "/removal")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.code").value("session.question.removal-not-allowed"));
+    }
+
+    @Test
+    void aDoubleRemovalConvergesRatherThanConflicting() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithQuestions(host.reference(), 3);
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        openQuestion(hostToken, sessionId);
+        UUID upcoming = quiz.questions().get(2).questionId();
+
+        removeQuestion(hostToken, sessionId, upcoming);
+        // The host's second click, or a retry of the first: it must not
+        // restore the question and must not fail.
+        removeQuestion(hostToken, sessionId, upcoming);
+
+        mockMvc.perform(get("/api/v1/sessions/" + sessionId + "/questions/current"))
+                .andExpect(jsonPath("$.totalQuestions").value(2));
+    }
+
+    @Test
+    void correctionRemovalAndTheQuestionListAreHostOnly() throws Exception {
+        HostAccount host = onboardHost();
+        String hostToken = host.token();
+        PlayableQuiz quiz = publishedQuizWithTwoQuestions(host.reference());
+        String sessionId = createLobbyWithTwoConnectedGuests(hostToken, quiz.quizId());
+        UUID questionId = quiz.questions().getFirst().questionId();
+        String removal = "/api/v1/sessions/" + sessionId + "/questions/" + questionId + "/removal";
+        String correction = "/api/v1/sessions/" + sessionId + "/questions/" + questionId + "/correction";
+        String list = "/api/v1/sessions/" + sessionId + "/questions";
+        HostAccount stranger = onboardHost();
+
+        // A participant device has no token at all — and the question list
+        // carries unrevealed answer keys, so this is the gate that matters.
+        mockMvc.perform(post(removal)).andExpect(status().isUnauthorized());
+        mockMvc.perform(get(list)).andExpect(status().isUnauthorized());
+        mockMvc.perform(post(correction).contentType(MediaType.APPLICATION_JSON)
+                        .content(correctionBody(quiz.questions().getFirst().wrongOptionId(), "x")))
+                .andExpect(status().isUnauthorized());
+
+        // Hosting is exclusive to the identity that created the session.
+        mockMvc.perform(post(removal).header(HttpHeaders.AUTHORIZATION, "Bearer " + stranger.token()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get(list).header(HttpHeaders.AUTHORIZATION, "Bearer " + stranger.token()))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post(correction)
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + stranger.token())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(correctionBody(quiz.questions().getFirst().wrongOptionId(), "x")))
+                .andExpect(status().isForbidden());
+
+        mockMvc.perform(get(list).header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.totalQuestions").value(2))
+                .andExpect(jsonPath("$.questions[0].status").value("UPCOMING"));
+    }
+
+    private void removeQuestion(String hostToken, String sessionId, UUID questionId) throws Exception {
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/" + questionId + "/removal")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
+                .andExpect(status().isOk());
+    }
+
+    private void correctQuestion(String hostToken, String sessionId, UUID questionId,
+                                 UUID newCorrectOptionId, String prompt) throws Exception {
+        mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/questions/" + questionId + "/correction")
+                        .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(correctionBody(newCorrectOptionId, prompt)))
+                .andExpect(status().isOk());
+    }
+
+    private static String correctionBody(UUID correctOptionId, String prompt) {
+        return """
+                {"correctOptionIds": ["%s"],
+                 "localizations": [{"languageCode": "en", "prompt": "%s", "options": []}]}
+                """.formatted(correctOptionId, prompt);
+    }
+
     private PlayableQuiz publishedQuizWithTwoQuestions(IdentityReference owner) {
+        return publishedQuizWithQuestions(owner, 2);
+    }
+
+    private PlayableQuiz publishedQuizWithQuestions(IdentityReference owner, int count) {
         LanguageCode en = LanguageCode.of("en");
         List<QuestionAnswers> questions = new ArrayList<>();
         Quiz quiz = Quiz.create(new QuizLocalization(en, "Bible Quiz", null), owner);
-        for (int i = 1; i <= 2; i++) {
+        for (int i = 1; i <= count; i++) {
             Option correct = Option.of(true, 1);
             Option wrong = Option.of(false, 2);
             Question question = questionRepository.save(Question.create(

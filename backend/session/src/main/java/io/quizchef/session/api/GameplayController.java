@@ -6,10 +6,13 @@ import io.quizchef.session.application.AdvanceQuestionApplicationService;
 import io.quizchef.session.application.AnswerDistributionQueryService;
 import io.quizchef.session.application.AnswerProgressQueryService;
 import io.quizchef.session.application.CloseQuestionApplicationService;
+import io.quizchef.session.application.CorrectQuestionApplicationService;
 import io.quizchef.session.application.CurrentQuestionQueryService;
 import io.quizchef.session.application.FinalStandingsQueryService;
 import io.quizchef.session.application.ParticipantFinalPlacementQueryService;
 import io.quizchef.session.application.ReleaseFinalResultsApplicationService;
+import io.quizchef.session.application.RemoveQuestionApplicationService;
+import io.quizchef.session.application.SessionQuestionListQueryService;
 import io.quizchef.session.application.SessionResultsQueryService;
 import io.quizchef.session.application.RevealAnswerApplicationService;
 import io.quizchef.session.application.ShowLeaderboardApplicationService;
@@ -48,6 +51,9 @@ public class GameplayController {
     private final RevealAnswerApplicationService revealAnswerApplicationService;
     private final ShowLeaderboardApplicationService showLeaderboardApplicationService;
     private final ShuffleQuestionsApplicationService shuffleQuestionsApplicationService;
+    private final CorrectQuestionApplicationService correctQuestionApplicationService;
+    private final RemoveQuestionApplicationService removeQuestionApplicationService;
+    private final SessionQuestionListQueryService sessionQuestionListQueryService;
     private final AdvanceQuestionApplicationService advanceQuestionApplicationService;
     private final SubmitAnswerApplicationService submitAnswerApplicationService;
     private final CurrentQuestionQueryService currentQuestionQueryService;
@@ -65,6 +71,9 @@ public class GameplayController {
                              RevealAnswerApplicationService revealAnswerApplicationService,
                              ShowLeaderboardApplicationService showLeaderboardApplicationService,
                              ShuffleQuestionsApplicationService shuffleQuestionsApplicationService,
+                             CorrectQuestionApplicationService correctQuestionApplicationService,
+                             RemoveQuestionApplicationService removeQuestionApplicationService,
+                             SessionQuestionListQueryService sessionQuestionListQueryService,
                              AdvanceQuestionApplicationService advanceQuestionApplicationService,
                              SubmitAnswerApplicationService submitAnswerApplicationService,
                              CurrentQuestionQueryService currentQuestionQueryService,
@@ -81,6 +90,9 @@ public class GameplayController {
         this.revealAnswerApplicationService = revealAnswerApplicationService;
         this.showLeaderboardApplicationService = showLeaderboardApplicationService;
         this.shuffleQuestionsApplicationService = shuffleQuestionsApplicationService;
+        this.correctQuestionApplicationService = correctQuestionApplicationService;
+        this.removeQuestionApplicationService = removeQuestionApplicationService;
+        this.sessionQuestionListQueryService = sessionQuestionListQueryService;
         this.advanceQuestionApplicationService = advanceQuestionApplicationService;
         this.submitAnswerApplicationService = submitAnswerApplicationService;
         this.currentQuestionQueryService = currentQuestionQueryService;
@@ -349,6 +361,109 @@ public class GameplayController {
     public SessionSummaryResponse shuffleQuestions(@PathVariable UUID id) {
         return SessionSummaryResponse.from(shuffleQuestionsApplicationService.shuffle(
                 currentUserProvider.currentUser(), id));
+    }
+
+    @GetMapping("/{id}/questions")
+    @Operation(
+            summary = "Read this session's questions (host only)",
+            description = "The sequence this session is playing, in its own order, with each "
+                    + "question's number, status (PLAYED / CURRENT / UPCOMING / REMOVED), and "
+                    + "whether the host has already corrected it. Numbers come from the effective "
+                    + "sequence, so a removal closes the gap and this read agrees with what players "
+                    + "see. Removed questions are listed where they used to sit, without a number — "
+                    + "the host should see what they pulled. Unlike every other question read here, "
+                    + "this one carries correctOptionIds before the reveal: a host cannot fix a "
+                    + "wrong answer key without being shown it. That is why it is host-only and "
+                    + "never broadcast.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session's questions"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionQuestionsResponse sessionQuestions(@PathVariable UUID id) {
+        return SessionQuestionsResponse.from(
+                sessionQuestionListQueryService.questions(currentUserProvider.currentUser(), id));
+    }
+
+    @PostMapping("/{id}/questions/{questionId}/correction")
+    @Operation(
+            summary = "Correct a question for this session (host only)",
+            description = "Fixes a question's wording or its answer key for this session alone. The "
+                    + "Question Library record is untouched: published questions are immutable and "
+                    + "editing one would change every other quiz using it and rewrite what past "
+                    + "sessions asked. The correction is an overlay — languages omitted keep their "
+                    + "authored text — and may not add or drop options, because answers already "
+                    + "recorded point at the existing ids.\n\n"
+                    + "Whether this also replays the question is the server's decision, not a flag: "
+                    + "an upcoming question is corrected silently and arrives fixed, while the "
+                    + "question in play is corrected *and* restarted — its attempt cancelled, every "
+                    + "answer and point it produced reversed, and the fixed question re-entering "
+                    + "QUESTION_PREVIEW from the top. All of it commits atomically. Correcting a "
+                    + "question the room has already played is refused; remove it instead.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session, replayed from "
+                    + "QUESTION_PREVIEW if the corrected question was in play"),
+            @ApiResponse(responseCode = "400", description = "Validation failed — no correct option, "
+                    + "blank prompt, or an option the question does not have",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "The question is not in this session's "
+                    + "sequence (session.no-current-question), or has already been played, removed, "
+                    + "or the session has finished (session.invalid-transition)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse correctQuestion(@PathVariable UUID id,
+                                                  @PathVariable UUID questionId,
+                                                  @Valid @RequestBody CorrectQuestionRequest request) {
+        return SessionSummaryResponse.from(correctQuestionApplicationService.correct(
+                currentUserProvider.currentUser(), request.toCommand(id, questionId)));
+    }
+
+    @PostMapping("/{id}/questions/{questionId}/removal")
+    @Operation(
+            summary = "Remove a question from this session (host only)",
+            description = "Pulls a question out of this session for good — the published quiz keeps "
+                    + "it, and another session will still ask it. Its answers are cancelled and its "
+                    + "points reversed, so it contributes to nothing: not the leaderboard, not the "
+                    + "distribution, not the final standings. Numbering closes the gap, so players "
+                    + "never see \"Question 3 of 10\" followed by \"Question 5 of 10\".\n\n"
+                    + "Removing the question in play also ends its attempt: the timer is cancelled "
+                    + "and the next question enters QUESTION_PREVIEW — or, if there is no next "
+                    + "question, the session finishes into the winner ceremony with no leaderboard "
+                    + "for a question nobody completed. The removed question's answer is never "
+                    + "revealed. Idempotent: removing an already-removed question returns the "
+                    + "session unchanged, so a double-click converges.",
+            security = @SecurityRequirement(name = "bearerAuth"))
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", description = "The session, advanced past the removed "
+                    + "question or finished"),
+            @ApiResponse(responseCode = "401", description = "Missing, invalid, or revoked token",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "403", description = "Lacking QUIZ_HOST, or not the host",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "404", description = "Unknown session",
+                    content = @Content(schema = @Schema(implementation = ApiError.class))),
+            @ApiResponse(responseCode = "409", description = "The question is not in this session's "
+                    + "sequence (session.no-current-question), the session has finished "
+                    + "(session.invalid-transition), or it is the last question left to play "
+                    + "(session.question.removal-not-allowed)",
+                    content = @Content(schema = @Schema(implementation = ApiError.class)))
+    })
+    public SessionSummaryResponse removeQuestion(@PathVariable UUID id,
+                                                 @PathVariable UUID questionId) {
+        return SessionSummaryResponse.from(removeQuestionApplicationService.remove(
+                currentUserProvider.currentUser(), id, questionId));
     }
 
     @PostMapping("/{id}/questions/start")
