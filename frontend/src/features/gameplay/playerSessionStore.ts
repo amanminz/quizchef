@@ -49,6 +49,10 @@ interface PlayerSessionState {
   clear: (sessionId: string) => void;
 }
 
+const PERSIST_KEY = "quizchef.playerSession.v2";
+/** Where credentials lived before they were keyed by session. */
+const LEGACY_PERSIST_KEY = "quizchef.playerSession.v1";
+
 export const usePlayerSessionStore = create<PlayerSessionState>()(
   persist(
     (set) => ({
@@ -69,14 +73,90 @@ export const usePlayerSessionStore = create<PlayerSessionState>()(
           )
         }))
     }),
-    // v2: v1 was keyed by PIN and its records are unsafe to reuse for the
-    // reason above. Nothing migrates — a v1 record is dropped, and its
-    // owner rejoins, which is the same outcome they would have got from a
-    // cleared browser and strictly better than being restored into the
-    // wrong quiz.
-    { name: "quizchef.playerSession.v2" }
+    {
+      name: PERSIST_KEY,
+      // v1 was keyed by PIN. Dropping those records rather than carrying
+      // them over was a mistake that stranded a live event: every player
+      // whose browser held one lost their credential on deploy, never
+      // attempted a resume, and was sent to the join form — where the
+      // display-name rule that shipped in the same release refused their
+      // own name.
+      //
+      // The PIN *hint* was the untrustworthy part, never the credential.
+      // The record names the session it belongs to, and the server now
+      // resolves the PIN itself and refuses a credential belonging to a
+      // different session — so a stale record costs one rejected resume,
+      // and carrying it over costs nothing.
+      //
+      // Done in `merge` rather than `migrate` because zustand only migrates
+      // within one storage key, and v1's records live under a different one.
+      merge: (persisted, current) => ({
+        ...current,
+        ...(persisted as Partial<PlayerSessionState>),
+        ...adoptLegacyRecords(persisted as Partial<PlayerSessionState>)
+      })
+    }
   )
 );
+
+/** The v1 shape: one record per PIN, with the token under its old name. */
+interface LegacyRecord {
+  sessionId?: string;
+  participantId?: string;
+  guestParticipantToken?: string;
+  displayName?: string;
+  preferredLanguage?: string;
+}
+
+/**
+ * Folds any credentials left in v1's storage key into this store, then
+ * removes them.
+ *
+ * <p>Removing matters as much as adopting. Left in place, v1 would be
+ * re-read on every reload — including after a resume was definitively
+ * rejected and the record deliberately cleared — putting the player in a
+ * loop that retries a credential the server has already refused.
+ *
+ * <p>An existing v2 record always wins: it was written more recently, by a
+ * client that already knew about session-scoped storage.
+ *
+ * <p>Deliberately forgiving throughout. A half-written or hand-edited
+ * record, or storage that throws (Safari private mode), should cost that
+ * one player a rejoin — never take the whole store, and everyone else's
+ * credential, down with it.
+ */
+function adoptLegacyRecords(persisted: Partial<PlayerSessionState> | undefined): {
+  bySessionId: Record<string, PlayerSessionRecord>;
+  sessionIdByPin: Record<string, string>;
+} {
+  const bySessionId = { ...(persisted?.bySessionId ?? {}) };
+  const sessionIdByPin = { ...(persisted?.sessionIdByPin ?? {}) };
+  try {
+    const raw = globalThis.localStorage?.getItem(LEGACY_PERSIST_KEY);
+    if (!raw) {
+      return { bySessionId, sessionIdByPin };
+    }
+    const legacy: Record<string, LegacyRecord> =
+      JSON.parse(raw)?.state?.bySessionPin ?? {};
+    for (const [pin, record] of Object.entries(legacy)) {
+      if (!record?.sessionId || !record.participantId || bySessionId[record.sessionId]) {
+        continue;
+      }
+      bySessionId[record.sessionId] = {
+        sessionId: record.sessionId,
+        participantId: record.participantId,
+        resumeToken: record.guestParticipantToken,
+        displayName: record.displayName ?? "",
+        preferredLanguage: record.preferredLanguage ?? "en"
+      };
+      sessionIdByPin[pin] = record.sessionId;
+    }
+    globalThis.localStorage?.removeItem(LEGACY_PERSIST_KEY);
+  } catch {
+    // Unreadable or unwritable storage: carry on with whatever v2 holds.
+  }
+  return { bySessionId, sessionIdByPin };
+}
 
 /** The stored record to try for this PIN, if there is one. */
 export function useStoredPlayerSession(pin: string): PlayerSessionRecord | undefined {
