@@ -1,5 +1,6 @@
 package io.quizchef.session.application;
 
+import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionQuizQuery;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.QUIZ_VERSION;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.host;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionHostedBy;
@@ -43,7 +44,8 @@ class CurrentQuestionQueryServiceTest {
     private final GameplayQuizQuery gameplayQuizQuery = mock(GameplayQuizQuery.class);
     private final GameplayQuestionContentQuery contentQuery = mock(GameplayQuestionContentQuery.class);
     private final CurrentQuestionQueryService service = new CurrentQuestionQueryService(
-            sessionRepository, gameplayQuizQuery, contentQuery, Clock.fixed(NOW, ZoneOffset.UTC));
+            sessionRepository, sessionQuizQuery(gameplayQuizQuery, contentQuery),
+            Clock.fixed(NOW, ZoneOffset.UTC));
 
     @Test
     void refusesWhileNoQuestionIsInPlay() {

@@ -36,4 +36,14 @@ final class SessionLookup {
         return repository.findById(sessionId)
                 .orElseThrow(() -> new SessionNotFoundException("Session %s does not exist".formatted(sessionId)));
     }
+
+    /**
+     * The same session, write-locked for the rest of the transaction — for
+     * answering, correcting, and removing, which must not interleave with
+     * each other. See {@link SessionRepository#findAndLockById}.
+     */
+    static Session byIdForUpdate(SessionRepository repository, UUID sessionId) {
+        return repository.findAndLockById(sessionId)
+                .orElseThrow(() -> new SessionNotFoundException("Session %s does not exist".formatted(sessionId)));
+    }
 }

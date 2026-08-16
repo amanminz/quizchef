@@ -1,7 +1,6 @@
 package io.quizchef.session.application;
 
 import io.quizchef.common.event.DomainEventPublisher;
-import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuizView.PlayableQuestion;
 import io.quizchef.session.domain.Participant;
 import io.quizchef.session.domain.ParticipantAnswer;
@@ -17,6 +16,7 @@ import io.quizchef.session.infrastructure.persistence.ParticipantRepository;
 import io.quizchef.session.infrastructure.persistence.SessionRepository;
 import java.time.Clock;
 import java.time.Duration;
+import java.util.UUID;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
@@ -41,7 +41,7 @@ public class SubmitAnswerApplicationService {
 
     private final SessionRepository sessionRepository;
     private final ParticipantRepository participantRepository;
-    private final GameplayQuizQuery gameplayQuizQuery;
+    private final SessionQuizQuery sessionQuizQuery;
     private final ScoringService scoringService;
     private final ScoringPolicy scoringPolicy;
     private final DomainEventPublisher eventPublisher;
@@ -49,14 +49,14 @@ public class SubmitAnswerApplicationService {
 
     public SubmitAnswerApplicationService(SessionRepository sessionRepository,
                                           ParticipantRepository participantRepository,
-                                          GameplayQuizQuery gameplayQuizQuery,
+                                          SessionQuizQuery sessionQuizQuery,
                                           ScoringService scoringService,
                                           ScoringPolicy scoringPolicy,
                                           DomainEventPublisher eventPublisher,
                                           Clock clock) {
         this.sessionRepository = sessionRepository;
         this.participantRepository = participantRepository;
-        this.gameplayQuizQuery = gameplayQuizQuery;
+        this.sessionQuizQuery = sessionQuizQuery;
         this.scoringService = scoringService;
         this.scoringPolicy = scoringPolicy;
         this.eventPublisher = eventPublisher;
@@ -65,9 +65,18 @@ public class SubmitAnswerApplicationService {
 
     @Transactional
     public AnswerAcceptedView submit(SubmitAnswerCommand command) {
+        // The session's write lock comes first, and the participant is read
+        // only once it is held. A host correcting or removing this very
+        // question reverses points across every participant under the same
+        // lock, so the two cannot interleave: either this answer is taken
+        // and then cancelled with the rest, or it arrives after the question
+        // is already gone and is refused below. A participant loaded before
+        // the lock would be a snapshot from before that decision.
+        UUID sessionId = participantRepository.findSessionIdById(command.participantId())
+                .orElseThrow(ParticipantNotFoundException::new);
+        Session session = SessionLookup.byIdForUpdate(sessionRepository, sessionId);
         Participant participant = participantRepository.findById(command.participantId())
                 .orElseThrow(ParticipantNotFoundException::new);
-        Session session = SessionLookup.byId(sessionRepository, participant.getSessionId());
 
         if (!session.acceptsAnswersFor(command.questionId())) {
             throw new AnswerNotAcceptedException("The question is not open for answers");
@@ -82,7 +91,7 @@ public class SubmitAnswerApplicationService {
             throw new IllegalArgumentException("an answer must select at least one option");
         }
 
-        PlayableQuestion question = gameplayQuizQuery.load(session.getPublishedQuizVersionId())
+        PlayableQuestion question = sessionQuizQuery.effectiveQuiz(session)
                 .questions().stream()
                 .filter(playable -> playable.questionId().equals(command.questionId()))
                 .findFirst()

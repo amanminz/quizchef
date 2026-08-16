@@ -19,6 +19,20 @@ export type ProtocolMessageType =
   | "question.preview.started"
   | "question.started"
   | "question.closed"
+  /**
+   * The host fixed a question mid-session. Carries the question id and
+   * nothing else — the correction includes the answer key, and this reaches
+   * every device in the room. Followed by `question.preview.started` when
+   * the corrected question was the one in play.
+   */
+  | "question.corrected"
+  /**
+   * The host pulled a question out of the session. Its answers and points
+   * are already reversed and the numbering has already closed the gap.
+   * Never carries the removed question's correct answer: the room did not
+   * finish it, so that is a spoiler rather than a reveal.
+   */
+  | "question.removed"
   | "answer.revealed"
   | "leaderboard.updated"
   | "participant.answer.accepted"

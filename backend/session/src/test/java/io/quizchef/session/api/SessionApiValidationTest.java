@@ -62,4 +62,48 @@ class SessionApiValidationTest {
         assertThat(validator.validate(request))
                 .anyMatch(v -> v.getPropertyPath().toString().equals("selectedOptionIds"));
     }
+
+    @Test
+    void correctionRejectsAnEmptyAnswerKey() {
+        // A corrected question with nothing marked correct cannot be scored
+        // at all — worse than the wrong key it was meant to fix.
+        CorrectQuestionRequest request = new CorrectQuestionRequest(Set.of(),
+                java.util.List.of(new CorrectQuestionRequest.CorrectedLocalizationDto(
+                        "en", "Prompt", java.util.List.of())));
+
+        assertThat(validator.validate(request))
+                .anyMatch(v -> v.getPropertyPath().toString().equals("correctOptionIds"));
+    }
+
+    @Test
+    void correctionRejectsACorrectionThatSaysNothingInAnyLanguage() {
+        CorrectQuestionRequest request =
+                new CorrectQuestionRequest(Set.of(UUID.randomUUID()), java.util.List.of());
+
+        assertThat(validator.validate(request))
+                .anyMatch(v -> v.getPropertyPath().toString().equals("localizations"));
+    }
+
+    @Test
+    void correctionRejectsABlankPrompt() {
+        CorrectQuestionRequest request = new CorrectQuestionRequest(Set.of(UUID.randomUUID()),
+                java.util.List.of(new CorrectQuestionRequest.CorrectedLocalizationDto(
+                        "en", "   ", java.util.List.of())));
+
+        assertThat(validator.validate(request))
+                .anyMatch(v -> v.getPropertyPath().toString().startsWith("localizations[0].prompt"));
+    }
+
+    @Test
+    void correctionAcceptsAFixInOneLanguageOnly() {
+        // Languages omitted keep their authored text, so a host fixing only
+        // the English is a complete, valid correction.
+        CorrectQuestionRequest request = new CorrectQuestionRequest(Set.of(UUID.randomUUID()),
+                java.util.List.of(new CorrectQuestionRequest.CorrectedLocalizationDto(
+                        "en", "The corrected prompt",
+                        java.util.List.of(new CorrectQuestionRequest.CorrectedOptionDto(
+                                UUID.randomUUID(), "Corrected option")))));
+
+        assertThat(validator.validate(request)).isEmpty();
+    }
 }

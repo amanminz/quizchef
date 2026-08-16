@@ -1,7 +1,5 @@
 package io.quizchef.session.application;
 
-import io.quizchef.quiz.application.GameplayQuestionContentQuery;
-import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuestionContentView;
 import io.quizchef.quiz.application.PlayableQuizView;
 import io.quizchef.session.domain.Session;
@@ -37,17 +35,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class CurrentQuestionQueryService {
 
     private final SessionRepository sessionRepository;
-    private final GameplayQuizQuery gameplayQuizQuery;
-    private final GameplayQuestionContentQuery contentQuery;
+    private final SessionQuizQuery sessionQuizQuery;
     private final Clock clock;
 
     public CurrentQuestionQueryService(SessionRepository sessionRepository,
-                                       GameplayQuizQuery gameplayQuizQuery,
-                                       GameplayQuestionContentQuery contentQuery,
+                                       SessionQuizQuery sessionQuizQuery,
                                        Clock clock) {
         this.sessionRepository = sessionRepository;
-        this.gameplayQuizQuery = gameplayQuizQuery;
-        this.contentQuery = contentQuery;
+        this.sessionQuizQuery = sessionQuizQuery;
         this.clock = clock;
     }
 
@@ -59,8 +54,8 @@ public class CurrentQuestionQueryService {
             throw new NoCurrentQuestionException(session.getState());
         }
 
-        PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
-        PlayableQuestionContentView content = contentQuery.content(questionId);
+        PlayableQuizView quiz = sessionQuizQuery.effectiveQuiz(session);
+        PlayableQuestionContentView content = sessionQuizQuery.effectiveContent(session, questionId);
 
         boolean previewing = session.getCurrentPhase() == SessionPhase.QUESTION_PREVIEW;
         boolean revealed = session.getCurrentPhase() == SessionPhase.ANSWER_REVEALED

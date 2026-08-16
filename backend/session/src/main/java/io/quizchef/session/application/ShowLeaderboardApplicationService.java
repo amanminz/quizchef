@@ -4,7 +4,6 @@ import io.quizchef.common.event.DomainEventPublisher;
 import io.quizchef.identity.application.AuthorizationService;
 import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
-import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuizView;
 import io.quizchef.session.domain.LeaderboardEntry;
 import io.quizchef.session.domain.LeaderboardService;
@@ -41,7 +40,7 @@ public class ShowLeaderboardApplicationService {
     private final SessionRepository sessionRepository;
     private final ParticipantRepository participantRepository;
     private final LeaderboardService leaderboardService;
-    private final GameplayQuizQuery gameplayQuizQuery;
+    private final SessionQuizQuery sessionQuizQuery;
     private final AuthorizationService authorizationService;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
@@ -49,14 +48,14 @@ public class ShowLeaderboardApplicationService {
     public ShowLeaderboardApplicationService(SessionRepository sessionRepository,
                                              ParticipantRepository participantRepository,
                                              LeaderboardService leaderboardService,
-                                             GameplayQuizQuery gameplayQuizQuery,
+                                             SessionQuizQuery sessionQuizQuery,
                                              AuthorizationService authorizationService,
                                              DomainEventPublisher eventPublisher,
                                              Clock clock) {
         this.sessionRepository = sessionRepository;
         this.participantRepository = participantRepository;
         this.leaderboardService = leaderboardService;
-        this.gameplayQuizQuery = gameplayQuizQuery;
+        this.sessionQuizQuery = sessionQuizQuery;
         this.authorizationService = authorizationService;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
@@ -68,7 +67,7 @@ public class ShowLeaderboardApplicationService {
         Session session = SessionLookup.byId(sessionRepository, sessionId);
         SessionHostPolicy.requireHost(currentUser, session);
 
-        PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
+        PlayableQuizView quiz = sessionQuizQuery.effectiveQuiz(session);
         if (QuestionProgression.nextAfter(quiz, session).isEmpty()) {
             throw new LeaderboardNotAvailableException();
         }

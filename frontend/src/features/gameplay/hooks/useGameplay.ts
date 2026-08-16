@@ -22,14 +22,25 @@ const QUESTION_PROGRESSION_EVENTS = new Set<ProtocolMessage["type"]>([
   "question.started",
   "question.closed",
   "answer.revealed",
-  "leaderboard.updated"
+  "leaderboard.updated",
+  // Both change what the question in play *is*: a correction replaces its
+  // wording (and may replay it from the reading period), a removal advances
+  // past it entirely. Neither carries the new state, so both are read back.
+  "question.corrected",
+  "question.removed"
 ]);
 
 /** Events after which the standings read may have new content. */
 const RESULTS_EVENTS = new Set<ProtocolMessage["type"]>([
   "answer.revealed",
   "leaderboard.updated",
-  "session.finished"
+  "session.finished",
+  // A correction or removal cancels a question's answers and reverses the
+  // points they earned, so every projection over those answers moved —
+  // scores, ranks, the distribution. The backend did the reversing
+  // (ADR-006); this only stops us rendering the standings from before it.
+  "question.corrected",
+  "question.removed"
 ]);
 
 function announcementFor(message: ProtocolMessage): string | null {
@@ -40,6 +51,10 @@ function announcementFor(message: ProtocolMessage): string | null {
       return "The answer options are now available.";
     case "question.closed":
       return "The question has closed.";
+    case "question.corrected":
+      return "The Quiz Master corrected this question. It is starting again.";
+    case "question.removed":
+      return "The Quiz Master removed this question. Get ready for the next one.";
     case "answer.revealed":
       return "The correct answer has been revealed.";
     case "leaderboard.updated":
@@ -75,6 +90,11 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
   const connectionStatus = useConnectionStore((state) => state.status);
   const state = useGameplayState(sessionId);
   const [announcement, setAnnouncement] = useState("");
+  // A question vanishing needs explaining, and the explanation has to
+  // outlive the event that triggered it: the next question's reading period
+  // begins immediately, and a player who looked down would otherwise see
+  // only a screen that changed for no reason.
+  const [questionRemoved, setQuestionRemoved] = useState(false);
 
   useEffect(() => {
     client.connect();
@@ -88,6 +108,15 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
       const text = announcementFor(message);
       if (text) {
         setAnnouncement(text);
+      }
+      // Deliberately *not* cleared by the next question's reading period:
+      // that period is where the notice belongs, standing in for the usual
+      // "options coming shortly" so the player is told why the question
+      // changed under them. It clears when that question actually opens.
+      if (message.type === "question.removed") {
+        setQuestionRemoved(true);
+      } else if (message.type === "question.started" || message.type === "session.finished") {
+        setQuestionRemoved(false);
       }
       if (!sessionId) {
         return;
@@ -108,6 +137,8 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
         !participantId &&
         (message.type === "answer.progress" ||
           message.type === "question.started" ||
+          message.type === "question.corrected" ||
+          message.type === "question.removed" ||
           message.type === "participant.joined" ||
           message.type === "participant.disconnected" ||
           message.type === "participant.reconnected")
@@ -127,6 +158,8 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
           });
         } else {
           void queryClient.invalidateQueries({ queryKey: gameplayKeys.results(sessionId) });
+          // The host's own question panel renumbers with the sequence.
+          void queryClient.invalidateQueries({ queryKey: sessionKeys.questions(sessionId) });
           // The projected Top 5 rides the same signal. Invalidated by
           // session prefix, not by question: the reveal that matters is
           // the one that just happened, and the stale entries under it
@@ -153,5 +186,5 @@ export function useGameplay(sessionId: string | undefined, participantId?: strin
     previousStatus.current = connectionStatus;
   }, [connectionStatus, refetchSession, refetchQuestion]);
 
-  return { ...state, connectionStatus, announcement };
+  return { ...state, connectionStatus, announcement, questionRemoved };
 }

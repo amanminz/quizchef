@@ -1,5 +1,6 @@
 package io.quizchef.session.application;
 
+import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionQuizQuery;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.QUIZ_VERSION;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.host;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionHostedBy;
@@ -40,7 +41,8 @@ class AnswerDistributionQueryServiceTest {
     private final GameplayQuizQuery gameplayQuizQuery = mock(GameplayQuizQuery.class);
     private final AuthorizationService authorizationService = mock(AuthorizationService.class);
     private final AnswerDistributionQueryService service = new AnswerDistributionQueryService(
-            sessionRepository, participantRepository, gameplayQuizQuery, authorizationService);
+            sessionRepository, participantRepository, sessionQuizQuery(gameplayQuizQuery),
+            authorizationService);
 
     private final CurrentUser hostUser = host();
     private final UUID questionId = UUID.randomUUID();

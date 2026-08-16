@@ -33,6 +33,27 @@ public enum ProtocolMessageType {
     QUESTION_PREVIEW_STARTED("question.preview.started"),
     QUESTION_STARTED("question.started"),
     QUESTION_CLOSED("question.closed"),
+
+    /**
+     * The host fixed a question mid-session — its wording, its answer key,
+     * or both. Purely "what you are looking at is out of date"; the
+     * correction itself never rides the wire, because it includes the
+     * answer key and this reaches every device in the room. When the
+     * corrected question was the one in play, a {@code
+     * question.preview.started} follows: its attempt was cancelled and it
+     * restarts from the reading period.
+     */
+    QUESTION_CORRECTED("question.corrected"),
+
+    /**
+     * The host pulled a question out of the session. Its answers and points
+     * are already reversed and the numbering already closed the gap.
+     * Carries no correct answer and no standings — the room never finished
+     * the question, and revealing its key would tell them what they were
+     * about to be asked. Followed by a {@code question.preview.started} for
+     * whatever comes next, or {@code session.finished} when nothing does.
+     */
+    QUESTION_REMOVED("question.removed"),
     ANSWER_REVEALED("answer.revealed"),
     LEADERBOARD_UPDATED("leaderboard.updated"),
     ANSWER_ACCEPTED("participant.answer.accepted"),

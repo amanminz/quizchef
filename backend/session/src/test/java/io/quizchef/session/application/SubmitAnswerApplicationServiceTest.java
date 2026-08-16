@@ -1,5 +1,6 @@
 package io.quizchef.session.application;
 
+import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionQuizQuery;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.host;
 import static io.quizchef.session.application.SessionOrchestrationTestFixtures.sessionHostedBy;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -49,7 +50,7 @@ class SubmitAnswerApplicationServiceTest {
     private final GameplayQuizQuery gameplayQuizQuery = mock(GameplayQuizQuery.class);
     private final DomainEventPublisher eventPublisher = mock(DomainEventPublisher.class);
     private final SubmitAnswerApplicationService service = new SubmitAnswerApplicationService(
-            sessionRepository, participantRepository, gameplayQuizQuery, new ScoringService(),
+            sessionRepository, participantRepository, sessionQuizQuery(gameplayQuizQuery), new ScoringService(),
             ScoringPolicy.classic(), eventPublisher, Clock.fixed(ANSWERED, ZoneOffset.UTC));
 
     private final UUID questionId = UUID.randomUUID();
@@ -64,15 +65,25 @@ class SubmitAnswerApplicationServiceTest {
         session.start();
         session.previewQuestion(questionId, QuestionTimer.startingAt(START, Duration.ofSeconds(5)));
         session.openQuestion(QuestionTimer.startingAt(START, Duration.ofSeconds(30)));
-        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(sessionRepository.findAndLockById(session.getId())).thenReturn(Optional.of(session));
         return session;
     }
 
     private Participant connectedParticipant(UUID sessionId) {
         Participant participant = Participant.guest(sessionId, GuestParticipantToken.generate(), "Guest", EN);
         participant.connect(START);
-        when(participantRepository.findById(participant.getId())).thenReturn(Optional.of(participant));
+        stubParticipant(participant);
         return participant;
+    }
+
+    /**
+     * Submission resolves the session from the participant id and locks it
+     * before loading anything else, so both reads are stubbed together.
+     */
+    private void stubParticipant(Participant participant) {
+        when(participantRepository.findSessionIdById(participant.getId()))
+                .thenReturn(Optional.of(participant.getSessionId()));
+        when(participantRepository.findById(participant.getId())).thenReturn(Optional.of(participant));
     }
 
     private void stubQuestion() {
@@ -120,7 +131,7 @@ class SubmitAnswerApplicationServiceTest {
         session.registerParticipant(UUID.randomUUID(),
                 io.quizchef.session.domain.ParticipantKey.forGuest(GuestParticipantToken.generate()));
         session.start();
-        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(sessionRepository.findAndLockById(session.getId())).thenReturn(Optional.of(session));
         Participant participant = connectedParticipant(session.getId());
 
         assertThatExceptionOfType(AnswerNotAcceptedException.class).isThrownBy(() ->
@@ -136,7 +147,7 @@ class SubmitAnswerApplicationServiceTest {
                 io.quizchef.session.domain.ParticipantKey.forGuest(GuestParticipantToken.generate()));
         session.start();
         session.previewQuestion(questionId, QuestionTimer.startingAt(START, Duration.ofSeconds(5)));
-        when(sessionRepository.findById(session.getId())).thenReturn(Optional.of(session));
+        when(sessionRepository.findAndLockById(session.getId())).thenReturn(Optional.of(session));
         Participant participant = connectedParticipant(session.getId());
 
         // The question is current — visible — but not yet open for answers.
@@ -161,7 +172,7 @@ class SubmitAnswerApplicationServiceTest {
         Session session = openSessionWithQuestion();
         Participant participant = Participant.guest(session.getId(),
                 GuestParticipantToken.generate(), "Guest", EN); // JOINED, never connected
-        when(participantRepository.findById(participant.getId())).thenReturn(Optional.of(participant));
+        stubParticipant(participant);
 
         assertThatExceptionOfType(ParticipantNotConnectedException.class).isThrownBy(() ->
                 service.submit(new SubmitAnswerCommand(participant.getId(), questionId, Set.of(correctOption))));

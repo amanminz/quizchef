@@ -1,28 +1,16 @@
 package io.quizchef.session.application;
 
-import io.quizchef.common.event.DomainEventPublisher;
 import io.quizchef.identity.application.AuthorizationService;
 import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
-import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuizView;
 import io.quizchef.quiz.application.PlayableQuizView.PlayableQuestion;
-import io.quizchef.session.domain.FinalStanding;
-import io.quizchef.session.domain.LeaderboardService;
 import io.quizchef.session.domain.Session;
 import io.quizchef.session.domain.SessionPhase;
-import io.quizchef.session.domain.event.SessionFinishedEvent;
 import io.quizchef.session.domain.exception.InvalidSessionTransitionException;
-import io.quizchef.session.infrastructure.persistence.FinalStandingRepository;
-import io.quizchef.session.infrastructure.persistence.ParticipantRepository;
 import io.quizchef.session.infrastructure.persistence.SessionRepository;
-import java.time.Clock;
-import java.time.Instant;
-import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -52,36 +40,22 @@ import org.springframework.transaction.annotation.Transactional;
 @Service
 public class AdvanceQuestionApplicationService {
 
-    private static final Logger log = LoggerFactory.getLogger(AdvanceQuestionApplicationService.class);
-
     private final SessionRepository sessionRepository;
-    private final ParticipantRepository participantRepository;
-    private final FinalStandingRepository finalStandingRepository;
-    private final LeaderboardService leaderboardService;
-    private final GameplayQuizQuery gameplayQuizQuery;
+    private final SessionQuizQuery sessionQuizQuery;
     private final AuthorizationService authorizationService;
     private final QuestionOpener questionOpener;
-    private final DomainEventPublisher eventPublisher;
-    private final Clock clock;
+    private final SessionFinisher sessionFinisher;
 
     public AdvanceQuestionApplicationService(SessionRepository sessionRepository,
-                                             ParticipantRepository participantRepository,
-                                             FinalStandingRepository finalStandingRepository,
-                                             LeaderboardService leaderboardService,
-                                             GameplayQuizQuery gameplayQuizQuery,
+                                             SessionQuizQuery sessionQuizQuery,
                                              AuthorizationService authorizationService,
                                              QuestionOpener questionOpener,
-                                             DomainEventPublisher eventPublisher,
-                                             Clock clock) {
+                                             SessionFinisher sessionFinisher) {
         this.sessionRepository = sessionRepository;
-        this.participantRepository = participantRepository;
-        this.finalStandingRepository = finalStandingRepository;
-        this.leaderboardService = leaderboardService;
-        this.gameplayQuizQuery = gameplayQuizQuery;
+        this.sessionQuizQuery = sessionQuizQuery;
         this.authorizationService = authorizationService;
         this.questionOpener = questionOpener;
-        this.eventPublisher = eventPublisher;
-        this.clock = clock;
+        this.sessionFinisher = sessionFinisher;
     }
 
     @Transactional
@@ -95,7 +69,7 @@ public class AdvanceQuestionApplicationService {
                     "advance before the leaderboard is shown");
         }
 
-        PlayableQuizView quiz = gameplayQuizQuery.load(session.getPublishedQuizVersionId());
+        PlayableQuizView quiz = sessionQuizQuery.effectiveQuiz(session);
         Optional<PlayableQuestion> next =
                 QuestionProgression.nextAfter(quiz, session);
         if (phase == SessionPhase.ANSWER_REVEALED && next.isPresent()) {
@@ -105,45 +79,9 @@ public class AdvanceQuestionApplicationService {
         if (next.isPresent()) {
             questionOpener.startPreview(session, next.get(), quiz.questionTimeLimitSeconds());
         } else {
-            // Capture the standings *before* finishing, while the ranking is
-            // still the one this game actually produced. This is the only
-            // place a session ends, so it is the only place history is
-            // written — and it is written once, never updated.
-            captureFinalStandings(session);
-            session.finish();
-            eventPublisher.publish(new SessionFinishedEvent(sessionId, clock.instant()));
-            log.info("Session {} finished after the last question", sessionId);
+            sessionFinisher.finish(session, "after the last question");
         }
         sessionRepository.saveAndFlush(session);
         return SessionSummaryView.of(session);
-    }
-
-    /**
-     * Copies the finishing order into durable history: name, rank, and score
-     * as they stood at this moment.
-     *
-     * <p>The rank is stored rather than recomputed later on purpose. The
-     * host's live standings are projected and ranked at read time (ADR-006),
-     * which is right for a running game and wrong for a finished one — a
-     * change to the ranking rule would rewrite the result of an event that
-     * already happened, and a display name edited afterwards would
-     * retroactively rename someone in a past quiz.
-     *
-     * <p>Idempotent by guard as well as by construction: advancing a
-     * finished session already throws, but a snapshot that exists is never
-     * written twice.
-     */
-    private void captureFinalStandings(Session session) {
-        if (finalStandingRepository.existsBySessionId(session.getId())) {
-            return;
-        }
-        Instant capturedAt = clock.instant();
-        List<FinalStanding> standings = leaderboardService
-                .rank(participantRepository.findBySessionId(session.getId()), session.roster())
-                .stream()
-                .map(entry -> FinalStanding.capture(session.getId(), entry, capturedAt))
-                .toList();
-        finalStandingRepository.saveAll(standings);
-        log.info("Captured {} final standings for session {}", standings.size(), session.getId());
     }
 }

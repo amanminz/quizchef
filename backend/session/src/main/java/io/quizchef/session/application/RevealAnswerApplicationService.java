@@ -4,7 +4,6 @@ import io.quizchef.common.event.DomainEventPublisher;
 import io.quizchef.identity.application.AuthorizationService;
 import io.quizchef.identity.domain.CurrentUser;
 import io.quizchef.identity.domain.Permission;
-import io.quizchef.quiz.application.GameplayQuizQuery;
 import io.quizchef.quiz.application.PlayableQuizView.PlayableQuestion;
 import io.quizchef.session.domain.Session;
 import io.quizchef.session.domain.event.AnswerRevealedEvent;
@@ -24,18 +23,18 @@ import org.springframework.transaction.annotation.Transactional;
 public class RevealAnswerApplicationService {
 
     private final SessionRepository sessionRepository;
-    private final GameplayQuizQuery gameplayQuizQuery;
+    private final SessionQuizQuery sessionQuizQuery;
     private final AuthorizationService authorizationService;
     private final DomainEventPublisher eventPublisher;
     private final Clock clock;
 
     public RevealAnswerApplicationService(SessionRepository sessionRepository,
-                                          GameplayQuizQuery gameplayQuizQuery,
+                                          SessionQuizQuery sessionQuizQuery,
                                           AuthorizationService authorizationService,
                                           DomainEventPublisher eventPublisher,
                                           Clock clock) {
         this.sessionRepository = sessionRepository;
-        this.gameplayQuizQuery = gameplayQuizQuery;
+        this.sessionQuizQuery = sessionQuizQuery;
         this.authorizationService = authorizationService;
         this.eventPublisher = eventPublisher;
         this.clock = clock;
@@ -51,7 +50,7 @@ public class RevealAnswerApplicationService {
         session.revealAnswer();
         sessionRepository.saveAndFlush(session);
 
-        Set<UUID> correctOptionIds = gameplayQuizQuery.load(session.getPublishedQuizVersionId())
+        Set<UUID> correctOptionIds = sessionQuizQuery.effectiveQuiz(session)
                 .questions().stream()
                 .filter(question -> question.questionId().equals(questionId))
                 .findFirst()

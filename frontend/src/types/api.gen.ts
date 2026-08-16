@@ -176,6 +176,50 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/questions/{questionId}/removal": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Remove a question from this session (host only)
+         * @description Pulls a question out of this session for good — the published quiz keeps it, and another session will still ask it. Its answers are cancelled and its points reversed, so it contributes to nothing: not the leaderboard, not the distribution, not the final standings. Numbering closes the gap, so players never see "Question 3 of 10" followed by "Question 5 of 10".
+         *
+         *     Removing the question in play also ends its attempt: the timer is cancelled and the next question enters QUESTION_PREVIEW — or, if there is no next question, the session finishes into the winner ceremony with no leaderboard for a question nobody completed. The removed question's answer is never revealed. Idempotent: removing an already-removed question returns the session unchanged, so a double-click converges.
+         */
+        post: operations["removeQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{id}/questions/{questionId}/correction": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Correct a question for this session (host only)
+         * @description Fixes a question's wording or its answer key for this session alone. The Question Library record is untouched: published questions are immutable and editing one would change every other quiz using it and rewrite what past sessions asked. The correction is an overlay — languages omitted keep their authored text — and may not add or drop options, because answers already recorded point at the existing ids.
+         *
+         *     Whether this also replays the question is the server's decision, not a flag: an upcoming question is corrected silently and arrives fixed, while the question in play is corrected *and* restarted — its attempt cancelled, every answer and point it produced reversed, and the fixed question re-entering QUESTION_PREVIEW from the top. All of it commits atomically. Correcting a question the room has already played is refused; remove it instead.
+         */
+        post: operations["correctQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/questions/start": {
         parameters: {
             query?: never;
@@ -620,6 +664,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{id}/questions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Read this session's questions (host only)
+         * @description The sequence this session is playing, in its own order, with each question's number, status (PLAYED / CURRENT / UPCOMING / REMOVED), and whether the host has already corrected it. Numbers come from the effective sequence, so a removal closes the gap and this read agrees with what players see. Removed questions are listed where they used to sit, without a number — the host should see what they pulled. Unlike every other question read here, this one carries correctOptionIds before the reveal: a host cannot fix a wrong answer key without being shown it. That is why it is host-only and never broadcast.
+         */
+        get: operations["sessionQuestions"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{id}/questions/current": {
         parameters: {
             query?: never;
@@ -834,7 +898,7 @@ export interface paths {
          * Detach a question from the quiz
          * @description Owner only, requires QUIZ_EDIT. Draft only — a published quiz may gain questions but never lose them. No quiz deletion; this only removes the composition reference.
          */
-        delete: operations["removeQuestion"];
+        delete: operations["removeQuestion_1"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1146,6 +1210,26 @@ export interface components {
             /** @enum {string} */
             sessionState?: "CREATED" | "LOBBY" | "IN_PROGRESS" | "FINISHED" | "ARCHIVED";
         };
+        CorrectQuestionRequest: {
+            /** @description Which options the corrected question treats as correct; replaces the authored answer key outright */
+            correctOptionIds?: string[];
+            /** @description The corrected wording, per language. Only the languages present change. */
+            localizations?: components["schemas"]["CorrectedLocalizationDto"][];
+        };
+        CorrectedLocalizationDto: {
+            /** @example en */
+            languageCode?: string;
+            prompt?: string;
+            options?: components["schemas"]["CorrectedOptionDto"][];
+        };
+        CorrectedOptionDto: {
+            /**
+             * Format: uuid
+             * @description Must be an option the question already has
+             */
+            optionId: string;
+            text?: string;
+        };
         LeaderboardEntryDto: {
             /** Format: uuid */
             participantId?: string;
@@ -1362,6 +1446,56 @@ export interface components {
              */
             exactRankRevealCount?: number;
             entries?: components["schemas"]["LeaderboardEntryDto"][];
+        };
+        SessionQuestionDto: {
+            /** Format: uuid */
+            questionId?: string;
+            /**
+             * Format: int32
+             * @description Its place in the effective sequence, 1-based; null once removed
+             * @example 3
+             */
+            questionNumber?: number;
+            /** @enum {string} */
+            status?: "PLAYED" | "CURRENT" | "UPCOMING" | "REMOVED";
+            /** @description Whether the host has already corrected this question in this session */
+            corrected?: boolean;
+            /** @enum {string} */
+            questionType?: "SINGLE_CHOICE" | "MULTIPLE_CHOICE" | "TRUE_FALSE";
+            /** @example en */
+            defaultLanguage?: string;
+            correctOptionIds?: string[];
+            options?: components["schemas"]["SessionQuestionOptionDto"][];
+            localizations?: components["schemas"]["SessionQuestionLocalizationDto"][];
+        };
+        SessionQuestionLocalizationDto: {
+            /** @example en */
+            languageCode?: string;
+            prompt?: string;
+            explanation?: string;
+            optionTexts?: components["schemas"]["SessionQuestionOptionTextDto"][];
+        };
+        SessionQuestionOptionDto: {
+            /** Format: uuid */
+            optionId?: string;
+            /** Format: int32 */
+            displayOrder?: number;
+        };
+        SessionQuestionOptionTextDto: {
+            /** Format: uuid */
+            optionId?: string;
+            text?: string;
+        };
+        SessionQuestionsResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /**
+             * Format: int32
+             * @description How many questions this session will actually ask — removals excluded
+             * @example 4
+             */
+            totalQuestions?: number;
+            questions?: components["schemas"]["SessionQuestionDto"][];
         };
         CurrentQuestionResponse: {
             /** Format: uuid */
@@ -2355,6 +2489,137 @@ export interface operations {
                 };
             };
             /** @description The session has not finished yet (session.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    removeQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session, advanced past the removed question or finished */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The question is not in this session's sequence (session.no-current-question), the session has finished (session.invalid-transition), or it is the last question left to play (session.question.removal-not-allowed) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    correctQuestion: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                questionId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectQuestionRequest"];
+            };
+        };
+        responses: {
+            /** @description The session, replayed from QUESTION_PREVIEW if the corrected question was in play */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSummaryResponse"];
+                };
+            };
+            /** @description Validation failed — no correct option, blank prompt, or an option the question does not have */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The question is not in this session's sequence (session.no-current-question), or has already been played, removed, or the session has finished (session.invalid-transition) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -3600,6 +3865,55 @@ export interface operations {
             };
         };
     };
+    sessionQuestions: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The session's questions */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionQuestionsResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     currentQuestion: {
         parameters: {
             query?: never;
@@ -4095,7 +4409,7 @@ export interface operations {
             };
         };
     };
-    removeQuestion: {
+    removeQuestion_1: {
         parameters: {
             query?: never;
             header?: never;

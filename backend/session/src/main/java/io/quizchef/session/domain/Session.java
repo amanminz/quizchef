@@ -6,6 +6,7 @@ import io.quizchef.session.domain.exception.DuplicateParticipantException;
 import io.quizchef.session.domain.exception.InvalidSessionTransitionException;
 import io.quizchef.session.domain.exception.ParticipantAlreadyJoinedException;
 import io.quizchef.session.domain.exception.SessionFullException;
+import io.quizchef.session.domain.exception.QuestionRemovalNotAllowedException;
 import io.quizchef.session.domain.exception.SessionNotStartableException;
 import jakarta.persistence.AttributeOverride;
 import jakarta.persistence.AttributeOverrides;
@@ -20,6 +21,7 @@ import jakarta.persistence.FetchType;
 import jakarta.persistence.JoinColumn;
 import jakarta.persistence.OrderColumn;
 import jakarta.persistence.Table;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -27,6 +29,7 @@ import java.util.Set;
 import java.util.List;
 import java.util.Objects;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -125,6 +128,19 @@ public class Session extends AuditableEntity {
     @OrderColumn(name = "position")
     @Column(name = "question_id", nullable = false)
     private List<UUID> questionOrder = new ArrayList<>();
+
+    /**
+     * The questions the host pulled out of this session, and the record of
+     * pulling them.
+     *
+     * <p>Empty for every session that runs cleanly. A removed question stays
+     * listed rather than being erased: everything that reads the session
+     * skips it (see {@link #isRemoved}), but the audit entry outlives the
+     * game.
+     */
+    @ElementCollection(fetch = FetchType.LAZY)
+    @CollectionTable(name = "session_removed_questions", joinColumns = @JoinColumn(name = "session_id"))
+    private List<RemovedQuestion> removedQuestions = new ArrayList<>();
 
     private Session(UUID id, SessionPin sessionPin, UUID publishedQuizVersionId,
                     IdentityReference hostIdentity, SessionSettings sessionSettings) {
@@ -289,6 +305,92 @@ public class Session extends AuditableEntity {
      */
     public List<UUID> questionOrder() {
         return List.copyOf(questionOrder);
+    }
+
+    /**
+     * Pulls a question out of this session for good.
+     *
+     * <p>Session-scoped by construction: the published quiz keeps the
+     * question, another session of the same quiz still asks it, and only
+     * this session's effective sequence loses it. Everything downstream —
+     * numbering, progression, scoring, history — reads through {@link
+     * #isRemoved} and so never sees it again, which is what keeps
+     * "Question 3 of 10 / Question 5 of 10" from ever reaching a player.
+     *
+     * <p>Refuses the last one. A session with no questions left cannot
+     * produce standings for a game nobody played, and the safe outcome for
+     * a host who has already removed everything else is to be told no
+     * rather than handed an empty result. Idempotent for the caller's
+     * benefit: removing an already-removed question is a no-op, so a
+     * double-click converges instead of throwing.
+     *
+     * <p>The caller supplies the questions currently in play, exactly as
+     * {@link #useQuestionOrder} does — which questions a quiz has is not
+     * something the session knows, but "this one is real and it is not the
+     * last" is an invariant and belongs here.
+     *
+     * @return true if this call performed the removal, false if it was
+     *         already removed
+     */
+    public boolean removeQuestion(UUID questionId, Set<UUID> effectiveQuestionIds,
+                                  SessionPhase removedFromPhase, int cancelledAnswerCount,
+                                  Instant at) {
+        Objects.requireNonNull(questionId, "questionId must not be null");
+        Objects.requireNonNull(effectiveQuestionIds, "effectiveQuestionIds must not be null");
+        if (isRemoved(questionId)) {
+            return false;
+        }
+        if (!effectiveQuestionIds.contains(questionId)) {
+            throw new IllegalArgumentException(
+                    "question %s is not part of this session's sequence".formatted(questionId));
+        }
+        if (effectiveQuestionIds.size() <= 1) {
+            throw new QuestionRemovalNotAllowedException(
+                    "This is the session's last remaining question — removing it would leave "
+                            + "nothing to play");
+        }
+        removedQuestions.add(
+                new RemovedQuestion(questionId, at, removedFromPhase, cancelledAnswerCount));
+        return true;
+    }
+
+    /**
+     * Abandons the attempt at the current question, leaving the session
+     * between questions.
+     *
+     * <p>Clears the phase and the running clock but keeps {@code
+     * currentQuestionId}, which is what makes both recoveries work: the
+     * engine still knows where in the sequence it stands (so it can find
+     * what comes next), and a null phase is one {@link #previewQuestion}
+     * already accepts — so a corrected question can re-enter its reading
+     * period without a special case, and a removed one can be stepped past.
+     *
+     * <p>Cancelling the attempt is only half the reversal; the answers and
+     * points it produced belong to the participants and are reversed there.
+     */
+    public void cancelCurrentQuestion() {
+        requireState(SessionState.IN_PROGRESS, "cancel the current question of");
+        if (currentPhase == null) {
+            return;
+        }
+        this.currentPhase = null;
+        this.currentQuestionTimer = null;
+    }
+
+    /** The questions pulled out of this session, in the order they were pulled. */
+    public List<RemovedQuestion> removedQuestions() {
+        return List.copyOf(removedQuestions);
+    }
+
+    public Set<UUID> removedQuestionIds() {
+        return removedQuestions.stream()
+                .map(RemovedQuestion::questionId)
+                .collect(Collectors.toUnmodifiableSet());
+    }
+
+    public boolean isRemoved(UUID questionId) {
+        return removedQuestions.stream()
+                .anyMatch(removed -> removed.questionId().equals(questionId));
     }
 
     public void archive() {
