@@ -6,7 +6,7 @@ import type { ReactNode } from "react";
 import { describe, expect, it } from "vitest";
 import { SessionQuestionsPanel } from "@/features/sessions/components/SessionQuestionsPanel";
 import { server } from "@/test/server";
-import type { SessionQuestionsResponse } from "@/types/api";
+import type { SessionQuestionDto, SessionQuestionsResponse } from "@/types/api";
 
 const OPTION_A = "11111111-1111-1111-1111-111111111111";
 const OPTION_B = "22222222-2222-2222-2222-222222222222";
@@ -18,7 +18,7 @@ function questions(): SessionQuestionsResponse {
     questions: [
       question("q1", 1, "PLAYED", "Who built the ark?"),
       question("q2", 2, "CURRENT", "Who parted the Red Sea?"),
-      question("q3", null, "REMOVED", "A question the host pulled"),
+      question("q3", undefined, "REMOVED", "A question the host pulled"),
       question("q4", 3, "UPCOMING", "Who wrote most of the Psalms?")
     ]
   };
@@ -26,10 +26,12 @@ function questions(): SessionQuestionsResponse {
 
 function question(
   questionId: string,
-  questionNumber: number | null,
+  // Absent rather than null once removed: the backend omits null fields, so
+  // that is what a client actually receives.
+  questionNumber: number | undefined,
   status: "PLAYED" | "CURRENT" | "UPCOMING" | "REMOVED",
   prompt: string
-) {
+): SessionQuestionDto {
   return {
     questionId,
     questionNumber,
@@ -46,7 +48,6 @@ function question(
       {
         languageCode: "en",
         prompt,
-        explanation: null,
         optionTexts: [
           { optionId: OPTION_A, text: "Noah" },
           { optionId: OPTION_B, text: "Moses" }

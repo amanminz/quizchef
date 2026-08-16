@@ -41,9 +41,17 @@ public record SessionQuestionsResponse(
     ) {
     }
 
+    /**
+     * Named explicitly, like {@code FinalStandingEntry}: a bare {@code
+     * OptionDto} would collide with the quiz module's authoring DTO of that
+     * name in the OpenAPI document, and the generated client would describe
+     * this endpoint with the wrong shape entirely.
+     */
+    @Schema(name = "SessionQuestionOptionDto")
     public record OptionDto(UUID optionId, int displayOrder) {
     }
 
+    @Schema(name = "SessionQuestionLocalizationDto")
     public record LocalizationDto(
             @Schema(example = "en") String languageCode,
             String prompt,
@@ -52,6 +60,7 @@ public record SessionQuestionsResponse(
     ) {
     }
 
+    @Schema(name = "SessionQuestionOptionTextDto")
     public record OptionTextDto(UUID optionId, String text) {
     }
 

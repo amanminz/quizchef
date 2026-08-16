@@ -168,7 +168,7 @@ export function SessionQuestionsPanel({ sessionId, answeredCount }: SessionQuest
           question={correcting}
           isCurrent={correcting.status === "CURRENT"}
           answeredCount={correcting.status === "CURRENT" ? answeredCount : 0}
-          onSubmit={(request) => recovery.correctQuestion(correcting.questionId, request)}
+          onSubmit={(request) => recovery.correctQuestion(correcting.questionId ?? "", request)}
           isSubmitting={recovery.isCorrecting}
           error={recovery.correctError}
         />
@@ -183,7 +183,7 @@ export function SessionQuestionsPanel({ sessionId, answeredCount }: SessionQuest
           answeredCount={removing.status === "CURRENT" ? answeredCount : 0}
           isLastRemaining={removing.status === "CURRENT" && isLastRemaining}
           onConfirmRemove={async () => {
-            await recovery.removeQuestion(removing.questionId);
+            await recovery.removeQuestion(removing.questionId ?? "");
             setRemoving(null);
           }}
           onCorrectInstead={() => {

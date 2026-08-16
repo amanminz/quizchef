@@ -50,8 +50,18 @@ export function QuestionCorrectionDialog({
   isSubmitting,
   error
 }: QuestionCorrectionDialogProps) {
-  const options = useMemo(
-    () => [...(question.options ?? [])].sort((a, b) => a.displayOrder - b.displayOrder),
+  // Normalized once, into a shape the rest of this component can rely on.
+  // The generated contract makes every field optional; an option without an
+  // id is not an option anyone could pick, so it is dropped here rather
+  // than defended against at each of the dozen places it is read.
+  const options = useMemo<{ optionId: string; displayOrder: number }[]>(
+    () =>
+      (question.options ?? [])
+        .filter((option): option is { optionId: string; displayOrder?: number } =>
+          Boolean(option.optionId)
+        )
+        .map((option) => ({ optionId: option.optionId, displayOrder: option.displayOrder ?? 0 }))
+        .sort((a, b) => a.displayOrder - b.displayOrder),
     [question.options]
   );
 

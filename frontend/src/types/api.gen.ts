@@ -1447,13 +1447,6 @@ export interface components {
             exactRankRevealCount?: number;
             entries?: components["schemas"]["LeaderboardEntryDto"][];
         };
-        LocalizationDto: {
-            /** @example en */
-            languageCode?: string;
-            prompt?: string;
-            explanation?: string;
-            optionTexts?: components["schemas"]["OptionTextDto"][];
-        };
         SessionQuestionDto: {
             /** Format: uuid */
             questionId?: string;
@@ -1472,8 +1465,26 @@ export interface components {
             /** @example en */
             defaultLanguage?: string;
             correctOptionIds?: string[];
-            options?: components["schemas"]["OptionDto"][];
-            localizations?: components["schemas"]["LocalizationDto"][];
+            options?: components["schemas"]["SessionQuestionOptionDto"][];
+            localizations?: components["schemas"]["SessionQuestionLocalizationDto"][];
+        };
+        SessionQuestionLocalizationDto: {
+            /** @example en */
+            languageCode?: string;
+            prompt?: string;
+            explanation?: string;
+            optionTexts?: components["schemas"]["SessionQuestionOptionTextDto"][];
+        };
+        SessionQuestionOptionDto: {
+            /** Format: uuid */
+            optionId?: string;
+            /** Format: int32 */
+            displayOrder?: number;
+        };
+        SessionQuestionOptionTextDto: {
+            /** Format: uuid */
+            optionId?: string;
+            text?: string;
         };
         SessionQuestionsResponse: {
             /** Format: uuid */
