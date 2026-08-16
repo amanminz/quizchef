@@ -118,10 +118,10 @@ class GameplayIntegrationTest {
         // reconnect mid-game restores gameplay: advance to Q2, then reconnect guestB
         String q2 = advanceToNext(hostToken, sessionId);
         assertThat(q2).isEqualTo(quiz.questions().get(1).questionId().toString());
-        mockMvc.perform(post("/api/v1/sessions/reconnect")
+        mockMvc.perform(post("/api/v1/sessions/" + sessionPin + "/participants/resume")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"guestParticipantToken": "%s"}
+                                {"resumeToken": "%s"}
                                 """.formatted(guestBToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentPhase").value("QUESTION_OPEN"))
@@ -836,6 +836,8 @@ class GameplayIntegrationTest {
     private String guestA;
     private String guestB;
     private String guestBToken;
+    /** The PIN of the lobby the current test is playing in — resume is addressed by it. */
+    private String sessionPin;
 
     private String createLobbyWithTwoConnectedGuests(String hostToken, UUID quizId) throws Exception {
         JsonNode session = readJson(mockMvc.perform(post("/api/v1/sessions")
@@ -847,6 +849,7 @@ class GameplayIntegrationTest {
                 .andExpect(status().isCreated()).andReturn().getResponse().getContentAsString());
         String sessionId = session.get("sessionId").asText();
         String pin = session.get("sessionPin").asText();
+        sessionPin = pin;
 
         mockMvc.perform(post("/api/v1/sessions/" + pin + "/lobby")
                 .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken)).andExpect(status().isOk());
@@ -856,8 +859,8 @@ class GameplayIntegrationTest {
         guestA = a.get("participantId").asText();
         guestB = b.get("participantId").asText();
         guestBToken = b.get("guestParticipantToken").asText();
-        connect(a.get("guestParticipantToken").asText());
-        connect(guestBToken);
+        connect(pin, a.get("guestParticipantToken").asText());
+        connect(pin, guestBToken);
 
         mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/start")
                         .header(HttpHeaders.AUTHORIZATION, "Bearer " + hostToken))
@@ -874,12 +877,12 @@ class GameplayIntegrationTest {
                 .andExpect(status().isOk()).andReturn().getResponse().getContentAsString());
     }
 
-    private void connect(String guestToken) throws Exception {
-        mockMvc.perform(post("/api/v1/sessions/reconnect")
+    private void connect(String pin, String resumeToken) throws Exception {
+        mockMvc.perform(post("/api/v1/sessions/" + pin + "/participants/resume")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"guestParticipantToken": "%s"}
-                                """.formatted(guestToken)))
+                                {"resumeToken": "%s"}
+                                """.formatted(resumeToken)))
                 .andExpect(status().isOk());
     }
 
@@ -1023,7 +1026,7 @@ class GameplayIntegrationTest {
         for (String name : names) {
             JsonNode guest = joinGuest(pin, name);
             participantIds.add(guest.get("participantId").asText());
-            connect(guest.get("guestParticipantToken").asText());
+            connect(pin, guest.get("guestParticipantToken").asText());
         }
 
         mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/start")

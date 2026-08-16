@@ -38,7 +38,7 @@ class ParticipantTest {
         assertThat(participant.getState()).isEqualTo(ParticipantState.JOINED);
         assertThat(participant.isGuest()).isFalse();
         assertThat(participant.getIdentityReference()).isNotNull();
-        assertThat(participant.getGuestParticipantToken()).isNull();
+        assertThat(participant.getGuestTokenDigest()).isNull();
         assertThat(participant.key().isGuest()).isFalse();
         assertThat(participant.isConnected()).isFalse();
     }
@@ -48,7 +48,7 @@ class ParticipantTest {
         Participant participant = guest();
 
         assertThat(participant.isGuest()).isTrue();
-        assertThat(participant.getGuestParticipantToken()).isNotNull();
+        assertThat(participant.getGuestTokenDigest()).isNotNull();
         assertThat(participant.getIdentityReference()).isNull();
         assertThat(participant.key().isGuest()).isTrue();
         assertThat(participant.getPreferredLanguage()).isEqualTo(KN);

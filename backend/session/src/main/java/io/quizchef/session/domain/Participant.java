@@ -31,7 +31,7 @@ import lombok.NoArgsConstructor;
  * deletes it, and reconnection restores its score and answers.
  *
  * <p>Identified by exactly one mechanism — a registered {@link
- * IdentityReference} or a guest {@link GuestParticipantToken}, never a
+ * IdentityReference} or a guest {@link GuestTokenDigest}, never a
  * display name or a connection. It owns its own state, answers, and cached
  * score; the session owns only the roster reference to it.
  *
@@ -56,9 +56,14 @@ public class Participant extends AuditableEntity {
     })
     private IdentityReference identityReference;
 
+    /**
+     * The digest of this guest's resume token — never the token itself.
+     * The secret is issued once, in the join response, and only ever
+     * returns as something to verify against this.
+     */
     @Embedded
     @AttributeOverride(name = "value", column = @Column(name = "guest_token", updatable = false))
-    private GuestParticipantToken guestParticipantToken;
+    private GuestTokenDigest guestTokenDigest;
 
     @Column(name = "display_name", nullable = false, length = 100)
     private String displayName;
@@ -83,18 +88,18 @@ public class Participant extends AuditableEntity {
     private List<ParticipantAnswer> answers = new ArrayList<>();
 
     private Participant(UUID id, UUID sessionId, IdentityReference identityReference,
-                        GuestParticipantToken guestParticipantToken, String displayName,
+                        GuestTokenDigest guestTokenDigest, String displayName,
                         LanguageCode preferredLanguage) {
         super(id);
         this.sessionId = Objects.requireNonNull(sessionId, "sessionId must not be null");
         boolean hasIdentity = identityReference != null;
-        boolean hasGuest = guestParticipantToken != null;
+        boolean hasGuest = guestTokenDigest != null;
         if (hasIdentity == hasGuest) {
             throw new IllegalArgumentException(
                     "a participant must have exactly one of an identity reference or a guest token");
         }
         this.identityReference = identityReference;
-        this.guestParticipantToken = guestParticipantToken;
+        this.guestTokenDigest = guestTokenDigest;
         this.displayName = requireDisplayName(displayName);
         this.preferredLanguage =
                 Objects.requireNonNull(preferredLanguage, "preferredLanguage must not be null");
@@ -112,12 +117,16 @@ public class Participant extends AuditableEntity {
     }
 
     /**
-     * A guest participant, backed by a reconnection token.
+     * A guest participant, backed by a resume token. Takes the secret and
+     * keeps only its digest — the caller (the join service) is the last
+     * thing that holds the raw token, and it hands it straight to the
+     * player.
      */
     public static Participant guest(UUID sessionId, GuestParticipantToken guestParticipantToken,
                                     String displayName, LanguageCode preferredLanguage) {
-        return new Participant(UUID.randomUUID(), sessionId, null, guestParticipantToken,
-                displayName, preferredLanguage);
+        Objects.requireNonNull(guestParticipantToken, "guestParticipantToken must not be null");
+        return new Participant(UUID.randomUUID(), sessionId, null,
+                guestParticipantToken.digest(), displayName, preferredLanguage);
     }
 
     /**
@@ -125,12 +134,23 @@ public class Participant extends AuditableEntity {
      */
     public ParticipantKey key() {
         return isGuest()
-                ? ParticipantKey.forGuest(guestParticipantToken)
+                ? ParticipantKey.forDigest(guestTokenDigest)
                 : ParticipantKey.forIdentity(identityReference);
     }
 
     public boolean isGuest() {
-        return guestParticipantToken != null;
+        return guestTokenDigest != null;
+    }
+
+    /**
+     * Whether the presented secret is this guest's resume token.
+     *
+     * <p>The one place a resume is authorized. A registered participant has
+     * no token at all and always answers false — they resume on their
+     * bearer identity, never on a secret they could pass to someone else.
+     */
+    public boolean matchesResumeToken(GuestParticipantToken presented) {
+        return guestTokenDigest != null && guestTokenDigest.matches(presented);
     }
 
     /**

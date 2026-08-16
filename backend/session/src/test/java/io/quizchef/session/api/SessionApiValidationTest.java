@@ -28,27 +28,17 @@ class SessionApiValidationTest {
     }
 
     @Test
-    void reconnectRequestAcceptsExactlyOneIdentifier() {
-        assertThat(validator.validate(new ReconnectRequest(UUID.randomUUID(), null))).isEmpty();
-        assertThat(validator.validate(new ReconnectRequest(null, "guest-token"))).isEmpty();
+    void resumeRequestRejectsAnOverlongToken() {
+        assertThat(validator.validate(new ResumeParticipantRequest("x".repeat(129))))
+                .anyMatch(v -> v.getPropertyPath().toString().equals("resumeToken"));
     }
 
     @Test
-    void reconnectRequestRejectsNeitherIdentifier() {
-        assertThat(validator.validate(new ReconnectRequest(null, null)))
-                .anyMatch(v -> v.getPropertyPath().toString().equals("exactlyOneIdentifierPresent"));
-    }
-
-    @Test
-    void reconnectRequestRejectsBothIdentifiers() {
-        assertThat(validator.validate(new ReconnectRequest(UUID.randomUUID(), "guest-token")))
-                .anyMatch(v -> v.getPropertyPath().toString().equals("exactlyOneIdentifierPresent"));
-    }
-
-    @Test
-    void reconnectRequestRejectsAnOverlongGuestToken() {
-        assertThat(validator.validate(new ReconnectRequest(null, "x".repeat(129))))
-                .anyMatch(v -> v.getPropertyPath().toString().equals("guestParticipantToken"));
+    void resumeRequestAcceptsAnAbsentTokenForASignedInPlayer() {
+        // A registered player resumes on their bearer identity and has no
+        // token at all; the service, not this shape, decides whether they
+        // are actually signed in.
+        assertThat(validator.validate(new ResumeParticipantRequest(null))).isEmpty();
     }
 
     @Test

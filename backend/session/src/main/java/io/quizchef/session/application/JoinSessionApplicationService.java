@@ -7,6 +7,7 @@ import io.quizchef.session.domain.GuestParticipantToken;
 import io.quizchef.session.domain.Participant;
 import io.quizchef.session.domain.Session;
 import io.quizchef.session.domain.event.ParticipantJoinedEvent;
+import io.quizchef.session.domain.exception.DisplayNameAlreadyTakenException;
 import io.quizchef.session.domain.exception.ParticipantAlreadyJoinedException;
 import io.quizchef.session.infrastructure.persistence.ParticipantRepository;
 import io.quizchef.session.infrastructure.persistence.SessionRepository;
@@ -70,12 +71,18 @@ public class JoinSessionApplicationService {
     public ParticipantSessionView join(CurrentUser currentUser, JoinSessionCommand command) {
         Session session = SessionLookup.activeByPinForUpdate(sessionRepository, command.sessionPin());
         LanguageCode language = LanguageCode.of(command.preferredLanguage());
+        String displayName = command.displayName() == null ? null : command.displayName().strip();
+        requireNameAvailable(session, displayName);
 
+        // Generated here, not inside the aggregate, because this is the last
+        // place the raw secret can be seen: the participant keeps only its
+        // digest, and the response below is the single time it is returned.
+        GuestParticipantToken issuedToken =
+                currentUser.authenticated() ? null : GuestParticipantToken.generate();
         Participant participant = currentUser.authenticated()
                 ? Participant.registered(session.getId(), currentUser.reference(),
-                        command.displayName(), language)
-                : Participant.guest(session.getId(), GuestParticipantToken.generate(),
-                        command.displayName(), language);
+                        displayName, language)
+                : Participant.guest(session.getId(), issuedToken, displayName, language);
 
         // The aggregate enforces state, capacity, and uniqueness before anything persists.
         session.registerParticipant(participant.getId(), participant.key());
@@ -90,6 +97,32 @@ public class JoinSessionApplicationService {
                 session.getId(), participant.getId(), clock.instant()));
         log.info("Participant {} ({}) joined session {}", participant.getId(),
                 participant.isGuest() ? "guest" : "registered", session.getId());
-        return ParticipantSessionView.of(participant, session.getState());
+        return ParticipantSessionView.of(participant, issuedToken, session.getState());
+    }
+
+    /**
+     * One name per session, case- and whitespace-insensitively.
+     *
+     * <p>Checked here rather than in the aggregate because the roster holds
+     * only immutable identity, never a display name — and safe here because
+     * joins are already serialized on the session row above, so there is no
+     * window between this check and the insert for a second "Aman" to slip
+     * through.
+     *
+     * <p>No database constraint backs it, deliberately: sessions that ran
+     * before this rule existed may legitimately contain duplicates, and
+     * renaming people in finished quizzes to satisfy a unique index would
+     * rewrite what those events actually looked like. The lock is the
+     * authority for every session that can still be joined, which is the
+     * only kind this rule applies to.
+     */
+    private void requireNameAvailable(Session session, String displayName) {
+        if (displayName == null || displayName.isBlank()) {
+            return; // The aggregate rejects it in a moment, with a better message.
+        }
+        if (participantRepository.existsBySessionIdAndDisplayNameIgnoreCase(
+                session.getId(), displayName)) {
+            throw new DisplayNameAlreadyTakenException(displayName);
+        }
     }
 }

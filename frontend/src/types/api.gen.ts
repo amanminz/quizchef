@@ -96,6 +96,32 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{pin}/participants/resume": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Resume an existing participant
+         * @description Returns a player to the participant they already are in this session, with their score, answers, name, and language intact, and returns the resume snapshot. A guest presents the resume token issued at join; a registered player sends an empty body and is resolved from their bearer identity.
+         *
+         *     Called on every arrival — refresh, reopened tab, dropped connection, or a return after several questions — and always before join, which is what stops a returning player being offered the join form and becoming a second participant with none of their score.
+         *
+         *     Addressed by PIN, and resolved to the session live under that PIN right now. PINs are reused once a session is archived, so a stored credential may belong to a quiz that has already finished: resolving from the PIN means such a player is told they are not in this session and can join it, rather than being silently restored into the old one. A token issued for a different live session does not resolve here either, so it cannot be replayed across quizzes.
+         *
+         *     Identity comes from the token, never from a display name, and never from a participant id — that identifies, it does not authenticate.
+         */
+        post: operations["resume"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{pin}/lobby": {
         parameters: {
             query?: never;
@@ -354,26 +380,6 @@ export interface paths {
          * @description Open to participants (anonymous-friendly). The server validates the answer, stamps the response time, and scores it — the response confirms receipt and carries no score.
          */
         post: operations["submitAnswer"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/sessions/reconnect": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        /**
-         * Reconnect to a session
-         * @description Rebinds to an existing participant, preserving identity, score, and answers. A guest sends their reconnection token; a registered player sends the session id and reconnects through their bearer token. Returns the reconnection snapshot.
-         */
-        post: operations["reconnect"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1188,6 +1194,42 @@ export interface components {
             /** Format: date-time */
             createdAt?: string;
         };
+        ResumeParticipantRequest: {
+            /** @description The guest's resume token, issued once at join; omit when signed in */
+            resumeToken?: string;
+        };
+        LeaderboardEntryDto: {
+            /** Format: uuid */
+            participantId?: string;
+            displayName?: string;
+            /** Format: int32 */
+            score?: number;
+            /** Format: int32 */
+            rank?: number;
+        };
+        SessionSnapshotResponse: {
+            /** Format: uuid */
+            sessionId?: string;
+            /** Format: uuid */
+            participantId?: string;
+            /**
+             * @description The participant's name as the server holds it
+             * @example Aman
+             */
+            displayName?: string;
+            /** @example en */
+            preferredLanguage?: string;
+            sessionState?: string;
+            /** Format: uuid */
+            currentQuestionId?: string;
+            currentPhase?: string;
+            /** Format: int64 */
+            remainingMillis?: number;
+            /** Format: int32 */
+            participantScore?: number;
+            submittedOptionIds?: string[];
+            leaderboard?: components["schemas"]["LeaderboardEntryDto"][];
+        };
         JoinSessionRequest: {
             /**
              * @description The per-session nickname; need not be unique
@@ -1230,15 +1272,6 @@ export interface components {
             optionId: string;
             text?: string;
         };
-        LeaderboardEntryDto: {
-            /** Format: uuid */
-            participantId?: string;
-            displayName?: string;
-            /** Format: int32 */
-            score?: number;
-            /** Format: int32 */
-            rank?: number;
-        };
         LeaderboardResponse: {
             entries?: components["schemas"]["LeaderboardEntryDto"][];
         };
@@ -1260,32 +1293,6 @@ export interface components {
             questionId?: string;
             /** @example true */
             accepted?: boolean;
-        };
-        ReconnectRequest: {
-            /**
-             * Format: uuid
-             * @description Required for a registered reconnect; omit for a guest
-             */
-            sessionId?: string;
-            /** @description The guest's reconnection token; omit for a registered reconnect */
-            guestParticipantToken?: string;
-            exactlyOneIdentifierPresent?: boolean;
-        };
-        SessionSnapshotResponse: {
-            /** Format: uuid */
-            sessionId?: string;
-            /** Format: uuid */
-            participantId?: string;
-            sessionState?: string;
-            /** Format: uuid */
-            currentQuestionId?: string;
-            currentPhase?: string;
-            /** Format: int64 */
-            remainingMillis?: number;
-            /** Format: int32 */
-            participantScore?: number;
-            submittedOptionIds?: string[];
-            leaderboard?: components["schemas"]["LeaderboardEntryDto"][];
         };
         CreateQuizRequest: {
             /**
@@ -2272,6 +2279,59 @@ export interface operations {
             };
         };
     };
+    resume: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pin: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: {
+            content: {
+                "application/json": components["schemas"]["ResumeParticipantRequest"];
+            };
+        };
+        responses: {
+            /** @description Resumed; returns the session snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["SessionSnapshotResponse"];
+                };
+            };
+            /** @description No resume token and not signed in */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No active session for the PIN, or no participant in it matches (session.participant.not-found) — an unknown, expired, or other session's token is indistinguishable here on purpose */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The participant has finished and cannot resume (participant.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
     openLobby: {
         parameters: {
             query?: never;
@@ -2949,57 +3009,6 @@ export interface operations {
                 };
             };
             /** @description Not accepted — question not open, already answered (session.answer.not-accepted), or not connected (session.participant.not-connected) */
-            409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiError"];
-                };
-            };
-        };
-    };
-    reconnect: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["ReconnectRequest"];
-            };
-        };
-        responses: {
-            /** @description Reconnected; returns the session snapshot */
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["SessionSnapshotResponse"];
-                };
-            };
-            /** @description A registered reconnect without a token */
-            401: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description No participant matches (session.participant.not-found) */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "*/*": components["schemas"]["ApiError"];
-                };
-            };
-            /** @description The participant is not in a reconnectable state (participant.invalid-transition) */
             409: {
                 headers: {
                     [name: string]: unknown;

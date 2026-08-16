@@ -5,7 +5,7 @@ import io.quizchef.identity.domain.CurrentUserProvider;
 import io.quizchef.session.application.CreateSessionApplicationService;
 import io.quizchef.session.application.JoinSessionApplicationService;
 import io.quizchef.session.application.OpenLobbyApplicationService;
-import io.quizchef.session.application.ReconnectParticipantApplicationService;
+import io.quizchef.session.application.ResumeParticipantApplicationService;
 import io.quizchef.session.application.SessionQueryService;
 import io.quizchef.session.application.SessionRosterQueryService;
 import io.quizchef.session.application.SessionSummaryView;
@@ -29,19 +29,19 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
- * Session orchestration endpoints: create, open lobby, join, reconnect,
+ * Session orchestration endpoints: create, open lobby, join, resume,
  * start, and read. Validate, delegate, respond — authorization and host
  * ownership are decided in the application services, never here.
  */
 @RestController
 @RequestMapping("/api/v1/sessions")
-@Tag(name = "Sessions", description = "Hosting and joining live sessions: create, lobby, join, reconnect, start")
+@Tag(name = "Sessions", description = "Hosting and joining live sessions: create, lobby, join, resume, start")
 public class SessionController {
 
     private final CreateSessionApplicationService createSessionApplicationService;
     private final OpenLobbyApplicationService openLobbyApplicationService;
     private final JoinSessionApplicationService joinSessionApplicationService;
-    private final ReconnectParticipantApplicationService reconnectParticipantApplicationService;
+    private final ResumeParticipantApplicationService resumeParticipantApplicationService;
     private final StartSessionApplicationService startSessionApplicationService;
     private final SessionQueryService sessionQueryService;
     private final SessionRosterQueryService sessionRosterQueryService;
@@ -50,7 +50,7 @@ public class SessionController {
     public SessionController(CreateSessionApplicationService createSessionApplicationService,
                              OpenLobbyApplicationService openLobbyApplicationService,
                              JoinSessionApplicationService joinSessionApplicationService,
-                             ReconnectParticipantApplicationService reconnectParticipantApplicationService,
+                             ResumeParticipantApplicationService resumeParticipantApplicationService,
                              StartSessionApplicationService startSessionApplicationService,
                              SessionQueryService sessionQueryService,
                              SessionRosterQueryService sessionRosterQueryService,
@@ -58,7 +58,7 @@ public class SessionController {
         this.createSessionApplicationService = createSessionApplicationService;
         this.openLobbyApplicationService = openLobbyApplicationService;
         this.joinSessionApplicationService = joinSessionApplicationService;
-        this.reconnectParticipantApplicationService = reconnectParticipantApplicationService;
+        this.resumeParticipantApplicationService = resumeParticipantApplicationService;
         this.startSessionApplicationService = startSessionApplicationService;
         this.sessionQueryService = sessionQueryService;
         this.sessionRosterQueryService = sessionRosterQueryService;
@@ -138,25 +138,44 @@ public class SessionController {
                 currentUserProvider.currentUser(), request.toCommand(pin)));
     }
 
-    @PostMapping("/reconnect")
+    @PostMapping("/{pin}/participants/resume")
     @Operation(
-            summary = "Reconnect to a session",
-            description = "Rebinds to an existing participant, preserving identity, score, and answers. "
-                    + "A guest sends their reconnection token; a registered player sends the session id "
-                    + "and reconnects through their bearer token. Returns the reconnection snapshot.")
+            summary = "Resume an existing participant",
+            description = "Returns a player to the participant they already are in this session, with "
+                    + "their score, answers, name, and language intact, and returns the resume "
+                    + "snapshot. A guest presents the resume token issued at join; a registered player "
+                    + "sends an empty body and is resolved from their bearer identity.\n\n"
+                    + "Called on every arrival — refresh, reopened tab, dropped connection, or a return "
+                    + "after several questions — and always before join, which is what stops a "
+                    + "returning player being offered the join form and becoming a second participant "
+                    + "with none of their score.\n\n"
+                    + "Addressed by PIN, and resolved to the session live under that PIN right now. "
+                    + "PINs are reused once a session is archived, so a stored credential may belong to "
+                    + "a quiz that has already finished: resolving from the PIN means such a player is "
+                    + "told they are not in this session and can join it, rather than being silently "
+                    + "restored into the old one. A token issued for a different live session does not "
+                    + "resolve here either, so it cannot be replayed across quizzes.\n\n"
+                    + "Identity comes from the token, never from a display name, and never from a "
+                    + "participant id — that identifies, it does not authenticate.")
     @ApiResponses({
-            @ApiResponse(responseCode = "200", description = "Reconnected; returns the session snapshot"),
-            @ApiResponse(responseCode = "401", description = "A registered reconnect without a token",
+            @ApiResponse(responseCode = "200", description = "Resumed; returns the session snapshot"),
+            @ApiResponse(responseCode = "401", description = "No resume token and not signed in",
                     content = @Content(schema = @Schema(implementation = ApiError.class))),
-            @ApiResponse(responseCode = "404", description = "No participant matches (session.participant.not-found)",
+            @ApiResponse(responseCode = "404", description = "No active session for the PIN, or no "
+                    + "participant in it matches (session.participant.not-found) — an unknown, "
+                    + "expired, or other session's token is indistinguishable here on purpose",
                     content = @Content(schema = @Schema(implementation = ApiError.class))),
-            @ApiResponse(responseCode = "409", description = "The participant is not in a reconnectable state "
-                    + "(participant.invalid-transition)",
+            @ApiResponse(responseCode = "409", description = "The participant has finished and cannot "
+                    + "resume (participant.invalid-transition)",
                     content = @Content(schema = @Schema(implementation = ApiError.class)))
     })
-    public SessionSnapshotResponse reconnect(@Valid @RequestBody ReconnectRequest request) {
-        return SessionSnapshotResponse.from(reconnectParticipantApplicationService.reconnect(
-                currentUserProvider.currentUser(), request.toCommand()));
+    public SessionSnapshotResponse resume(@PathVariable String pin,
+                                          @Valid @RequestBody(required = false)
+                                          ResumeParticipantRequest request) {
+        ResumeParticipantRequest resolved =
+                request == null ? new ResumeParticipantRequest(null) : request;
+        return SessionSnapshotResponse.from(resumeParticipantApplicationService.resume(
+                currentUserProvider.currentUser(), resolved.toCommand(pin)));
     }
 
     @PostMapping("/{id}/start")
