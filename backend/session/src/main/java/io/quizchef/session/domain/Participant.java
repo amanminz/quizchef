@@ -62,7 +62,7 @@ public class Participant extends AuditableEntity {
      * returns as something to verify against this.
      */
     @Embedded
-    @AttributeOverride(name = "value", column = @Column(name = "guest_token", updatable = false))
+    @AttributeOverride(name = "value", column = @Column(name = "guest_token"))
     private GuestTokenDigest guestTokenDigest;
 
     @Column(name = "display_name", nullable = false, length = 100)
@@ -140,6 +140,28 @@ public class Participant extends AuditableEntity {
 
     public boolean isGuest() {
         return guestTokenDigest != null;
+    }
+
+    /**
+     * Replaces this guest's resume token, invalidating the old one.
+     *
+     * <p>Used when a host recovers a player onto a new device. Rotating
+     * rather than re-issuing the same secret is the point: the device that
+     * lost the game — which may be lost, borrowed, or simply someone
+     * else's — stops being able to resume the moment the new one starts.
+     *
+     * <p>The session's roster mirrors this digest as the participant's key,
+     * so the caller must move that too
+     * ({@link Session#rekeyParticipant}) or the session stops recognizing
+     * its own participant.
+     */
+    public void rotateResumeToken(GuestParticipantToken replacement) {
+        if (guestTokenDigest == null) {
+            throw new IllegalStateException(
+                    "a registered participant has no resume token to rotate");
+        }
+        Objects.requireNonNull(replacement, "replacement must not be null");
+        this.guestTokenDigest = replacement.digest();
     }
 
     /**

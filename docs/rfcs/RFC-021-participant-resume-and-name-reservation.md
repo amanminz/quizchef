@@ -18,7 +18,7 @@ Created
 
 Updated
 
-2026-08-16
+2026-08-17
 
 ---
 
@@ -249,14 +249,66 @@ None outstanding.
 
 ---
 
+# Amendment — what the first release got wrong (2026-08-17)
+
+The design above is unchanged, and the mechanics it describes are the ones in the code. Three
+things around it were wrong, and together they took a live event down. They are recorded here
+rather than in a new RFC because none of them revises a decision — each is a defect in
+carrying this one out.
+
+**1. The client's storage key was renamed and the old records were dropped.** Written as a
+safety measure ("v1 records are unsafe to reuse"), it was the opposite. Only the PIN *hint*
+was untrustworthy; the credential inside names its own session, and this RFC's server-side
+PIN resolution already made a stale hint harmless. On deploy, every in-flight player's browser
+went from holding a credential to holding nothing — so `hasJoined` was false, **resume was
+never attempted**, and the join form appeared. Typing their own name there hit the
+display-name rule from this same RFC. The visible error pointed at the name rule while the
+actual fault was one step earlier. Credentials are now adopted from the old key and the old
+key removed, so a cleared record stays cleared.
+
+**2. A failed resume fell through to the join form.** A `404` cleared the credential outright,
+and every other failure — a phone waking on a weak signal, a venue's shared address hitting
+the rate limit, a backend restarting — left a manual "Retry" and no recovery. Resume failures
+are now classified: *temporary* keeps the credential and retries with back-off, *definitive*
+keeps it too and offers recovery. Nothing sends a player to a blank join form, because that
+path costs them their score. The default for an unrecognized failure is "temporary", because
+the cost of being wrong is asymmetric.
+
+**3. The rate-limit rule still named the endpoint this RFC renamed.** A rule keyed to a route
+nobody serves does not fail or warn — it stops applying. Participant resume silently fell back
+to the 60/minute default, on the one call every device in a venue makes after every network
+blip, with the whole room behind one NAT address. Fixed, and a test now asserts that every
+configured rule names a route the application actually serves.
+
+## Host-assisted recovery, now built
+
+The *Future Work* item below is implemented. A host issues a six-digit code for one
+participant from the roster panel (never the projected wall — the code must not reach the
+screen the room is looking at); the player redeems it against the session PIN. The code is
+single-use, lives about five minutes, is scoped to one participant in one session, is rate
+limited at 10/minute per address, and is stored as a digest.
+
+Redemption **rotates** the resume token rather than re-issuing the old one: the device that
+lost the game may be lost, borrowed, or someone else's, and it stops being able to resume the
+moment recovery happens. Rotating moves the digest in two places — the participant and the
+session roster's mirror of it — which is what `Session.rekeyParticipant` exists for. Six
+digits is a small space and the digest is not what protects it: the TTL, the single use, the
+scoping, and the rate limit are.
+
+Refusals are deliberately indistinguishable — unknown, expired, already used, wrong session,
+malformed all return one message — so the endpoint cannot be used to map which codes exist.
+
+---
+
 # Future Work
 
-- **Host-assisted transfer.** A host-only action that mints a fresh single-use code for an
-  existing participant, so a player whose storage is gone can be moved to a new device on the
-  host's authority rather than on their own claim. The right shape for the failure this RFC
-  leaves open.
-- **A visible "Welcome back, Aman" on resume.** ADR-003 called for it; the data is now in the
-  snapshot and nothing renders it yet.
+- **A resume that survives a cleared browser without the host.** Nothing safe exists today
+  that does not reintroduce identity-by-name; a signed-in account is the real answer, and
+  registered players already have it.
+- **Surfacing resume diagnostics.** `participant.resume.{attempt,success,failed}` and
+  `participant.recovery.{code_issued,success,failed}` are logged with controlled reasons
+  (`credential_missing`, `credential_invalid`, `session_not_active`) and never carry a
+  credential. Nothing aggregates them yet.
 - **Single active connection.** Still listed in RFC-004's Future Work and still transport
   work (RFC-005): resume deliberately allows a second device, since it cannot tell one from a
   refresh.

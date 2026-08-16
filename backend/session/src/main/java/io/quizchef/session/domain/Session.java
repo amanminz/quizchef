@@ -189,6 +189,37 @@ public class Session extends AuditableEntity {
         roster.add(new SessionRosterEntry(participantId, key, nextJoinOrder()));
     }
 
+    /**
+     * Points a roster entry at a new key, keeping the participant's place.
+     *
+     * <p>Only ever used to rotate a guest's resume token during host-assisted
+     * recovery. The roster mirrors the token's digest to enforce "one guest
+     * token per session", so a rotation that changed only the Participant
+     * would leave the session holding a key that no longer identifies
+     * anyone — the participant would still be listed and still be
+     * unreachable.
+     *
+     * <p>Join order is preserved deliberately: recovering a player must not
+     * quietly move them to the back of the room.
+     */
+    public void rekeyParticipant(UUID participantId, ParticipantKey newKey) {
+        Objects.requireNonNull(participantId, "participantId must not be null");
+        Objects.requireNonNull(newKey, "newKey must not be null");
+        SessionRosterEntry existing = roster.stream()
+                .filter(entry -> entry.participantId().equals(participantId))
+                .findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "participant %s is not in this session".formatted(participantId)));
+        boolean takenBySomeoneElse = roster.stream()
+                .anyMatch(entry -> !entry.participantId().equals(participantId)
+                        && entry.key().equals(newKey));
+        if (takenBySomeoneElse) {
+            throw new ParticipantAlreadyJoinedException();
+        }
+        roster.remove(existing);
+        roster.add(new SessionRosterEntry(participantId, newKey, existing.joinOrder()));
+    }
+
     public void start() {
         requireState(SessionState.LOBBY, "start");
         if (roster.isEmpty()) {

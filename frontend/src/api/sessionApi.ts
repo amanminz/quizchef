@@ -12,6 +12,9 @@ import type {
   ParticipantFinalPlacementResponse,
   ParticipantResultResponse,
   ParticipantSessionResponse,
+  RecoveredParticipantResponse,
+  RecoveryCodeResponse,
+  RedeemRecoveryCodeRequest,
   ResumeParticipantRequest,
   SessionParticipantsResponse,
   SessionQuestionsResponse,
@@ -222,6 +225,40 @@ export const sessionApi = {
   async removeQuestion(sessionId: string, questionId: string): Promise<SessionSummaryResponse> {
     const { data } = await apiClient.post<SessionSummaryResponse>(
       `/api/v1/sessions/${sessionId}/questions/${questionId}/removal`
+    );
+    return data;
+  },
+
+  /**
+   * Puts a stranded player back into their own participant using the code
+   * the host read out — the last resort when browser storage is gone and
+   * they can prove nothing by themselves. Returns a NEW resume token; the
+   * one it replaces stops working immediately, so store it. Throws
+   * `participant.recovery.code-not-accepted` (409) for any bad code, and
+   * 429 when attempts are coming too fast.
+   */
+  async recoverParticipant(
+    pin: string,
+    request: RedeemRecoveryCodeRequest
+  ): Promise<RecoveredParticipantResponse> {
+    const { data } = await apiClient.post<RecoveredParticipantResponse>(
+      `/api/v1/sessions/${pin}/participants/recover`,
+      request
+    );
+    return data;
+  },
+
+  /**
+   * Mints a recovery code for one participant — HOST ONLY. Returned once;
+   * read it out and it works for a few minutes, once. Issuing supersedes
+   * any code already outstanding for that player.
+   */
+  async issueRecoveryCode(
+    sessionId: string,
+    participantId: string
+  ): Promise<RecoveryCodeResponse> {
+    const { data } = await apiClient.post<RecoveryCodeResponse>(
+      `/api/v1/sessions/${sessionId}/participants/${participantId}/recovery-code`
     );
     return data;
   },

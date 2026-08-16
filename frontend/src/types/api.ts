@@ -38,6 +38,15 @@ export type SessionSummaryResponse = Schemas["SessionSummaryResponse"];
 export type JoinSessionRequest = Schemas["JoinSessionRequest"];
 export type ParticipantSessionResponse = Schemas["ParticipantSessionResponse"];
 export type ResumeParticipantRequest = Schemas["ResumeParticipantRequest"];
+/**
+ * Host-assisted recovery for a player whose browser lost its credential.
+ * `RecoveryCodeResponse.code` and `RecoveredParticipantResponse.resumeToken`
+ * are both returned exactly once and are live credentials — never log them,
+ * never put them in a URL.
+ */
+export type RedeemRecoveryCodeRequest = Schemas["RedeemRecoveryCodeRequest"];
+export type RecoveredParticipantResponse = Schemas["RecoveredParticipantResponse"];
+export type RecoveryCodeResponse = Schemas["RecoveryCodeResponse"];
 export type SessionSnapshotResponse = Schemas["SessionSnapshotResponse"];
 export type SubmitAnswerRequest = Schemas["SubmitAnswerRequest"];
 export type AnswerAcceptedResponse = Schemas["AnswerAcceptedResponse"];

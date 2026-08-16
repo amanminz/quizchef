@@ -20,10 +20,18 @@ export interface JoinSessionFormProps {
   onSubmit: (values: JoinSessionFormValues) => Promise<void>;
   isSubmitting?: boolean;
   error?: unknown;
+  /** Offered when the chosen name is taken — the way back to an existing game. */
+  onEnterRecoveryCode?: () => void;
 }
 
 /** The PIN + nickname + language form — the one entry point to gameplay for a participant. */
-export function JoinSessionForm({ fixedPin, onSubmit, isSubmitting, error }: JoinSessionFormProps) {
+export function JoinSessionForm({
+  fixedPin,
+  onSubmit,
+  isSubmitting,
+  error,
+  onEnterRecoveryCode
+}: JoinSessionFormProps) {
   const {
     register,
     handleSubmit,
@@ -90,11 +98,22 @@ export function JoinSessionForm({ fixedPin, onSubmit, isSubmitting, error }: Joi
           // that lost its resume credential — and the one thing we must
           // not do is let them back in on the strength of the name, which
           // would hand their score to anyone who could spell it.
-          <div role="alert" className="space-y-1 text-sm text-destructive">
-            <p>This name is already part of this quiz.</p>
-            <p className="text-muted-foreground">
-              If this is you, please ask the Quiz Master for help. Otherwise, pick a different
-              name.
+          <div role="alert" className="space-y-2 rounded-md border border-destructive/40 p-3">
+            <p className="text-sm font-medium text-destructive">
+              A participant with this name is already in this quiz.
+            </p>
+            <p className="text-sm text-muted-foreground">
+              If that&rsquo;s you, don&rsquo;t join again — you would start from zero and your
+              points would stay with the other player. Ask the Quiz Master for a recovery code
+              to get your game back.
+            </p>
+            {onEnterRecoveryCode && (
+              <Button type="button" variant="outline" size="sm" onClick={onEnterRecoveryCode}>
+                Enter recovery code
+              </Button>
+            )}
+            <p className="text-xs text-muted-foreground">
+              Not you? Choose a different name.
             </p>
           </div>
         ) : (

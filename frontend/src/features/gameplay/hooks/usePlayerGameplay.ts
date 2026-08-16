@@ -1,13 +1,17 @@
 import { useMutation } from "@tanstack/react-query";
-import { useEffect, useRef } from "react";
-import { isApiClientError } from "@/api/apiError";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { sessionApi } from "@/api/sessionApi";
 import { useAnswerSubmission } from "@/features/gameplay/hooks/useAnswerSubmission";
 import { useGameplay } from "@/features/gameplay/hooks/useGameplay";
 import { useJoinSession } from "@/features/gameplay/hooks/useJoinSession";
 import { useFinalPlacement } from "@/features/gameplay/hooks/useFinalPlacement";
+import { useParticipantRecovery } from "@/features/gameplay/hooks/useParticipantRecovery";
 import { useParticipantResult } from "@/features/gameplay/hooks/useParticipantResult";
 import { isLastQuestion } from "@/features/gameplay/isLastQuestion";
+import {
+  classifyResumeFailure,
+  resumeRetryDelayMs
+} from "@/features/gameplay/resumeOutcome";
 import {
   usePlayerSessionStore,
   useStoredPlayerSession
@@ -41,19 +45,63 @@ export function usePlayerGameplay(pin: string) {
   const clearStored = usePlayerSessionStore((state) => state.clear);
   const joinMutation = useJoinSession();
 
+  // Set only when the server has definitively refused the credential, and
+  // never on a failure that might be the network. It is what turns the
+  // screen into a recovery offer instead of a bare join form.
+  const [credentialRejected, setCredentialRejected] = useState(false);
+  const retryAttempt = useRef(0);
+  const retryTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const [welcomeBack, setWelcomeBack] = useState<{ displayName: string; score: number } | null>(
+    null
+  );
+  const welcomeTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
   const resumeMutation = useMutation({
     mutationFn: () =>
       sessionApi.resumeParticipant(pin, { resumeToken: stored?.resumeToken }),
-    onError: (error) => {
-      // The server does not recognize this credential in the session live
-      // under this PIN — an unknown or revoked token, or one belonging to
-      // an earlier quiz that happened to use the same six digits. Forget
-      // it so the join form reappears instead of retrying forever.
-      if (isApiClientError(error) && error.code === "session.participant.not-found") {
-        clearStored(stored?.sessionId ?? "");
+    onSuccess: (snapshot) => {
+      retryAttempt.current = 0;
+      setCredentialRejected(false);
+      // Only worth saying when there is something to reassure them about.
+      // On a first join, or a refresh before anyone has scored, "welcome
+      // back" is noise.
+      if ((snapshot.participantScore ?? 0) > 0 && snapshot.displayName) {
+        setWelcomeBack({ displayName: snapshot.displayName, score: snapshot.participantScore! });
+        clearTimeout(welcomeTimer.current);
+        welcomeTimer.current = setTimeout(() => setWelcomeBack(null), 6_000);
       }
+    },
+    onError: (error) => {
+      const failure = classifyResumeFailure(error);
+      if (failure.kind === "credential-rejected") {
+        // This credential will never work — but the player is NOT sent to a
+        // blank join form, because typing their own name there is exactly
+        // what produces "that name is already taken". They are offered
+        // recovery instead, and the credential is kept until they choose:
+        // clearing it here would leave nothing to identify them with if the
+        // rejection turns out to be about the wrong session.
+        setCredentialRejected(true);
+        return;
+      }
+      // Temporary: the request did not land, or the venue's shared address
+      // hit a limit while the whole room reconnected at once. The
+      // credential is untouched and we simply try again — losing a live
+      // participation to a passing network blip is the failure this whole
+      // path exists to prevent.
+      retryAttempt.current += 1;
+      const delay = resumeRetryDelayMs(retryAttempt.current, failure.retryAfterSeconds);
+      clearTimeout(retryTimer.current);
+      retryTimer.current = setTimeout(() => resumeMutation.mutate(), delay);
     }
   });
+
+  useEffect(
+    () => () => {
+      clearTimeout(retryTimer.current);
+      clearTimeout(welcomeTimer.current);
+    },
+    []
+  );
 
   const gameplay = useGameplay(stored?.sessionId, stored?.participantId);
 
@@ -113,6 +161,37 @@ export function usePlayerGameplay(pin: string) {
 
   const join = (request: JoinSessionRequest) => joinMutation.mutateAsync({ pin, request });
 
+  // Recovery writes a fresh credential, so a successful redemption ends the
+  // rejected state by itself — the next render simply has a record again.
+  const recoveryMutation = useParticipantRecovery(pin);
+  const recoverWithCode = useCallback(
+    async (code: string) => {
+      const recovered = await recoveryMutation.mutateAsync(code);
+      setCredentialRejected(false);
+      retryAttempt.current = 0;
+      return recovered;
+    },
+    // recoveryMutation is stable for the life of the hook.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    []
+  );
+
+  /** Forgets the refused credential and shows the join form deliberately. */
+  const startOver = useCallback(() => {
+    if (stored?.sessionId) {
+      clearStored(stored.sessionId);
+    }
+    setCredentialRejected(false);
+  }, [clearStored, stored?.sessionId]);
+
+  const retryResume = useCallback(() => {
+    retryAttempt.current = 0;
+    setCredentialRejected(false);
+    resumeMutation.mutate();
+    // resumeMutation is stable for the life of the hook.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Pruned only once the session is archived — not when it merely
   // finishes. A finished session is still being read: the podium runs, the
   // host releases results, and the player refreshes to see where they came.
@@ -130,6 +209,20 @@ export function usePlayerGameplay(pin: string) {
 
   return {
     hasJoined: stored !== undefined,
+    /**
+     * The server has refused this credential outright. The screen offers
+     * recovery; it must never silently become the join form, which is what
+     * turned a lost credential into "that name is already taken".
+     */
+    credentialRejected,
+    /** Set briefly after a resume that restored real points. */
+    welcomeBack,
+    startOver,
+    retryResume,
+    /** Redeems the host's code and stores the credential it returns. */
+    recoverWithCode,
+    isRecovering: recoveryMutation.isPending,
+    recoveryError: recoveryMutation.error,
     participantId: stored?.participantId,
     // The server's copy wins once resume has answered. A device that has
     // been away, or a record written by an older client, can disagree with

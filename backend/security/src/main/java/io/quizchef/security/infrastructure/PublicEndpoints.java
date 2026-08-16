@@ -33,6 +33,13 @@ public final class PublicEndpoints {
             // endpoint authenticates the caller itself rather than relying
             // on the filter chain to have done it.
             "/api/v1/sessions/*/participants/resume",
+            // Host-assisted recovery for a player whose browser lost its
+            // credential. Public because the player redeeming it has no
+            // account and, by definition, no credential — the code itself
+            // is the proof, and it is single-use, minutes-lived, and rate
+            // limited. Issuing a code is the host-authenticated counterpart
+            // and is deliberately NOT here.
+            "/api/v1/sessions/*/participants/recover",
             // Participants (guests included) submit answers without an account;
             // per-message identity binding arrives with the STOMP command layer.
             "/api/v1/sessions/*/answers",

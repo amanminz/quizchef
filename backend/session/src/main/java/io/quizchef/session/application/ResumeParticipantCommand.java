@@ -13,4 +13,9 @@ public record ResumeParticipantCommand(
         String sessionPin,
         String resumeToken
 ) {
+
+    /** Whether a guest credential was presented — never the credential itself. */
+    public boolean hasResumeToken() {
+        return resumeToken != null && !resumeToken.isBlank();
+    }
 }
