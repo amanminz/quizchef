@@ -45,9 +45,22 @@ public record ParticipantKey(
         return new ParticipantKey(reference.identityId(), reference.identityType(), null);
     }
 
+    /**
+     * The key for a guest, derived from their resume token.
+     *
+     * <p>What is stored is the token's digest, never the token: a roster
+     * that held the raw secrets would hand out every guest's identity to
+     * anything that could read the session. A digest recognizes a
+     * participant exactly as well, which is all a key is for.
+     */
     public static ParticipantKey forGuest(GuestParticipantToken token) {
         Objects.requireNonNull(token, "token must not be null");
-        return new ParticipantKey(null, null, token.value());
+        return forDigest(token.digest());
+    }
+
+    public static ParticipantKey forDigest(GuestTokenDigest digest) {
+        Objects.requireNonNull(digest, "digest must not be null");
+        return new ParticipantKey(null, null, digest.value());
     }
 
     public boolean isGuest() {

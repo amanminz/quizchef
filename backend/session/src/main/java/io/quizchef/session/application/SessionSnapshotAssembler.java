@@ -42,6 +42,8 @@ public class SessionSnapshotAssembler {
         return new SessionSnapshotView(
                 session.getId(),
                 participant.getId(),
+                participant.getDisplayName(),
+                participant.getPreferredLanguage().value(),
                 session.getState().name(),
                 session.getCurrentPhase() == null ? null : session.getCurrentPhase().name(),
                 session.getCurrentQuestionId(),

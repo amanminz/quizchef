@@ -16,10 +16,18 @@ import java.util.UUID;
  * <p>During gameplay it carries the current phase and question, the time
  * still on the clock, the participant's own submitted answer and score, and
  * the standings. In the lobby those gameplay fields are simply empty.
+ *
+ * <p>Name and language ride along so a returning device renders what the
+ * server believes rather than what its own storage happens to hold — the
+ * two can differ after a device switch, and the server is the one that is
+ * right (ADR-006).
  */
 public record SessionSnapshotView(
         UUID sessionId,
         UUID participantId,
+        /** Who they are, as the server has it — not as this device remembers it. */
+        String displayName,
+        String preferredLanguage,
         String sessionState,
         String currentPhase,
         UUID currentQuestionId,

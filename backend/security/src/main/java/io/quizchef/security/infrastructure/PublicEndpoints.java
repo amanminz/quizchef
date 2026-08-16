@@ -21,12 +21,18 @@ public final class PublicEndpoints {
             // per-message authorization (who may subscribe to which session
             // topic, who may send commands) arrives with Session APIs.
             "/ws/**",
-            // Anonymous-friendly session endpoints: guests join and reconnect
+            // Anonymous-friendly session endpoints: guests join and resume
             // without an account, and anyone in a lobby can read its summary.
             // These are single-segment /sessions/* (join = /sessions/*/join),
             // so the host-only create/lobby/start endpoints stay authenticated.
             "/api/v1/sessions/*",
             "/api/v1/sessions/*/join",
+            // Returning to a session already joined. Public for the same
+            // reason join is — the audience is anonymous guests — and safe
+            // because the resume token in the body is the credential: the
+            // endpoint authenticates the caller itself rather than relying
+            // on the filter chain to have done it.
+            "/api/v1/sessions/*/participants/resume",
             // Participants (guests included) submit answers without an account;
             // per-message identity binding arrives with the STOMP command layer.
             "/api/v1/sessions/*/answers",

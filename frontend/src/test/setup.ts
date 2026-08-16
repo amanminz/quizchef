@@ -45,7 +45,7 @@ afterEach(() => {
   useAuthStore.setState({ token: null, sessionExpired: false });
   useConnectionStore.setState({ status: "disconnected" });
   useHostedSessionsStore.setState({ sessionIds: [] });
-  usePlayerSessionStore.setState({ bySessionPin: {} });
+  usePlayerSessionStore.setState({ bySessionId: {}, sessionIdByPin: {} });
   useUiPreferencesStore.setState({ theme: "system" });
 });
 

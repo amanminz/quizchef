@@ -11,7 +11,7 @@ export interface JoinSessionVariables {
 /**
  * Joins a session by PIN and records the resulting participant locally
  * (`playerSessionStore`) so a refresh or a return visit to the same PIN
- * can reconnect instead of joining again. Open to everyone — guests join
+ * resumes that participant instead of creating a second one. Open to everyone — guests join
  * anonymously; a signed-in caller joins backed by their identity (the
  * axios interceptor attaches the bearer token automatically, the join
  * form never branches on auth state). The PIN travels with each call
@@ -29,7 +29,7 @@ export function useJoinSession() {
         record(pin, {
           sessionId: participant.sessionId,
           participantId: participant.participantId,
-          guestParticipantToken: participant.guestParticipantToken ?? undefined,
+          resumeToken: participant.guestParticipantToken ?? undefined,
           displayName: request.displayName ?? "",
           preferredLanguage: request.preferredLanguage ?? "en"
         });

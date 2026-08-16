@@ -50,7 +50,7 @@ describe("PlaySessionPage", () => {
     serveGameplay(session, question);
     server.use(
       http.post(`/api/v1/sessions/${PIN}/join`, () => HttpResponse.json(participant)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -86,7 +86,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -94,7 +94,7 @@ describe("PlaySessionPage", () => {
     serveGameplay(session, question);
     let submitCount = 0;
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -136,14 +136,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -175,14 +175,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -213,14 +213,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, previewing);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -258,7 +258,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: holder.session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -270,7 +270,7 @@ describe("PlaySessionPage", () => {
       http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
         HttpResponse.json(holder.question)
       ),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: holder.session.sessionId,
@@ -316,14 +316,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, openQuestion);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -356,7 +356,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: holder.session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -377,7 +377,7 @@ describe("PlaySessionPage", () => {
         }
         return HttpResponse.json({ ...holder.question, phase: holder.session.currentPhase });
       }),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: holder.session.sessionId,
@@ -443,14 +443,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -479,12 +479,12 @@ describe("PlaySessionPage", () => {
     usePlayerSessionStore.getState().record(PIN, {
       sessionId: "stale-session",
       participantId: "stale-participant",
-      guestParticipantToken: "stale-token",
+      resumeToken: "stale-token",
       displayName: "Aman",
       preferredLanguage: "en"
     });
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(apiError("session.participant.not-found", "No participant matches"), {
           status: 404
         })
@@ -494,7 +494,73 @@ describe("PlaySessionPage", () => {
     renderApp(`/play/${PIN}`);
 
     expect(await screen.findByLabelText(/your name/i)).toBeInTheDocument();
-    expect(usePlayerSessionStore.getState().bySessionPin[PIN]).toBeUndefined();
+    // The rejected credential is forgotten, not retried — the PIN no
+    // longer points at anything to resume.
+    expect(usePlayerSessionStore.getState().sessionIdByPin[PIN]).toBeUndefined();
+    expect(usePlayerSessionStore.getState().bySessionId["stale-session"]).toBeUndefined();
+  });
+
+  it("resumes the same participant rather than offering the join form again", async () => {
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    usePlayerSessionStore.getState().record(PIN, {
+      sessionId: session.sessionId!,
+      participantId: "participant-1",
+      resumeToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    });
+    let resumedWith: unknown;
+    serveGameplay(session, question);
+    server.use(
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, async ({ request }) => {
+        resumedWith = await request.json();
+        return HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: "participant-1",
+            participantScore: 940,
+            displayName: "Aman",
+            preferredLanguage: "en"
+          })
+        );
+      })
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    // Straight into the question — never the join form, which is what
+    // creates a second participant with none of their score.
+    expect(await screen.findByText(question.localizations![0].prompt!)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/your name/i)).not.toBeInTheDocument();
+    // Identity comes from the stored secret, never from the name.
+    expect(resumedWith).toEqual({ resumeToken: "guest-token-1" });
+  });
+
+  it("tells a player with no credential to ask the host, rather than letting the name in", async () => {
+    const session = sessionSummary({ state: "LOBBY" });
+    server.use(
+      http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
+      http.post(`/api/v1/sessions/${PIN}/join`, () =>
+        HttpResponse.json(
+          apiError("participant.name-already-taken", "\"Aman\" is already part of this quiz"),
+          { status: 409 }
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+    await userEvent.type(await screen.findByLabelText(/your name/i), "Aman");
+    await userEvent.click(screen.getByRole("button", { name: /join/i }));
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent("This name is already part of this quiz.");
+    expect(alert).toHaveTextContent(/ask the Quiz Master for help/i);
   });
 
   it("shows the participant a correct verdict, their answer, and the explanation at the reveal", async () => {
@@ -510,14 +576,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -552,14 +618,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-1",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -588,14 +654,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -657,7 +723,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -666,7 +732,7 @@ describe("PlaySessionPage", () => {
     let personalResultCalled = false;
     let rankContextCalled = false;
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -740,14 +806,14 @@ describe("PlaySessionPage", () => {
       const record = {
         sessionId: session.sessionId!,
         participantId: "participant-me",
-        guestParticipantToken: "guest-token-1",
+        resumeToken: "guest-token-1",
         displayName: "Aman",
         preferredLanguage: language
       };
       usePlayerSessionStore.getState().record(PIN, record);
       serveGameplay(session, question);
       server.use(
-        http.post("/api/v1/sessions/reconnect", () =>
+        http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
           HttpResponse.json(
             sessionSnapshotResponse({
               sessionId: session.sessionId,
@@ -806,7 +872,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: holder.session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "hi"
     };
@@ -818,7 +884,7 @@ describe("PlaySessionPage", () => {
       http.get(`/api/v1/sessions/${holder.session.sessionId}/questions/current`, () =>
         HttpResponse.json(question)
       ),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: holder.session.sessionId,
@@ -866,14 +932,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -927,14 +993,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "hi"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -989,7 +1055,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -999,7 +1065,7 @@ describe("PlaySessionPage", () => {
     let neighboursCalled = false;
     let topFiveCalled = false;
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1070,14 +1136,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "hi"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1131,7 +1197,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -1139,7 +1205,7 @@ describe("PlaySessionPage", () => {
     let personalResultCalled = false;
     server.use(
       http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1192,7 +1258,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: holder.session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -1201,7 +1267,7 @@ describe("PlaySessionPage", () => {
       http.get(`/api/v1/sessions/${holder.session.sessionId}`, () =>
         HttpResponse.json(holder.session)
       ),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: holder.session.sessionId,
@@ -1259,14 +1325,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     server.use(
       http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1307,14 +1373,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     server.use(
       http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1361,14 +1427,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     server.use(
       http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1416,7 +1482,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -1424,7 +1490,7 @@ describe("PlaySessionPage", () => {
     let attempts = 0;
     server.use(
       http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1469,14 +1535,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1541,7 +1607,7 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: holder.session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
@@ -1565,7 +1631,7 @@ describe("PlaySessionPage", () => {
             })
           )
       ),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: holder.session.sessionId,
@@ -1606,14 +1672,14 @@ describe("PlaySessionPage", () => {
     const record = {
       sessionId: session.sessionId!,
       participantId: "participant-me",
-      guestParticipantToken: "guest-token-1",
+      resumeToken: "guest-token-1",
       displayName: "Aman",
       preferredLanguage: "en"
     };
     usePlayerSessionStore.getState().record(PIN, record);
     server.use(
       http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1681,7 +1747,7 @@ describe("PlaySessionPage", () => {
     usePlayerSessionStore.getState().record(PIN, record);
     serveGameplay(session, question);
     server.use(
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,
@@ -1721,7 +1787,7 @@ describe("PlaySessionPage", () => {
     usePlayerSessionStore.getState().record(PIN, record);
     server.use(
       http.get(`/api/v1/sessions/${session.sessionId}`, () => HttpResponse.json(session)),
-      http.post("/api/v1/sessions/reconnect", () =>
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
         HttpResponse.json(
           sessionSnapshotResponse({
             sessionId: session.sessionId,

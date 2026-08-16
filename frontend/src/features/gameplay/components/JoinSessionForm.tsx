@@ -1,6 +1,6 @@
 import { useForm } from "react-hook-form";
 import { z } from "zod";
-import { errorMessage } from "@/api/apiError";
+import { errorMessage, isApiClientError } from "@/api/apiError";
 import { Button } from "@/components/common/Button";
 import { FormField } from "@/components/forms/FormField";
 import { EVENT_LANGUAGES } from "@/features/gameplay/eventLanguages";
@@ -83,11 +83,25 @@ export function JoinSessionForm({ fixedPin, onSubmit, isSubmitting, error }: Joi
         )}
       </div>
 
-      {error != null && (
-        <p role="alert" className="text-sm text-destructive">
-          {errorMessage(error)}
-        </p>
-      )}
+      {error != null &&
+        (isApiClientError(error) && error.code === "participant.name-already-taken" ? (
+          // Deliberately not "try another name". The likeliest person
+          // seeing this is the owner of that name returning on a device
+          // that lost its resume credential — and the one thing we must
+          // not do is let them back in on the strength of the name, which
+          // would hand their score to anyone who could spell it.
+          <div role="alert" className="space-y-1 text-sm text-destructive">
+            <p>This name is already part of this quiz.</p>
+            <p className="text-muted-foreground">
+              If this is you, please ask the Quiz Master for help. Otherwise, pick a different
+              name.
+            </p>
+          </div>
+        ) : (
+          <p role="alert" className="text-sm text-destructive">
+            {errorMessage(error)}
+          </p>
+        ))}
 
       <Button type="submit" isLoading={isSubmitting}>
         Join

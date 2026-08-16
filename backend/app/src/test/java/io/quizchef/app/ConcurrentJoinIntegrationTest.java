@@ -21,8 +21,8 @@ import io.quizchef.session.application.JoinSessionApplicationService;
 import io.quizchef.session.application.JoinSessionCommand;
 import io.quizchef.session.application.OpenLobbyApplicationService;
 import io.quizchef.session.application.ParticipantSessionView;
-import io.quizchef.session.application.ReconnectParticipantApplicationService;
-import io.quizchef.session.application.ReconnectSessionCommand;
+import io.quizchef.session.application.ResumeParticipantApplicationService;
+import io.quizchef.session.application.ResumeParticipantCommand;
 import io.quizchef.session.domain.Session;
 import io.quizchef.session.domain.SessionPin;
 import io.quizchef.session.domain.SessionSettings;
@@ -84,7 +84,7 @@ class ConcurrentJoinIntegrationTest {
     private JoinSessionApplicationService joinSessionApplicationService;
 
     @Autowired
-    private ReconnectParticipantApplicationService reconnectParticipantApplicationService;
+    private ResumeParticipantApplicationService resumeParticipantApplicationService;
 
     @Autowired
     private OpenLobbyApplicationService openLobbyApplicationService;
@@ -157,7 +157,10 @@ class ConcurrentJoinIntegrationTest {
         CurrentUser sameUser = CurrentUser.authenticated(
                 player.getId(), player.reference().identityType(), Set.of(Role.USER));
 
-        Outcome outcome = joinConcurrently(2, index -> "Same Player", sameUser);
+        // Distinct names on purpose: the identity rule is what is under
+        // test, and identical names would be refused a step earlier by the
+        // display-name rule, proving nothing about identity uniqueness.
+        Outcome outcome = joinConcurrently(2, index -> "Same Player " + index, sameUser);
 
         assertThat(outcome.succeeded()).hasSize(1);
         assertThat(outcome.failures()).hasSize(1);
@@ -195,8 +198,8 @@ class ConcurrentJoinIntegrationTest {
         pool.submit(() -> {
             await(start);
             try {
-                reconnectParticipantApplicationService.reconnect(CurrentUser.anonymous(),
-                        new ReconnectSessionCommand(null, first.guestParticipantToken()));
+                resumeParticipantApplicationService.resume(CurrentUser.anonymous(),
+                        new ResumeParticipantCommand(pin, first.guestParticipantToken()));
             } catch (Throwable failure) {
                 failures.add(failure);
             }

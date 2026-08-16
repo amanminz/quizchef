@@ -123,7 +123,7 @@ CREATED → LOBBY → IN_PROGRESS → FINISHED → ARCHIVED
 - **SessionPin** — exactly six digits. Format only; active-uniqueness and reuse-after-archive are a database concern (below).
 - **SessionSettings** — `allowLateJoin, allowReconnect, showLiveLeaderboard, maxParticipants (1..1000)`. Execution settings only — never authoring settings (those are the Quiz's).
 - **QuestionTimer** — `startedAt, durationSeconds, endsAt` (validates `endsAt = startedAt + duration`). A pure model: no scheduling, no expiry checking. Populated by progression later.
-- **GuestParticipantToken** — an opaque 32-byte random secret the guest stores client-side to reconnect. A reconnection credential, never a business identity.
+- **GuestParticipantToken** — an opaque 32-byte random secret the guest stores client-side to resume. A resume credential, never a business identity. *(Amended by [RFC-021](RFC-021-participant-resume-and-name-reservation.md): the token itself is no longer persisted — the server stores its SHA-256 as `GuestTokenDigest`, and the raw secret is returned only once, at join.)*
 - **ParticipantAnswer** — `questionId, selectedOptionIds, answeredLanguage, submittedAt, responseTimeMillis, pointsAwarded`. Model only. `answeredLanguage` records which translation the participant actually played in — future analytics on which localizations get used. `selectedOptionIds` is folded to one column by an `AttributeConverter` (a nested collection cannot live in an element-collection embeddable).
 - **ParticipantKey** — wraps an `IdentityReference` **xor** a `GuestParticipantToken`; value equality is what lets the Session enforce within-session uniqueness. Carries only *immutable* identity, so mirroring it into the roster can never diverge from the Participant.
 - **SessionRosterEntry** — `{participantId, ParticipantKey, joinOrder}`, the roster element.
@@ -135,7 +135,7 @@ Plus **SessionPhase** `{QUESTION_OPEN, QUESTION_CLOSED, ANSWER_REVEALED, LEADERB
 ## Uniqueness enforcement
 
 - **Within-session identity/guest-token uniqueness** is enforced **inside the Session aggregate** via `ParticipantKey` equality on the roster — the aggregate genuinely owns its roster invariants (`ParticipantAlreadyJoinedException`, 409). Partial unique indexes on `session_participants` are the database backstop.
-- **Global guest-token uniqueness** (the reconnection credential must be globally unique) cannot be seen by one Session, so — exactly like email uniqueness in RFC-002 — the **DB unique index on `participants.guest_token` is the authority**, translated by the future application service. Random 32-byte tokens make a collision astronomically unlikely; the constraint is correctness insurance.
+- **Global guest-token uniqueness** (the resume credential must be globally unique) cannot be seen by one Session, so — exactly like email uniqueness in RFC-002 — the **DB unique index on `participants.guest_token` is the authority**, translated by the future application service. *(Since [RFC-021](RFC-021-participant-resume-and-name-reservation.md) that column holds the token's digest, and resume additionally scopes the lookup to one session — global uniqueness is no longer what a resume relies on.)* Random 32-byte tokens make a collision astronomically unlikely; the constraint is correctness insurance.
 
 This split — the aggregate enforces what it can see, the database is the authority for what crosses aggregates — is the established QuizChef pattern.
 
@@ -158,6 +158,9 @@ CreateSessionApplicationService.create(CurrentUser, CreateSessionCommand)      �
 OpenLobbyApplicationService.openLobby(CurrentUser, pin)                         → authorize(QUIZ_HOST) + host  → LobbyOpenedEvent
 JoinSessionApplicationService.join(CurrentUser, JoinSessionCommand)            → (anonymous-friendly) resolve PIN → Participant + roster entry → ParticipantJoinedEvent
 ReconnectParticipantApplicationService.reconnect(CurrentUser, ReconnectCommand) → resolve by token or identity → connect → ParticipantReconnectedEvent, SessionSnapshot
+   [superseded by RFC-021: ResumeParticipantApplicationService.resume(CurrentUser, ResumeParticipantCommand)
+    → resolve the ACTIVE session for the PIN → find the participant in THAT session by token digest
+    → connect → ParticipantReconnectedEvent, SessionSnapshot]
 StartSessionApplicationService.start(CurrentUser, sessionId)                    → authorize(QUIZ_HOST) + host  → SessionStartedEvent
 SessionQueryService.summary(sessionId)                                         → (public read by id) → SessionSummary
 ```

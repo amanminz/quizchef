@@ -12,8 +12,19 @@ public interface ParticipantRepository extends JpaRepository<Participant, UUID> 
 
     List<Participant> findBySessionId(UUID sessionId);
 
-    /** Guest reconnection: the guest token is globally unique. */
-    Optional<Participant> findByGuestParticipantTokenValue(String guestParticipantTokenValue);
+    /**
+     * Guest resume, scoped to one session. Looked up by digest — the raw
+     * token is never stored, so this is the only shape the query can take —
+     * and by session, so a token issued for one quiz cannot resolve inside
+     * another.
+     */
+    Optional<Participant> findBySessionIdAndGuestTokenDigestValue(UUID sessionId, String digestValue);
+
+    /**
+     * Whether this session already has someone playing under that name.
+     * Case-insensitive: "aman" and "Aman" are the same person to a room.
+     */
+    boolean existsBySessionIdAndDisplayNameIgnoreCase(UUID sessionId, String displayName);
 
     /** Registered reconnection: at most one participant per identity per session. */
     Optional<Participant> findBySessionIdAndIdentityReferenceIdentityId(UUID sessionId, UUID identityId);

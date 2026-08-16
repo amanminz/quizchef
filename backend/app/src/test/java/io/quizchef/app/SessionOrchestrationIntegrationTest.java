@@ -125,7 +125,7 @@ class SessionOrchestrationIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.state").value("LOBBY"));
 
-        // 3. a guest joins (anonymous) and receives a reconnection token
+        // 3. a guest joins (anonymous) and receives a resume token
         JsonNode guest = readJson(mockMvc.perform(post("/api/v1/sessions/" + pin + "/join")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
@@ -149,17 +149,21 @@ class SessionOrchestrationIntegrationTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.guestParticipantToken").doesNotExist());
 
-        // 5. the guest reconnects and gets a snapshot
-        mockMvc.perform(post("/api/v1/sessions/reconnect")
+        // 5. the guest resumes and gets a snapshot — name and language come
+        //    back from the server, not from whatever the device remembered
+        mockMvc.perform(post("/api/v1/sessions/" + pin + "/participants/resume")
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
-                                {"guestParticipantToken": "%s"}
+                                {"resumeToken": "%s"}
                                 """.formatted(guestToken)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.sessionId").value(sessionId))
                 .andExpect(jsonPath("$.sessionState").value("LOBBY"))
+                .andExpect(jsonPath("$.displayName").value("Guest Aman"))
+                .andExpect(jsonPath("$.preferredLanguage").value("kn"))
                 .andExpect(jsonPath("$.participantScore").value(0))
-                .andExpect(jsonPath("$.leaderboard").isArray());
+                .andExpect(jsonPath("$.leaderboard").isArray())
+                .andExpect(jsonPath("$.resumeToken").doesNotExist());
 
         // 6. host starts the session
         mockMvc.perform(post("/api/v1/sessions/" + sessionId + "/start")
@@ -240,7 +244,7 @@ class SessionOrchestrationIntegrationTest {
 
         assertThat(paths.has("/api/v1/sessions")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{pin}/join")).isTrue();
-        assertThat(paths.has("/api/v1/sessions/reconnect")).isTrue();
+        assertThat(paths.has("/api/v1/sessions/{pin}/participants/resume")).isTrue();
         assertThat(paths.has("/api/v1/sessions/{id}/start")).isTrue();
         // create requires bearer auth; anonymous join does not
         assertThat(paths.at("/~1api~1v1~1sessions/post/security/0/bearerAuth").isMissingNode()).isFalse();

@@ -12,7 +12,7 @@ import type {
   ParticipantFinalPlacementResponse,
   ParticipantResultResponse,
   ParticipantSessionResponse,
-  ReconnectRequest,
+  ResumeParticipantRequest,
   SessionParticipantsResponse,
   SessionQuestionsResponse,
   SessionResultsResponse,
@@ -24,7 +24,7 @@ import type {
 
 /**
  * Session lifecycle and gameplay endpoints (RFC-004). Host commands require
- * a bearer token; join/reconnect/answer are anonymous-friendly — the token
+ * a bearer token; join/resume/answer are anonymous-friendly — the token
  * interceptor simply has nothing to inject for a guest.
  */
 export const sessionApi = {
@@ -53,9 +53,27 @@ export const sessionApi = {
     return data;
   },
 
-  async reconnect(request: ReconnectRequest): Promise<SessionSnapshotResponse> {
+  /**
+   * Returns a player to the participant they already are in the session
+   * live under this PIN — same score, same answers, same name and
+   * language. Called on every arrival (refresh, reopened tab, dropped
+   * connection, long absence) and always BEFORE join: a returning player
+   * who is offered the join form instead becomes a second participant with
+   * none of their score.
+   *
+   * A guest sends the resume token issued once at join; a signed-in player
+   * sends nothing and is resolved from their bearer token. Throws
+   * `session.participant.not-found` (404) when the credential does not
+   * belong to the session currently live under this PIN — which is also
+   * what a stale credential from an earlier quiz that reused the code
+   * looks like, and is the signal to forget it and show the join form.
+   */
+  async resumeParticipant(
+    pin: string,
+    request: ResumeParticipantRequest
+  ): Promise<SessionSnapshotResponse> {
     const { data } = await apiClient.post<SessionSnapshotResponse>(
-      "/api/v1/sessions/reconnect",
+      `/api/v1/sessions/${pin}/participants/resume`,
       request
     );
     return data;
