@@ -70,6 +70,17 @@ public class ResumeParticipantApplicationService {
         this.clock = clock;
     }
 
+    /**
+     * Diagnostics for the one flow whose failures are invisible from the
+     * outside: a player who cannot get back in simply stops appearing, and
+     * the host sees a name that never reconnects. These say which step gave
+     * way, using a closed set of reasons — never the credential itself, and
+     * never anything that varies with the secret presented.
+     */
+    private static final String ATTEMPT = "participant.resume.attempt";
+    private static final String SUCCESS = "participant.resume.success";
+    private static final String FAILED = "participant.resume.failed";
+
     @Transactional
     public SessionSnapshotView resume(CurrentUser currentUser, ResumeParticipantCommand command) {
         // The session row is write-locked for the same reason joining locks
@@ -78,8 +89,23 @@ public class ResumeParticipantApplicationService {
         // one connected participant; unserialized, one of them loses an
         // optimistic check and the player sees an error for doing nothing
         // wrong.
-        Session session = SessionLookup.activeByPinForUpdate(sessionRepository, command.sessionPin());
-        Participant participant = findParticipant(currentUser, session, command);
+        log.info("{} pin={} credential={}", ATTEMPT, command.sessionPin(),
+                command.hasResumeToken() ? "token" : "identity");
+        Session session;
+        try {
+            session = SessionLookup.activeByPinForUpdate(sessionRepository, command.sessionPin());
+        } catch (RuntimeException noSession) {
+            log.info("{} pin={} reason=session_not_active", FAILED, command.sessionPin());
+            throw noSession;
+        }
+        Participant participant;
+        try {
+            participant = findParticipant(currentUser, session, command);
+        } catch (RuntimeException refused) {
+            log.info("{} session={} reason={}", FAILED, session.getId(),
+                    command.hasResumeToken() ? "credential_invalid" : "credential_missing");
+            throw refused;
+        }
 
         // Idempotent by construction (Participant.connect accepts an already
         // connected participant), so a duplicate resume changes nothing —
@@ -91,7 +117,7 @@ public class ResumeParticipantApplicationService {
 
         eventPublisher.publish(new ParticipantReconnectedEvent(
                 session.getId(), participant.getId(), clock.instant()));
-        log.info("Participant {} resumed session {}", participant.getId(), session.getId());
+        log.info("{} session={} participant={}", SUCCESS, session.getId(), participant.getId());
         return snapshotAssembler.assemble(session, participant);
     }
 

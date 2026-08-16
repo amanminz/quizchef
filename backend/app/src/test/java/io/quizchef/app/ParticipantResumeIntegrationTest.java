@@ -18,6 +18,12 @@ import io.quizchef.quiz.domain.Quiz;
 import io.quizchef.quiz.domain.QuizLocalization;
 import io.quizchef.quiz.infrastructure.persistence.QuestionRepository;
 import io.quizchef.quiz.infrastructure.persistence.QuizRepository;
+import io.quizchef.session.application.GenerateRecoveryCodeApplicationService;
+import io.quizchef.session.application.RecoveredParticipantView;
+import io.quizchef.session.application.RecoveryCodeView;
+import io.quizchef.session.application.RedeemRecoveryCodeApplicationService;
+import io.quizchef.session.domain.exception.RecoveryCodeNotAcceptedException;
+import io.quizchef.session.domain.exception.RecoveryNotAvailableException;
 import io.quizchef.session.application.JoinSessionApplicationService;
 import io.quizchef.session.application.JoinSessionCommand;
 import io.quizchef.session.application.OpenLobbyApplicationService;
@@ -82,6 +88,12 @@ class ParticipantResumeIntegrationTest {
 
     @Autowired
     private ResumeParticipantApplicationService resumeParticipantApplicationService;
+
+    @Autowired
+    private GenerateRecoveryCodeApplicationService generateRecoveryCodeApplicationService;
+
+    @Autowired
+    private RedeemRecoveryCodeApplicationService redeemRecoveryCodeApplicationService;
 
     @Autowired
     private OpenLobbyApplicationService openLobbyApplicationService;
@@ -269,7 +281,201 @@ class ParticipantResumeIntegrationTest {
         assertThat(scoreOf(joined.participantId())).isEqualTo(500);
     }
 
+
+    @Test
+    void theLiveEventSequenceReturnsTheSamePlayerWithTheirPoints() {
+        // The exact production failure, end to end: join, score, vanish for
+        // a while, come back on the same phone. Before the fix this ended
+        // with the player on the join form being told their own name was
+        // already taken.
+        ParticipantSessionView joined = join("Aman", "en");
+        awardPoints(joined.participantId(), 2_500);
+        connect(joined);
+        disconnect(joined.participantId());
+
+        SessionSnapshotView returned = resume(pin, joined.guestParticipantToken());
+
+        assertThat(returned.participantId()).isEqualTo(joined.participantId());
+        assertThat(returned.participantScore()).isEqualTo(2_500);
+        assertThat(returned.displayName()).isEqualTo("Aman");
+        assertThat(participantRepository.findBySessionId(sessionId)).hasSize(1);
+        assertThat(rosterSize()).isEqualTo(1);
+
+        // And joining is never what a returning player has to do — proved
+        // by the fact that doing so is refused outright.
+        assertThatExceptionOfType(DisplayNameAlreadyTakenException.class)
+                .isThrownBy(() -> join("Aman", "en"));
+    }
+
+    @Test
+    void aHostIssuedCodeRestoresAPlayerWhoseCredentialIsGone() {
+        ParticipantSessionView joined = join("Aman", "en");
+        awardPoints(joined.participantId(), 8_420);
+
+        // Their phone was wiped: the token they were issued is unusable to
+        // them now, and nothing about their name proves anything.
+        RecoveryCodeView issued = generateRecoveryCodeApplicationService.generate(
+                hostUser(host), sessionId, joined.participantId());
+        RecoveredParticipantView recovered = redeem(pin, issued.code());
+
+        assertThat(recovered.session().participantId()).isEqualTo(joined.participantId());
+        assertThat(recovered.session().participantScore()).isEqualTo(8_420);
+        assertThat(recovered.session().displayName()).isEqualTo("Aman");
+        assertThat(participantRepository.findBySessionId(sessionId)).hasSize(1);
+        assertThat(rosterSize()).isEqualTo(1);
+
+        // The new credential works...
+        assertThat(resume(pin, recovered.resumeToken()).participantId())
+                .isEqualTo(joined.participantId());
+        // ...and the one it replaced does not. The device that lost the
+        // game may be lost, borrowed, or someone else's.
+        assertThatExceptionOfType(ParticipantNotFoundException.class)
+                .isThrownBy(() -> resume(pin, joined.guestParticipantToken()));
+    }
+
+    @Test
+    void aRecoveryCodeWorksExactlyOnce() {
+        ParticipantSessionView joined = join("Aman", "en");
+        RecoveryCodeView issued = generateRecoveryCodeApplicationService.generate(
+                hostUser(host), sessionId, joined.participantId());
+        redeem(pin, issued.code());
+
+        assertThatExceptionOfType(RecoveryCodeNotAcceptedException.class)
+                .isThrownBy(() -> redeem(pin, issued.code()));
+    }
+
+    @Test
+    void issuingASecondCodeKillsTheFirst() {
+        ParticipantSessionView joined = join("Aman", "en");
+        RecoveryCodeView misread = generateRecoveryCodeApplicationService.generate(
+                hostUser(host), sessionId, joined.participantId());
+
+        // A host who clicks twice, or reads the first code out wrongly,
+        // must not leave two live ways into one player's game.
+        RecoveryCodeView reissued = generateRecoveryCodeApplicationService.generate(
+                hostUser(host), sessionId, joined.participantId());
+
+        assertThatExceptionOfType(RecoveryCodeNotAcceptedException.class)
+                .isThrownBy(() -> redeem(pin, misread.code()));
+        assertThat(redeem(pin, reissued.code()).session().participantId())
+                .isEqualTo(joined.participantId());
+    }
+
+    @Test
+    void anExpiredCodeIsRefused() {
+        ParticipantSessionView joined = join("Aman", "en");
+        RecoveryCodeView issued = generateRecoveryCodeApplicationService.generate(
+                hostUser(host), sessionId, joined.participantId());
+
+        expire(joined.participantId());
+
+        assertThatExceptionOfType(RecoveryCodeNotAcceptedException.class)
+                .isThrownBy(() -> redeem(pin, issued.code()));
+    }
+
+    @Test
+    void aCodeIssuedForAnotherSessionIsRefusedHere() {
+        ParticipantSessionView joined = join("Aman", "en");
+        RecoveryCodeView issued = generateRecoveryCodeApplicationService.generate(
+                hostUser(host), sessionId, joined.participantId());
+        Lobby other = openLobby(nextPin());
+
+        assertThatExceptionOfType(RecoveryCodeNotAcceptedException.class)
+                .isThrownBy(() -> redeem(other.pin(), issued.code()));
+    }
+
+    @Test
+    void aWrongCodeIsRefusedWithoutSayingWhy() {
+        join("Aman", "en");
+
+        // Unknown digits and malformed input look identical from outside,
+        // so a guesser learns nothing about which codes exist.
+        assertThatExceptionOfType(RecoveryCodeNotAcceptedException.class)
+                .isThrownBy(() -> redeem(pin, "000000"));
+        assertThatExceptionOfType(RecoveryCodeNotAcceptedException.class)
+                .isThrownBy(() -> redeem(pin, "not-a-code"));
+    }
+
+    @Test
+    void simultaneousRedemptionsOfOneCodeProduceOneRecovery() throws Exception {
+        ParticipantSessionView joined = join("Aman", "en");
+        awardPoints(joined.participantId(), 400);
+        RecoveryCodeView issued = generateRecoveryCodeApplicationService.generate(
+                hostUser(host), sessionId, joined.participantId());
+
+        int attempts = 4;
+        ExecutorService pool = Executors.newFixedThreadPool(attempts);
+        CountDownLatch start = new CountDownLatch(1);
+        ConcurrentLinkedQueue<RecoveredParticipantView> succeeded = new ConcurrentLinkedQueue<>();
+        ConcurrentLinkedQueue<Throwable> failures = new ConcurrentLinkedQueue<>();
+        for (int attempt = 0; attempt < attempts; attempt++) {
+            pool.submit(() -> {
+                await(start);
+                try {
+                    succeeded.add(redeem(pin, issued.code()));
+                } catch (Throwable failure) {
+                    failures.add(failure);
+                }
+            });
+        }
+        start.countDown();
+        pool.shutdown();
+        assertThat(pool.awaitTermination(30, TimeUnit.SECONDS)).isTrue();
+
+        // Exactly one wins; the rest are refused. No duplicate participant,
+        // and no second live token for the same player.
+        assertThat(succeeded).hasSize(1);
+        assertThat(failures).hasSize(attempts - 1);
+        assertThat(participantRepository.findBySessionId(sessionId)).hasSize(1);
+        assertThat(scoreOf(joined.participantId())).isEqualTo(400);
+    }
+
+    @Test
+    void aSignedInPlayerIsNotGivenARecoveryCode() {
+        // They rejoin by logging in from any device; a code would be a
+        // second, weaker way into the same account.
+        Identity player = identityRepository.save(Identity.registered());
+        CurrentUser signedIn = CurrentUser.authenticated(
+                player.getId(), player.reference().identityType(), Set.of(Role.USER));
+        ParticipantSessionView joined = transactionTemplate.execute(status ->
+                joinSessionApplicationService.join(signedIn,
+                        new JoinSessionCommand(pin, "Registered Aman", "en")));
+
+        assertThatExceptionOfType(RecoveryNotAvailableException.class).isThrownBy(() ->
+                generateRecoveryCodeApplicationService.generate(
+                        hostUser(host), sessionId, joined.participantId()));
+    }
+
     // --- helpers -------------------------------------------------------------
+
+
+    private RecoveredParticipantView redeem(String sessionPin, String code) {
+        return redeemRecoveryCodeApplicationService.redeem(sessionPin, code);
+    }
+
+    private void connect(ParticipantSessionView joined) {
+        resume(pin, joined.guestParticipantToken());
+    }
+
+    private void disconnect(UUID participantId) {
+        transactionTemplate.executeWithoutResult(status -> {
+            Participant participant = participantRepository.findById(participantId).orElseThrow();
+            participant.disconnect(Instant.now());
+            participantRepository.save(participant);
+        });
+    }
+
+    /** Ages a participant's outstanding codes past their lifetime. */
+    private void expire(UUID participantId) {
+        transactionTemplate.executeWithoutResult(status ->
+                entityManager.createNativeQuery("""
+                        update quizchef.participant_recovery_codes
+                        set expires_at = now() - interval '1 minute'
+                        where participant_id = :participantId
+                        """)
+                        .setParameter("participantId", participantId)
+                        .executeUpdate());
+    }
 
     private record Lobby(String pin, UUID sessionId) {
     }

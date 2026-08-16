@@ -475,7 +475,7 @@ describe("PlaySessionPage", () => {
     await waitFor(() => expect(screen.queryByRole("alert")).not.toBeInTheDocument());
   });
 
-  it("returns to the join form when the server no longer recognizes the participant", async () => {
+  it("offers recovery, not the join form, when the server refuses the credential", async () => {
     usePlayerSessionStore.getState().record(PIN, {
       sessionId: "stale-session",
       participantId: "stale-participant",
@@ -493,11 +493,100 @@ describe("PlaySessionPage", () => {
 
     renderApp(`/play/${PIN}`);
 
-    expect(await screen.findByLabelText(/your name/i)).toBeInTheDocument();
-    // The rejected credential is forgotten, not retried — the PIN no
-    // longer points at anything to resume.
-    expect(usePlayerSessionStore.getState().sessionIdByPin[PIN]).toBeUndefined();
-    expect(usePlayerSessionStore.getState().bySessionId["stale-session"]).toBeUndefined();
+    // The old behaviour dropped the player here onto the join form, where
+    // typing their own name produced "that name is already taken" — the
+    // dead end reported from the live event.
+    expect(await screen.findByText(/couldn't restore Aman's game/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/your name/i)).not.toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /enter recovery code/i })).toBeInTheDocument();
+
+    // And the credential is kept until the player chooses to give it up.
+    expect(usePlayerSessionStore.getState().sessionIdByPin[PIN]).toBe("stale-session");
+  });
+
+  it("keeps the credential and retries when resume fails temporarily", async () => {
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    usePlayerSessionStore.getState().record(PIN, {
+      sessionId: session.sessionId!,
+      participantId: "participant-1",
+      resumeToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    });
+    serveGameplay(session, question);
+    let attempts = 0;
+    server.use(
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () => {
+        attempts += 1;
+        // A whole venue behind one address reconnecting at once.
+        return attempts === 1
+          ? HttpResponse.json(apiError("rate.limit.exceeded", "Slow down"), { status: 429 })
+          : HttpResponse.json(
+              sessionSnapshotResponse({
+                sessionId: session.sessionId,
+                participantId: "participant-1",
+                participantScore: 8420,
+                displayName: "Aman",
+                preferredLanguage: "en"
+              })
+            );
+      })
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    // A passing failure must never cost a live participation: the
+    // credential survives, nothing suggests joining again, and the retry
+    // lands the player back in their own game.
+    expect(await screen.findByText(question.localizations![0].prompt!, {}, { timeout: 5000 })).toBeInTheDocument();
+    expect(usePlayerSessionStore.getState().sessionIdByPin[PIN]).toBe(session.sessionId);
+    expect(screen.queryByLabelText(/your name/i)).not.toBeInTheDocument();
+    expect(attempts).toBeGreaterThan(1);
+  });
+
+  it("welcomes a returning player back with the score they still have", async () => {
+    const question = currentQuestionResponse();
+    const session = sessionSummary({
+      sessionId: question.sessionId,
+      state: "IN_PROGRESS",
+      currentQuestionId: question.questionId,
+      currentPhase: "QUESTION_OPEN"
+    });
+    usePlayerSessionStore.getState().record(PIN, {
+      sessionId: session.sessionId!,
+      participantId: "participant-1",
+      resumeToken: "guest-token-1",
+      displayName: "Aman",
+      preferredLanguage: "en"
+    });
+    serveGameplay(session, question);
+    server.use(
+      http.post(`/api/v1/sessions/${PIN}/participants/resume`, () =>
+        HttpResponse.json(
+          sessionSnapshotResponse({
+            sessionId: session.sessionId,
+            participantId: "participant-1",
+            participantScore: 8420,
+            displayName: "Aman",
+            preferredLanguage: "en"
+          })
+        )
+      )
+    );
+
+    renderApp(`/play/${PIN}`);
+
+    // Someone who has stared at a dead phone for two questions does not
+    // trust that their score survived — and if nothing says so, rejoining
+    // "properly" is the natural next move.
+    expect(await screen.findByText(/welcome back, Aman/i)).toBeInTheDocument();
+    expect(screen.getByText(/8,420 points/i)).toBeInTheDocument();
   });
 
   it("resumes the same participant rather than offering the join form again", async () => {
@@ -559,8 +648,12 @@ describe("PlaySessionPage", () => {
     await userEvent.click(screen.getByRole("button", { name: /join/i }));
 
     const alert = await screen.findByRole("alert");
-    expect(alert).toHaveTextContent("This name is already part of this quiz.");
-    expect(alert).toHaveTextContent(/ask the Quiz Master for help/i);
+    expect(alert).toHaveTextContent(/already in this quiz/i);
+    // Never "pick another name" as the headline: the likeliest reader is
+    // the owner of that name on a device that lost its credential, and
+    // joining again would strand their points with the other participant.
+    expect(alert).toHaveTextContent(/you would start from zero/i);
+    expect(screen.getByRole("button", { name: /enter recovery code/i })).toBeInTheDocument();
   });
 
   it("shows the participant a correct verdict, their answer, and the explanation at the reveal", async () => {

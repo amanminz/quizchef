@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { useParams } from "react-router-dom";
 import { Card, CardContent } from "@/components/common/Card";
 import { ErrorPanel } from "@/components/common/ErrorPanel";
@@ -18,7 +19,10 @@ import {
 } from "@/features/gameplay/components/JoinSessionForm";
 import { QuestionCard } from "@/features/gameplay/components/QuestionCard";
 import { QuestionPreviewNotice } from "@/features/gameplay/components/QuestionPreviewNotice";
+import { ParticipantRecoveryPanel } from "@/features/gameplay/components/ParticipantRecoveryPanel";
 import { QuestionRemovedNotice } from "@/features/gameplay/components/QuestionRemovedNotice";
+import { RecoveryCodeForm } from "@/features/gameplay/components/RecoveryCodeForm";
+import { WelcomeBackBanner } from "@/features/gameplay/components/WelcomeBackBanner";
 import { QuestionSkeleton } from "@/features/gameplay/components/QuestionSkeleton";
 import { QuestionTransition } from "@/features/gameplay/components/QuestionTransition";
 import { SubmissionStatus } from "@/features/gameplay/components/SubmissionStatus";
@@ -41,6 +45,7 @@ import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 export function PlaySessionPage() {
   const { pin = "" } = useParams<{ pin: string }>();
   const player = usePlayerGameplay(pin);
+  const [enteringRecoveryCode, setEnteringRecoveryCode] = useState(false);
   // The quiz's identity comes from the participant-safe session summary —
   // authoritative data, never local navigation state, so it survives
   // refreshes and reconnects on every screen of the journey.
@@ -54,18 +59,53 @@ export function PlaySessionPage() {
     });
   };
 
+  // A refused credential is an offer of help, never a silent fall-through
+  // to the join form — where typing your own name is exactly what produces
+  // "that name is already taken", which is how a lost credential turned
+  // into a dead end at a live event.
+  if (player.credentialRejected) {
+    return (
+      <PageContainer className="max-w-md py-16">
+        <SectionHeader title="Welcome back" description="Let's get you back into the quiz." />
+        <ParticipantRecoveryPanel
+          displayName={player.displayName}
+          onRetry={player.retryResume}
+          isRetrying={player.isReconnecting}
+          onRedeemCode={player.recoverWithCode}
+          isRedeeming={player.isRecovering}
+          redeemError={player.recoveryError}
+          onStartOver={player.startOver}
+        />
+      </PageContainer>
+    );
+  }
+
   if (!player.hasJoined) {
     return (
       <PageContainer className="max-w-md py-16">
         <SectionHeader title="Join a game" description="Enter your name to play." />
         <Card>
-          <CardContent className="pt-6">
+          <CardContent className="space-y-4 pt-6">
             <JoinSessionForm
               fixedPin={pin}
               onSubmit={onJoin}
               isSubmitting={player.isJoining}
               error={player.joinError}
+              onEnterRecoveryCode={() => setEnteringRecoveryCode(true)}
             />
+            {enteringRecoveryCode && (
+              <div className="space-y-2 rounded-md border p-3">
+                <p className="text-sm text-muted-foreground">
+                  Ask the Quiz Master for a recovery code. Your score and answers come back
+                  with you.
+                </p>
+                <RecoveryCodeForm
+                  onSubmit={player.recoverWithCode}
+                  isSubmitting={player.isRecovering}
+                  error={player.recoveryError}
+                />
+              </div>
+            )}
           </CardContent>
         </Card>
       </PageContainer>
@@ -79,20 +119,37 @@ export function PlaySessionPage() {
           {quizTitle}
         </h1>
       )}
+      {player.welcomeBack && (
+        <WelcomeBackBanner
+          displayName={player.welcomeBack.displayName}
+          score={player.welcomeBack.score}
+        />
+      )}
       <GameConnectionBanner status={player.connectionStatus} />
       <div aria-live="polite" role="status" className="sr-only">
         {player.announcement}
       </div>
 
       {(player.isReconnecting || player.isLoadingSession) && (
-        <div className="flex justify-center py-16">
+        <div className="flex flex-col items-center gap-3 py-16">
           <Spinner size="lg" className="text-primary" />
+          {/* Named rather than a bare spinner: a player coming back after a
+              blackout needs to know the app is fetching THEIR game, not
+              starting a new one. */}
+          <p className="text-sm text-muted-foreground">
+            {player.displayName
+              ? `Reconnecting ${player.displayName} to the quiz…`
+              : "Reconnecting to your quiz…"}
+          </p>
         </div>
       )}
 
-      {player.reconnectError != null && (
+      {/* A retry is already in flight (see usePlayerGameplay), so this says
+          so rather than presenting failure as final — and never offers a
+          way back to the join form, which is what cost people their games. */}
+      {player.reconnectError != null && !player.isReconnecting && (
         <ErrorPanel
-          title="Could not reconnect"
+          title="Still reconnecting — your game is safe"
           error={player.reconnectError}
           onRetry={player.retryReconnect}
         />

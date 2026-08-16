@@ -24,6 +24,7 @@ import { SessionSummaryCard } from "@/features/gameplay/components/SessionSummar
 import { useGameHost } from "@/features/gameplay/hooks/useGameHost";
 import { useDocumentTitle } from "@/hooks/useDocumentTitle";
 import { PresentationToggle } from "@/features/sessions/components/PresentationToggle";
+import { RecoverPlayerPanel } from "@/features/sessions/components/RecoverPlayerPanel";
 import { SessionQuestionsPanel } from "@/features/sessions/components/SessionQuestionsPanel";
 import { SessionStatusBadge } from "@/features/sessions/components/SessionStatusBadge";
 import { usePresentationMode } from "@/features/sessions/hooks/usePresentationMode";
@@ -138,6 +139,15 @@ export function SessionLivePage() {
             sessionId={sessionId}
             answeredCount={host.answerProgress?.answeredCount ?? 0}
           />
+        )}
+
+      {/* A player drops out mid-question far more often than in the lobby,
+          so the host needs this where they actually are. Same presentation
+          guard: a recovery code must never reach the projector. */}
+      {!presentation.active &&
+        host.sessionError == null &&
+        host.session?.state === "IN_PROGRESS" && (
+          <RecoverPlayerPanel sessionId={sessionId} />
         )}
 
       {!host.isLoadingSession && host.sessionError == null && (

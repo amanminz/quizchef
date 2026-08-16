@@ -122,6 +122,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/sessions/{pin}/participants/recover": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Recover a participant with a host-issued code
+         * @description The last resort for a player whose browser lost its resume credential. They can prove nothing by themselves — that is what the resume token is for — and letting them back in on their display name would hand their score to anyone who heard it. The missing authority comes from the host, who can see the person asking.
+         *
+         *     The code is spent doing this: single-use, a few minutes old at most, bound to one participant in one session, and rate limited. On success the participant's resume token is **rotated** — the device that lost the game stops being able to resume — and the new one is returned once, here. Everything else is untouched: same id, name, language, answers, and score.
+         *
+         *     Every refusal looks the same (unknown, expired, already used, wrong session, malformed), so the response cannot be used to map which codes exist.
+         */
+        post: operations["recoverParticipant"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/sessions/{pin}/lobby": {
         parameters: {
             query?: never;
@@ -340,6 +364,28 @@ export interface paths {
          * @description Host only. From the leaderboard, opens the next question in order, or finishes the session when the quiz is exhausted.
          */
         post: operations["advanceQuestion"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sessions/{id}/participants/{participantId}/recovery-code": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Issue a recovery code for one participant (host only)
+         * @description Mints six digits the host reads out to a player who cannot get back in. Returned exactly once and never stored in the clear. Issuing supersedes any code already outstanding for that participant, so a host who clicks twice or misreads the first one does not leave two live codes for the same player.
+         *
+         *     Guests only: a signed-in player rejoins by logging in from any device, and a code would be a second, weaker way in.
+         */
+        post: operations["issueRecoveryCode"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1230,6 +1276,18 @@ export interface components {
             submittedOptionIds?: string[];
             leaderboard?: components["schemas"]["LeaderboardEntryDto"][];
         };
+        RedeemRecoveryCodeRequest: {
+            /**
+             * @description The six digits the Quiz Master gave you
+             * @example 482731
+             */
+            recoveryCode?: string;
+        };
+        RecoveredParticipantResponse: {
+            /** @description Store this; the previous credential no longer works */
+            resumeToken?: string;
+            session?: components["schemas"]["SessionSnapshotResponse"];
+        };
         JoinSessionRequest: {
             /**
              * @description The per-session nickname; need not be unique
@@ -1271,6 +1329,19 @@ export interface components {
              */
             optionId: string;
             text?: string;
+        };
+        RecoveryCodeResponse: {
+            /** Format: uuid */
+            participantId?: string;
+            /** @example Aman */
+            displayName?: string;
+            /**
+             * @description Six digits, valid for a few minutes and usable once
+             * @example 482731
+             */
+            code?: string;
+            /** Format: date-time */
+            expiresAt?: string;
         };
         LeaderboardResponse: {
             entries?: components["schemas"]["LeaderboardEntryDto"][];
@@ -2332,6 +2403,68 @@ export interface operations {
             };
         };
     };
+    recoverParticipant: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                pin: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RedeemRecoveryCodeRequest"];
+            };
+        };
+        responses: {
+            /** @description Recovered; a new resume token and the session snapshot */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecoveredParticipantResponse"];
+                };
+            };
+            /** @description Validation failed (missing code) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description No active session for the PIN */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The code was not accepted (participant.recovery.code-not-accepted) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Too many attempts */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecoveredParticipantResponse"];
+                };
+            };
+        };
+    };
     openLobby: {
         parameters: {
             query?: never;
@@ -2916,6 +3049,65 @@ export interface operations {
                 };
             };
             /** @description Not at the leaderboard (session.invalid-transition) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+        };
+    };
+    issueRecoveryCode: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                participantId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description The code, its expiry, and whose it is */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["RecoveryCodeResponse"];
+                };
+            };
+            /** @description Missing, invalid, or revoked token */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Lacking QUIZ_HOST, or not the host */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description Unknown session, or no such participant in it (session.participant.not-found) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "*/*": components["schemas"]["ApiError"];
+                };
+            };
+            /** @description The player is signed in, or the quiz has finished (participant.recovery.not-available) */
             409: {
                 headers: {
                     [name: string]: unknown;

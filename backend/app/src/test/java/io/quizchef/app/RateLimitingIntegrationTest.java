@@ -10,8 +10,10 @@ import static org.assertj.core.api.Assertions.assertThat;
 import io.quizchef.platform.security.ratelimit.RateLimitProperties;
 import io.quizchef.platform.security.ratelimit.RateLimitRule;
 import java.time.Duration;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.testcontainers.service.connection.ServiceConnection;
@@ -22,6 +24,9 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.testcontainers.containers.PostgreSQLContainer;
 import org.testcontainers.junit.jupiter.Container;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.servlet.mvc.method.RequestMappingInfo;
+import org.springframework.web.servlet.mvc.method.annotation.RequestMappingHandlerMapping;
 import org.testcontainers.junit.jupiter.Testcontainers;
 
 /**
@@ -49,6 +54,16 @@ class RateLimitingIntegrationTest {
 
     @Autowired
     private RateLimitProperties rateLimitProperties;
+
+    /**
+     * Qualified because actuator registers a second mapping bean
+     * (`controllerEndpointHandlerMapping`) regardless of configuration, so
+     * type-only injection is ambiguous — the same trap
+     * `RealtimeHealthIndicator` hit with the broker handler.
+     */
+    @Autowired
+    @Qualifier("requestMappingHandlerMapping")
+    private RequestMappingHandlerMapping handlerMapping;
 
     @Test
     void exceedingTheLoginBucketReturnsA429WithRetryAfter() throws Exception {
@@ -98,11 +113,11 @@ class RateLimitingIntegrationTest {
         assertThat(join.capacity()).isGreaterThanOrEqualTo(smallestSupportedVenue);
         assertThat(join.window()).isLessThanOrEqualTo(Duration.ofMinutes(1));
 
-        // Every device reconnects on join, on refresh, and after any dropped
-        // websocket — a wifi blip reconnects the whole room at once, so this
+        // Every device resumes on join, on refresh, and after any dropped
+        // websocket — a wifi blip resumes the whole room at once, so this
         // needs headroom above the room size rather than parity with it.
-        RateLimitRule reconnect = ruleFor("POST", "/api/v1/sessions/reconnect");
-        assertThat(reconnect.capacity()).isGreaterThanOrEqualTo(join.capacity() * 2);
+        RateLimitRule resume = ruleFor("POST", "/api/v1/sessions/{pin}/participants/resume");
+        assertThat(resume.capacity()).isGreaterThanOrEqualTo(join.capacity() * 2);
 
         // A whole room answers within seconds of a question opening — so the
         // answer budget must cover the room that was allowed to join, or the
@@ -175,6 +190,43 @@ class RateLimitingIntegrationTest {
                 .as("Retry-After should tell the caller when to come back, in seconds")
                 .isPositive()
                 .isLessThanOrEqualTo(60);
+    }
+
+    /**
+     * Every configured rule must name a route the application actually
+     * serves.
+     *
+     * <p>This is the check that was missing. A rule keyed to a renamed
+     * endpoint does not fail, warn, or show up anywhere — it simply stops
+     * applying, and the route it was protecting silently falls back to the
+     * 60/minute default. That happened to participant resume for a release:
+     * the endpoint moved, the key did not, and the one call every device in
+     * a venue makes after every network blip was left sharing sixty
+     * requests a minute across a whole room behind one NAT address.
+     *
+     * <p>Asserting against the live handler mappings is the only way to
+     * catch it, because the configuration on its own is perfectly valid.
+     */
+    @Test
+    void everyRateLimitedRouteIsARouteTheApplicationServes() {
+        Set<String> served = handlerMapping.getHandlerMethods().keySet().stream()
+                .flatMap(RateLimitingIntegrationTest::routeKeys)
+                .collect(java.util.stream.Collectors.toSet());
+
+        assertThat(rateLimitProperties.rules().keySet())
+                .allSatisfy(configured -> assertThat(served)
+                        .as("rate-limit rule \"%s\" names no route this application serves — "
+                                + "it silently protects nothing", configured)
+                        .contains(configured));
+    }
+
+    private static java.util.stream.Stream<String> routeKeys(RequestMappingInfo mapping) {
+        Set<String> patterns = mapping.getPathPatternsCondition() == null
+                ? Set.of()
+                : mapping.getPathPatternsCondition().getPatternValues();
+        Set<RequestMethod> methods = mapping.getMethodsCondition().getMethods();
+        return patterns.stream().flatMap(pattern -> methods.stream()
+                .map(method -> method.name() + " " + pattern));
     }
 
     private RateLimitRule ruleFor(String method, String route) {

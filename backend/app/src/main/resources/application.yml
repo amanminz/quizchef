@@ -114,12 +114,27 @@ quizchef:
         "[POST /api/v1/sessions/{pin}/join]":
           capacity: ${PARTICIPANT_RATE_LIMIT_CAPACITY:150}
           window: PT1M
-        # Every device reconnects right after joining (that is what marks it
+        # Every device resumes right after joining (that is what marks it
         # connected), on every refresh, and after every dropped websocket —
-        # so a wifi blip reconnects the whole room at once. Twice the room
+        # so a wifi blip resumes the whole room at once. Twice the room
         # size per minute leaves headroom for that without a second thought.
-        "[POST /api/v1/sessions/reconnect]":
+        #
+        # This key MUST track the route. It named the old /sessions/reconnect
+        # path for a release after that endpoint was renamed, which silently
+        # dropped resume onto the 60/minute default — a whole venue sharing
+        # one NAT address, on the one call every device makes after every
+        # blip. A rule that names a route nobody serves does not fail; it
+        # just stops applying.
+        "[POST /api/v1/sessions/{pin}/participants/resume]":
           capacity: ${PARTICIPANT_RECONNECT_RATE_LIMIT_CAPACITY:300}
+          window: PT1M
+        # Six digits is a small space, and this limit — not the digest — is
+        # what makes guessing one impractical. Deliberately per-IP and
+        # deliberately low: recovery is a rare, host-initiated event, so even
+        # a full venue needs only a handful a minute, while a guesser gets
+        # 10 tries against a code that expires in five.
+        "[POST /api/v1/sessions/{pin}/participants/recover]":
+          capacity: ${PARTICIPANT_RECOVERY_RATE_LIMIT_CAPACITY:10}
           window: PT1M
         # A whole room answers within the same few seconds of a question
         # opening, which is the entire point of the format.

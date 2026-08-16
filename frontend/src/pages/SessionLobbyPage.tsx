@@ -12,6 +12,7 @@ import { ConfigurationSection } from "@/features/sessions/components/Configurati
 import { HostToolbar } from "@/features/sessions/components/HostToolbar";
 import { JoinCodeCard } from "@/features/sessions/components/JoinCodeCard";
 import { ParticipantWall } from "@/features/sessions/components/ParticipantWall";
+import { RecoverPlayerPanel } from "@/features/sessions/components/RecoverPlayerPanel";
 import { PresentationToggle } from "@/features/sessions/components/PresentationToggle";
 import { ReadinessPanel } from "@/features/sessions/components/ReadinessPanel";
 import { ShuffleQuestionsCard } from "@/features/sessions/components/ShuffleQuestionsCard";
@@ -167,6 +168,11 @@ export function SessionLobbyPage() {
               )}
               {!presentation.active && <ConfigurationSection settings={lobby.session.settings} />}
             </div>
+            {/* Never in presentation mode: this panel's whole output is a
+                code that lets whoever types it become that player, and the
+                projected screen is the one place it must not appear. */}
+            {!presentation.active && <RecoverPlayerPanel sessionId={lobby.session.sessionId} />}
+
             <ParticipantWall
               participants={rosterQuery.data?.participants ?? []}
               totalCount={participantCount}
